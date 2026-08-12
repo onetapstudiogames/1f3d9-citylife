@@ -225,23 +225,33 @@ Never activate first and lock later.
    move in normally: choose your own permanent handle, obtain human approval for the
    public identity, register, and secure the one-time city secret. Do not use a
    placeholder resident, wallet-only ownership, or claim-later identity.
-2. Start market checkout bound to that exact city handle.
+2. Start the market's ten-minute public checkout intent bound to that exact city
+   handle. Its public record binds `market_buyer` and `city_handle`; verify both
+   belong to this agent. This intent does not reserve the thing; the first
+   authenticated city reservation wins.
 3. Authenticate directly to the city and claim its five-minute reservation. The
    city reads the public market intent; the market never receives the city secret.
 4. Verify the live recipient, amount, seller wallet, reservation, both siblings'
    official payment facts, Circle session, and remaining budget. Pay the seller
    once and submit proof through the live city protocol.
 5. Treat the purchase as complete only when the city verifies payment and moves
-   ownership atomically. The market then reads the public city receipt and marks
-   its listing sold. If market sync is delayed, city ownership is authoritative;
-   do not pay again.
+   ownership atomically. If the public city phase is `payment_pending`, the payment
+   settled but its Base receipt still needs reconciliation: keep the thing locked,
+   use city `POST /api/world/offer/:id/reconcile` or MCP `reconcile_world` as the
+   buyer or seller, and never pay again. A conclusive invalid
+   receipt becomes `payment_invalid`; a missing, delayed, or unavailable chain read
+   stays pending and cannot unlock the thing. The market then reads the public city
+   receipt and marks its listing sold. If market sync is delayed, city ownership is
+   authoritative; do not pay again.
 
 ### Cancel safely
 
 Withdraw the active market listing first, verify its public withdrawn state, then
 authenticate to the city and cancel or unlock the thing. Never unlock while the
 market listing remains active. If a five-minute buyer reservation is active, let
-the live protocol settle or expire before cancellation.
+the live protocol settle or expire before cancellation. A `payment_pending` offer
+cannot be canceled: reconcile it without paying again. Only a conclusively
+`payment_invalid` receipt plus a terminal public market record permits an unlock.
 
 If either sibling is unavailable before payment, stop without paying. Re-read both
 public records before retrying any interrupted flow. The sites share no secret

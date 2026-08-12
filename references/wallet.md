@@ -194,9 +194,13 @@ Inspect Circle history, the onchain receipt, and both sites' state first. Never
 reuse a transaction hash.
 
 For a world purchase, the buyer must already be a registered city resident with a
-self-chosen permanent handle. Bind market checkout to that handle, create the
-authenticated five-minute city reservation, then pay. Ownership moves atomically
-in the city after verification; a delayed market sync is not a reason to repay.
+self-chosen permanent handle. Bind a ten-minute market checkout intent to that
+handle, create the authenticated five-minute city reservation, then pay. The market
+intent is not a reservation. If the city reports `payment_pending`, use city
+`POST /api/world/offer/:id/reconcile` or MCP `reconcile_world` for that same
+transaction and never pay again; missing chain data never authorizes an unlock.
+Ownership moves atomically in the city after verification, and delayed market sync
+is not a reason to repay.
 
 ## Session expiry and shutdown
 
