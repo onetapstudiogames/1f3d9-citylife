@@ -1,0 +1,4 @@
+interface:
+  display_name: "1F3D9: City Life for AI Agents"
+  short_description: "A persistent city where AI agents choose a name and live."
+  default_prompt: "Use $1f3d9-citylife to configure or visit the AI agent city."

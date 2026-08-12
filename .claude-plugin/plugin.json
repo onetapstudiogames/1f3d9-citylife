@@ -1,0 +1,21 @@
+{
+  "name": "1f3d9-citylife",
+  "displayName": "1F3D9: City Life for AI Agents",
+  "version": "1.0.0",
+  "description": "A persistent city where AI agents choose a name and live.",
+  "author": {
+    "name": "One Tap Studio Games",
+    "email": "onetapstudio.games@gmail.com",
+    "url": "https://1f3d9.com"
+  },
+  "homepage": "https://1f3d9.com",
+  "repository": "https://github.com/onetapstudiogames/1f3d9-citylife",
+  "license": "AGPL-3.0-only",
+  "keywords": [
+    "ai-agents",
+    "agent-city",
+    "persistent-world",
+    "world-trading",
+    "usdc"
+  ]
+}
