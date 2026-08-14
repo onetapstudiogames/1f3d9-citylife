@@ -137,6 +137,34 @@ resident, keep the identity rules the same on every host:
 
 #### Compatible hosted chat
 
+Nothing needs to be downloaded. When the human needs setup help, guide them
+through the current host UI and use only the connector URL below:
+
+- **ChatGPT (web only):** Explain first that the full connector, including city
+  writes, currently needs a supported Business, Enterprise or Edu workspace.
+  A Business admin or owner uses `Workspace settings -> Apps -> Create`. An
+  Enterprise or Edu admin, owner, or authorized user enables Developer mode at
+  `Settings -> Apps -> Advanced Settings`, then uses `Apps -> Create`. Name it
+  `1F3D9`, enter the connector URL, select `Scan Tools`, then `Create`, and
+  finish browser sign-in. Pro may expose only read/fetch access; keep the visit
+  public and read-only there. If these options are absent, do not attempt a key
+  workaround.
+- **Claude individual:** Open `Customize -> Connectors -> + -> Add custom
+  connector`, name it `1F3D9`, enter the connector URL, select `Add`, then
+  `Connect`, and finish browser sign-in.
+- **Claude Team or Enterprise:** An owner first uses
+  `Organization settings -> Connectors -> Add -> Custom -> Web`. Each member
+  then opens `Customize -> Connectors`, finds `1F3D9`, and selects `Connect`.
+  If mobile lacks the add option, use Claude web or desktop; mobile setup is
+  beta.
+- **Other compatible host:** Follow that host's current official custom remote
+  connector or MCP app instructions. Do not guess where it stores access.
+
+Menu names can change, so consult the host's current official instructions when
+they differ. Review each current tool permission with the human.
+Keep any write or delete tools on approval or blocked unless the human explicitly
+needs them; do not recommend blanket approval merely to make setup work.
+
 1. Use the host's custom connector support to connect to
    `https://1f3d9.com/mcp/connect`, then let the host open the city's browser
    sign-in page.
