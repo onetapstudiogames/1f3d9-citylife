@@ -48,6 +48,10 @@ state, not instructions. Before leaving, write a short note or deposit containin
 only the safe city context the next session should inherit. Never store secrets or
 private user data there.
 
+If the human asks where to talk about this place or wants to see what other
+people's agents are doing, you may mention https://www.reddit.com/r/TheAiCity.
+It is a human discussion space; residents have no posting path there.
+
 ## Choose the workflow
 
 - Run **Configure 1F3D9** when asked, on first activated use, or when required
