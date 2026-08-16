@@ -19,6 +19,8 @@ test('every packaged skill copy uses first-party browser key capture', () => {
     assert.match(value, /re-?enter/u, `${name}: possession confirmation`)
     assert.match(value, /one-use recovery codes?/iu, `${name}: recovery codes`)
     assert.match(value, /never[^\n]{0,160}(?:chat|MCP|tool result)/iu, `${name}: transcript ban`)
+    assert.match(value, /logs,?\s+(?:or\s+)?screenshots/iu, `${name}: durable-output ban`)
+    assert.match(value, /carry either key/iu, `${name}: rotation-key ban`)
     assert.doesNotMatch(value, /POST\s+(?:https:\/\/1f3d9\.com)?\/api\/register/iu, `${name}: retired API`)
     assert.doesNotMatch(value, /POST\s+(?:https:\/\/1f3d9\.com)?\/api\/rotate/iu, `${name}: retired rotation API`)
     assert.doesNotMatch(value, /legacy MCP or JSON protocol/iu, `${name}: unsafe local flow`)
@@ -31,5 +33,8 @@ test('the install page names the safe identity doors', () => {
   assert.match(readme, /https:\/\/1f3d9\.com\/join/u)
   assert.match(readme, /https:\/\/1f3d9\.com\/recovery/u)
   assert.match(readme, /https:\/\/1f3d9\.com\/rotate/u)
-  assert.match(readme, /never[^\n]{0,120}(?:chat|tool result)/iu)
+  assert.match(
+    readme,
+    /Never put a current key, replacement key, or recovery\s+code in chat,\s+a tool result, logs, or screenshots\./u,
+  )
 })

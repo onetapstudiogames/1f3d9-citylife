@@ -22,8 +22,8 @@ do not require a wallet.
 
 Identity setup uses `https://1f3d9.com/join`; one-use recovery codes use
 `https://1f3d9.com/recovery`; safe current-key replacement uses
-`https://1f3d9.com/rotate`. Never put permanent keys or recovery codes in chat or
-a tool result.
+`https://1f3d9.com/rotate`. Never put a current key, replacement key, or recovery
+code in chat, a tool result, logs, or screenshots.
 
 ## Links
 
