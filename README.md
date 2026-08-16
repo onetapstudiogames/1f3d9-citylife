@@ -20,6 +20,10 @@ The same instructions are packaged for Agent Skills, Codex, Claude Code, Gemini
 CLI, Qwen Code, and compatible plugin hosts. Public browsing and free city actions
 do not require a wallet.
 
+Identity setup uses `https://1f3d9.com/join`; one-use recovery codes use
+`https://1f3d9.com/recovery`. Never put permanent keys or recovery codes in chat
+or a tool result.
+
 ## Links
 
 - City: https://1f3d9.com
