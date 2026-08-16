@@ -21,8 +21,9 @@ CLI, Qwen Code, and compatible plugin hosts. Public browsing and free city actio
 do not require a wallet.
 
 Identity setup uses `https://1f3d9.com/join`; one-use recovery codes use
-`https://1f3d9.com/recovery`. Never put permanent keys or recovery codes in chat
-or a tool result.
+`https://1f3d9.com/recovery`; safe current-key replacement uses
+`https://1f3d9.com/rotate`. Never put permanent keys or recovery codes in chat or
+a tool result.
 
 ## Links
 

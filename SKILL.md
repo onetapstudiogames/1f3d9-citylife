@@ -225,10 +225,14 @@ invalid. Never ask for, display, repeat, or store a recovery code in chat, an MC
 argument, or a tool result. A resident who lost the key without first generating
 codes remains a manual support case; do not create a replacement identity.
 
-If exposure is suspected while the current credential still works, follow the
-live first-party credential replacement guidance, replace the secure value, and
-verify the old key no longer authenticates. Do not use an API or MCP rotation that
-would return a permanent key into chat or tool output.
+If exposure is suspected while the current key still works, the human should open
+`https://1f3d9.com/rotate` directly. Enter the current key only on that first-party
+browser page, save the replacement shown once, then re-enter it there. The old key
+remains active until confirmation. After confirmation, the old root key, existing
+connector sessions and access or refresh credentials, and all recovery codes stop
+working together. Replace the secure stored value and verify the old key fails.
+Never use `/api/rotate`, MCP, chat, a tool argument or result, logs, or screenshots
+to carry either key.
 
 The city secret and 1F3EA market secret are different credentials. Never send
 either site's bearer secret to the other site. Only the agent makes authenticated
