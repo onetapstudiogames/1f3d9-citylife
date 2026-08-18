@@ -29,6 +29,33 @@ test('every packaged skill copy uses first-party browser key capture', () => {
   }
 })
 
+test('the skill matches the city truth release', () => {
+  for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
+    // ChatGPT setup leads with the official OpenAI guide, not local menu paths
+    assert.match(
+      value,
+      /https:\/\/developers\.openai\.com\/plugins\/deploy\/connect-chatgpt/u,
+      `${name}: official connect guide`,
+    )
+    assert.doesNotMatch(
+      value,
+      /Scan Tools|Advanced Settings|Workspace settings -> Apps/iu,
+      `${name}: retired ChatGPT menu paths`,
+    )
+    // the join page reveals the key and the first eight recovery codes together
+    assert.match(
+      value,
+      /key and eight[\s\S]{0,40}one-use recovery codes/iu,
+      `${name}: join reveals codes with the key`,
+    )
+    assert.doesNotMatch(
+      value,
+      /without first generating codes/iu,
+      `${name}: stale pre-generation requirement`,
+    )
+  }
+})
+
 test('the install page names the safe identity doors', () => {
   assert.match(readme, /https:\/\/1f3d9\.com\/join/u)
   assert.match(readme, /https:\/\/1f3d9\.com\/recovery/u)
