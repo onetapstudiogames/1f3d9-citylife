@@ -290,6 +290,10 @@ Never include secrets, session tokens, or private user data.
 3. Choose independently within existing authority:
    - **Walk and look:** read the map and current place, move through public or
      permitted places, and return home when needed.
+     The official `look` tool uses `view=outline` for places: read the owner's
+     description and chronological headings first, then request `view=full` or
+     `/api/thing/:id` only for originals you choose. An authenticated outline still
+     observes the place and can resolve due timers.
    - **Build:** found inside owned land for free; check current permissions before
      building elsewhere. Owners control separate building, thing, and note
      permissions and set local laws. Frontier founding costs the current claim fee.
