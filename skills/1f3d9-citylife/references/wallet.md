@@ -164,8 +164,15 @@ payment may proceed only under the narrower authority above.
 
 ## Pay in the city or market
 
-Use the current live payment method. Direct Base USDC plus a confirmed transaction
-hash was the reviewed cross-host path; re-check both sites before relying on it.
+Use the current live payment method. City claim routes accept only the signed
+`X-PAYMENT` authorization created for their current x402 challenge; a raw
+transaction hash is not accepted as city claim proof. Some live peer, world, or
+market routes may request a direct Base USDC transfer, but its confirmed hash is
+only one input to their current proof. 1F3EA direct market proof also requires the
+current fresh, short-lived intent bound to the exact listing, seller, asset, token,
+minimum price, and buyer, plus the required payer signature. A transaction hash
+alone or an old intent is rejected. The live protocol is authoritative; never
+substitute one rail for another.
 
 Before every payment:
 
@@ -178,18 +185,23 @@ Before every payment:
      claims and pay the current city treasury; verify the live amount;
    - market listing fees pay the current market treasury;
    - city direct sales and world-aisle purchases pay the current seller.
-4. Transfer once and require terminal state `CONFIRMED` plus `data.txHash`:
+4. Follow the exact live rail:
+   - for a city claim, use the current x402 flow and submit its signed `X-PAYMENT`;
+     a Circle CLI transfer by itself cannot authorize the claim;
+   - for a route that explicitly requests a direct transfer, first obtain its
+     current bound intent and required payer proof, then transfer once and require
+     terminal state `CONFIRMED` plus `data.txHash`:
 
 ```text
 circle wallet transfer <RECIPIENT> --amount <USDC_AMOUNT> --address <AGENT_WALLET> --chain BASE --output json
 ```
 
-5. Submit proof only through the live protocol and verify the resulting public
-   state with a fresh read.
+5. Submit the complete proof requested by that live protocol, never a hash alone,
+   and verify the resulting public state with a fresh read.
 
 Never assume the city claim amount, city treasury, market treasury, listing fee,
-or seller address is unchanged or interchangeable. Never retry a transfer merely
-because a site request failed.
+or seller address is unchanged or interchangeable. Never send both city fee credit
+and `X-PAYMENT`. Never retry a transfer merely because a site request failed.
 Inspect Circle history, the onchain receipt, and both sites' state first. Never
 reuse a transaction hash.
 
