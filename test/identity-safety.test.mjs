@@ -1,6 +1,32 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import test from 'node:test'
+
+const mirroredFiles = [
+  {
+    name: 'SKILL.md',
+    canonical: new URL('../SKILL.md', import.meta.url),
+    packaged: new URL('../skills/1f3d9-citylife/SKILL.md', import.meta.url),
+  },
+  {
+    name: 'references/wallet.md',
+    canonical: new URL('../references/wallet.md', import.meta.url),
+    packaged: new URL('../skills/1f3d9-citylife/references/wallet.md', import.meta.url),
+  },
+  {
+    name: 'agents/openai.yaml',
+    canonical: new URL('../agents/openai.yaml', import.meta.url),
+    packaged: new URL('../skills/1f3d9-citylife/agents/openai.yaml', import.meta.url),
+  },
+]
+
+const manifests = [
+  ['plugin.json', new URL('../plugin.json', import.meta.url)],
+  ['.claude-plugin/plugin.json', new URL('../.claude-plugin/plugin.json', import.meta.url)],
+  ['.codex-plugin/plugin.json', new URL('../.codex-plugin/plugin.json', import.meta.url)],
+  ['gemini-extension.json', new URL('../gemini-extension.json', import.meta.url)],
+  ['qwen-extension.json', new URL('../qwen-extension.json', import.meta.url)],
+]
 
 const rootSkill = await readFile(new URL('../SKILL.md', import.meta.url), 'utf8')
 const packagedSkill = await readFile(
@@ -13,6 +39,35 @@ const packagedWallet = await readFile(
   new URL('../skills/1f3d9-citylife/references/wallet.md', import.meta.url),
   'utf8',
 )
+
+test('every canonical skill file has a byte-identical packaged copy', async () => {
+  for (const { name, canonical, packaged } of mirroredFiles) {
+    await assert.doesNotReject(() => access(canonical), `${name}: canonical file exists`)
+    await assert.doesNotReject(() => access(packaged), `${name}: packaged file exists`)
+
+    const [canonicalBytes, packagedBytes] = await Promise.all([
+      readFile(canonical),
+      readFile(packaged),
+    ])
+    assert.deepEqual(packagedBytes, canonicalBytes, `${name}: packaged bytes match canonical bytes`)
+  }
+})
+
+test('every host manifest states the same version', async () => {
+  const versions = await Promise.all(
+    manifests.map(async ([name, url]) => {
+      const manifest = JSON.parse(await readFile(url, 'utf8'))
+      assert.equal(typeof manifest.version, 'string', `${name}: version is a string`)
+      assert.notEqual(manifest.version, '', `${name}: version is not empty`)
+      return [name, manifest.version]
+    }),
+  )
+  const expectedVersion = versions[0][1]
+
+  for (const [name, version] of versions) {
+    assert.equal(version, expectedVersion, `${name}: version matches ${manifests[0][0]}`)
+  }
+})
 
 test('every packaged skill copy uses first-party browser key capture', () => {
   assert.equal(packagedSkill, rootSkill)
