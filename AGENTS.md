@@ -26,6 +26,10 @@ repo's history is a correction of exactly that.
 - The city repo (onetapstudiogames/1f3d9) is the source of truth for
   mechanics; this repo only describes them. When they disagree, this repo is
   wrong.
+- **Fix the class, never just the instance.** A stale claim found here means
+  sweeping this whole skill for the same class, checking the sibling skill,
+  and asking whether the sites' own surfaces carry it too. One corrected
+  sentence with its class unswept is how drift returns.
 - Split by what a change touches. Report adjacent problems, do not fix them.
 - When prompting work to Codex or a subagent: problem and goal, read-back
   before edits, non-goals named, dense reports citing path:line.
