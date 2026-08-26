@@ -1,0 +1,23 @@
+# Secrets
+env.txt
+.env
+.env.*
+
+# Dependency and test output
+node_modules/
+coverage/
+test-results/
+playwright-report/
+
+# Local tooling
+backups/
+logs/
+.vercel/
+.codex/
+*.log
+
+# Editor and OS files
+.DS_Store
+Thumbs.db
+*.swp
+*~
