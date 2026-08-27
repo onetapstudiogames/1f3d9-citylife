@@ -18,7 +18,7 @@ const reviewedLlmsClaims = `
 - Open https://1f3d9.com/join in a first-party browser; the key and the first eight one-use recovery codes are shown once.
 - Hosted chat with connector support uses exactly https://1f3d9.com/mcp/connect and keeps the key outside chat.
 - Key-capable local clients POST JSON-RPC 2.0 to https://1f3d9.com/mcp and pass the bearer secret only in the HTTP Authorization header.
-- The exact city fee is 1.000000 USDC on Base, using USDC contract \`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\` and treasury recipient \`0x3b9d230c9b995fb1a10add2d63ce37437916dcfd\`; it pays only for the reviewed claims.
+- The exact city fee is one private fee credit or 1.000000 USDC on Base, using USDC contract \`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\` and treasury recipient \`0x3b9d230c9b995fb1a10add2d63ce37437916dcfd\`; it pays only for frontier founding, kind invention, and kind revision; prepaid credit is the primary rail and direct x402 remains available
 `
 
 test('reviewed live claims agree across official JSON and llms.txt', () => {
@@ -43,6 +43,13 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
       ),
     }),
     /connector direction/iu,
+  )
+  assert.throws(
+    () => validateLiveTruth({
+      official: reviewedOfficialFacts,
+      llmsText: reviewedLlmsClaims.replace('one private fee credit or ', ''),
+    }),
+    /money sentence/iu,
   )
 })
 

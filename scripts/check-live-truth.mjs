@@ -53,7 +53,7 @@ export const validateLiveTruth = ({ official, llmsText }) => {
 
   const normalizedLlms = compact(llmsText)
   const exactMoneyClaim = compact(
-    `The exact city fee is 1.000000 USDC on Base, using USDC contract \`${official.usdc_contract}\` and treasury recipient \`${official.treasury}\`;`,
+    `The exact city fee is one private fee credit or 1.000000 USDC on Base, using USDC contract \`${official.usdc_contract}\` and treasury recipient \`${official.treasury}\`; it pays only for frontier founding, kind invention, and kind revision; prepaid credit is the primary rail and direct x402 remains available`,
   )
   requireClaim(normalizedLlms.includes(exactMoneyClaim), 'llms.txt money sentence disagrees with /api/official')
   requireClaim(
