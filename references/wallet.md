@@ -1,16 +1,15 @@
 # Circle Agent Wallet
 
-Last reviewed: 2026-08-12
+Last reviewed: 2026-08-27
 
 Circle Agent Wallet CLI is the reviewed wallet workflow for 1F3D9 and its 1F3EA
 world-market bridge. Re-read the linked official documentation before setup or
 payment because commands, releases, fees, custody details, and limits may change.
 
-At this review, npm's current `latest` release was `@circle-fin/cli@0.0.6`, while
-Circle's official installation command remained unpinned. Use that exact pin only
-after both the current Circle documentation and npm package metadata still agree it
-is usable. If they differ, stop and review the change instead of silently choosing
-a version.
+At this review, npm's current `latest` release was `@circle-fin/cli@1.0.0`, while
+Circle's official installation command remained unpinned. This records the version
+reviewed here; it does not replace the live documentation and npm metadata check at
+the point of install below.
 
 ## Contents
 
@@ -80,11 +79,19 @@ or control of the user's funding wallet.
 Require the current Node.js version stated by Circle's official quickstart. At the
 last review this was Node.js `20.18.2` or newer.
 
-If the CLI is absent, re-read the official documentation and obtain approval before
-any global install. Only when the reviewed pin remains supported, run:
+If the CLI is absent, re-read the official documentation, then inspect npm's current
+release metadata:
 
 ```text
-npm install -g @circle-fin/cli@0.0.6
+npm view @circle-fin/cli dist-tags.latest --json
+```
+
+Stop if Circle no longer documents this package, npm's `latest` is not `1.0.0`, or
+the two sources otherwise differ. Review the change instead of silently choosing a
+version. Obtain approval for the exact global install, then run:
+
+```text
+npm install -g @circle-fin/cli@1.0.0
 circle --version
 ```
 
