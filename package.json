@@ -1,6 +1,8 @@
 {
   "private": true,
   "scripts": {
+    "check:live-truth": "node scripts/check-live-truth.mjs",
+    "check:release-version": "node scripts/check-release-version.mjs",
     "test": "node --test"
   }
 }

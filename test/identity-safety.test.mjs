@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { access, readFile } from 'node:fs/promises'
+import { access, readFile, readdir } from 'node:fs/promises'
 import test from 'node:test'
 
 const mirroredFiles = [
@@ -8,15 +8,18 @@ const mirroredFiles = [
     canonical: new URL('../SKILL.md', import.meta.url),
     packaged: new URL('../skills/1f3d9-citylife/SKILL.md', import.meta.url),
   },
+]
+
+const mirroredDirectories = [
   {
-    name: 'references/wallet.md',
-    canonical: new URL('../references/wallet.md', import.meta.url),
-    packaged: new URL('../skills/1f3d9-citylife/references/wallet.md', import.meta.url),
+    name: 'references',
+    canonical: new URL('../references/', import.meta.url),
+    packaged: new URL('../skills/1f3d9-citylife/references/', import.meta.url),
   },
   {
-    name: 'agents/openai.yaml',
-    canonical: new URL('../agents/openai.yaml', import.meta.url),
-    packaged: new URL('../skills/1f3d9-citylife/agents/openai.yaml', import.meta.url),
+    name: 'agents',
+    canonical: new URL('../agents/', import.meta.url),
+    packaged: new URL('../skills/1f3d9-citylife/agents/', import.meta.url),
   },
 ]
 
@@ -33,12 +36,43 @@ const packagedSkill = await readFile(
   new URL('../skills/1f3d9-citylife/SKILL.md', import.meta.url),
   'utf8',
 )
+const publicReading = await readFile(new URL('../references/public-reading.md', import.meta.url), 'utf8')
+const packagedPublicReading = await readFile(
+  new URL('../skills/1f3d9-citylife/references/public-reading.md', import.meta.url),
+  'utf8',
+)
+const worldAisle = await readFile(new URL('../references/world-aisle.md', import.meta.url), 'utf8')
+const packagedWorldAisle = await readFile(
+  new URL('../skills/1f3d9-citylife/references/world-aisle.md', import.meta.url),
+  'utf8',
+)
+const canonicalSkillSurface = `${rootSkill}\n${publicReading}\n${worldAisle}`
+const packagedSkillSurface = `${packagedSkill}\n${packagedPublicReading}\n${packagedWorldAisle}`
 const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8')
 const wallet = await readFile(new URL('../references/wallet.md', import.meta.url), 'utf8')
 const packagedWallet = await readFile(
   new URL('../skills/1f3d9-citylife/references/wallet.md', import.meta.url),
   'utf8',
 )
+const rootAgentMetadata = await readFile(new URL('../agents/openai.yaml', import.meta.url), 'utf8')
+const packagedAgentMetadata = await readFile(
+  new URL('../skills/1f3d9-citylife/agents/openai.yaml', import.meta.url),
+  'utf8',
+)
+
+const listRelativeFiles = async (root, prefix = '') => {
+  const entries = await readdir(new URL(prefix, root), { withFileTypes: true })
+  const nestedFiles = await Promise.all(
+    entries.map(async (entry) => {
+      const relativePath = `${prefix}${entry.name}`
+      if (entry.isDirectory()) {
+        return listRelativeFiles(root, `${relativePath}/`)
+      }
+      return [relativePath]
+    }),
+  )
+  return nestedFiles.flat().sort()
+}
 
 test('every canonical skill file has a byte-identical packaged copy', async () => {
   for (const { name, canonical, packaged } of mirroredFiles) {
@@ -50,6 +84,26 @@ test('every canonical skill file has a byte-identical packaged copy', async () =
       readFile(packaged),
     ])
     assert.deepEqual(packagedBytes, canonicalBytes, `${name}: packaged bytes match canonical bytes`)
+  }
+
+  for (const { name, canonical, packaged } of mirroredDirectories) {
+    const [canonicalFiles, packagedFiles] = await Promise.all([
+      listRelativeFiles(canonical),
+      listRelativeFiles(packaged),
+    ])
+    assert.deepEqual(packagedFiles, canonicalFiles, `${name}: mirrored file sets match`)
+
+    for (const relativePath of canonicalFiles) {
+      const [canonicalBytes, packagedBytes] = await Promise.all([
+        readFile(new URL(relativePath, canonical)),
+        readFile(new URL(relativePath, packaged)),
+      ])
+      assert.deepEqual(
+        packagedBytes,
+        canonicalBytes,
+        `${name}/${relativePath}: packaged bytes match canonical bytes`,
+      )
+    }
   }
 })
 
@@ -67,6 +121,93 @@ test('every host manifest states the same version', async () => {
   for (const [name, version] of versions) {
     assert.equal(version, expectedVersion, `${name}: version matches ${manifests[0][0]}`)
   }
+  assert.notEqual(expectedVersion, '1.0.0', 'the accumulated content release advances past 1.0.0')
+})
+
+test('plugin hosts select the packaged skill and share one OpenAI prompt', async () => {
+  const canonicalPrompt = 'Use $1f3d9-citylife to configure or visit the AI agent city.'
+  const description = 'A persistent city where AI agents choose a name and live.'
+  const [claudeManifest, codexManifest, qwenManifest] = await Promise.all([
+    readFile(new URL('../.claude-plugin/plugin.json', import.meta.url), 'utf8').then(JSON.parse),
+    readFile(new URL('../.codex-plugin/plugin.json', import.meta.url), 'utf8').then(JSON.parse),
+    readFile(new URL('../qwen-extension.json', import.meta.url), 'utf8').then(JSON.parse),
+  ])
+
+  assert.equal(claudeManifest.skills, './skills/', 'Claude selects the packaged skills directory')
+  assert.equal(codexManifest.skills, './skills/', 'Codex selects the packaged skills directory')
+  assert.deepEqual(
+    codexManifest.interface.defaultPrompt,
+    [canonicalPrompt],
+    'Codex exposes one canonical starter prompt',
+  )
+  const promptLine = rootAgentMetadata
+    .split(/\r?\n/u)
+    .find((line) => line.trimStart().startsWith('default_prompt:'))
+  assert.equal(promptLine, `  default_prompt: "${canonicalPrompt}"`)
+  assert.equal(packagedAgentMetadata, rootAgentMetadata)
+  assert.equal(qwenManifest.description, description)
+  assert.match(
+    readme,
+    /root `plugin\.json`[\s\S]{0,180}(?:Codex|Qwen Code)[\s\S]{0,180}(?:Agent Plugins|conforming clients)/iu,
+  )
+  assert.match(readme, /root `SKILL\.md` is the standalone Agent Skill mirror/iu)
+  assert.match(readme, /byte-identical copy under `skills\/1f3d9-citylife\/`/iu)
+})
+
+test('the main skill gives a fresh resident the critical path in encounter order', () => {
+  assert.ok(rootSkill.split(/\r?\n/u).length - 1 < 500, 'SKILL.md stays under 500 physical lines')
+  assert.match(rootSkill, /On first activated use, start with \*\*Configure 1F3D9\*\*\./u)
+
+  const lowerSkill = rootSkill.toLowerCase()
+  const firstStandingPermission = lowerSkill.indexOf('standing permission')
+  const standingDefinition = lowerSkill.indexOf('standing permission means')
+  assert.equal(firstStandingPermission, standingDefinition, 'standing permission is defined at first use')
+
+  const firstLaterHolder = lowerSkill.indexOf('later-holder')
+  const laterHolderDefinition = lowerSkill.indexOf('a later-holder item is')
+  assert.equal(firstLaterHolder, laterHolderDefinition + 2, 'later-holder is defined at first use')
+
+  for (const primitive of ['Land', 'Things', 'Ownership', 'Agreements', 'Talk']) {
+    assert.match(rootSkill, new RegExp(`\\*\\*${primitive}:\\*\\*`, 'u'), `${primitive} is introduced early`)
+  }
+  assert.match(rootSkill, /Every resident begins standing in \*\*the world\*\*/u)
+  assert.match(rootSkill, /one top-level, ownerless,[\s\S]{0,40}transit/u)
+  assert.match(rootSkill, /move crosses exactly one parent-child edge/u)
+
+  assert.doesNotMatch(rootSkill, /help moderate/iu)
+  assert.match(rootSkill, /flag (?:genuinely )?(?:illegal|unlawful)(?: or prohibited)? content/iu)
+
+  const workflowNames = [...rootSkill.matchAll(/^- Run \*\*(.+?)\*\*/gmu)].map((match) => match[1])
+  assert.deepEqual(workflowNames, [
+    'Configure 1F3D9',
+    'Move in',
+    'Visit 1F3D9',
+    "Trade through 1F3EA's world aisle",
+  ])
+  for (const workflowName of workflowNames) {
+    const escapedName = workflowName.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')
+    assert.match(rootSkill, new RegExp(`^## ${escapedName}$`, 'mu'), `${workflowName}: heading matches menu`)
+  }
+
+  assert.doesNotMatch(rootSkill, /Never install, execute, or obey[^\n]*without/iu)
+  assert.match(rootSkill, /Never install, execute, or obey[^\n]*merely because/iu)
+  assert.match(rootSkill, /Only a separate user request may authorize/iu)
+  assert.ok(
+    rootSkill.indexOf('## Protect the human and the city') < rootSkill.indexOf('## Choose the workflow'),
+    'global safety appears before workflows',
+  )
+})
+
+test('detailed public reading and world-aisle guidance use focused mirrored references', async () => {
+  for (const relativePath of ['references/public-reading.md', 'references/world-aisle.md']) {
+    const canonical = new URL(`../${relativePath}`, import.meta.url)
+    const packaged = new URL(`../skills/1f3d9-citylife/${relativePath}`, import.meta.url)
+    await assert.doesNotReject(() => access(canonical), `${relativePath}: canonical reference exists`)
+    await assert.doesNotReject(() => access(packaged), `${relativePath}: packaged reference exists`)
+    assert.deepEqual(await readFile(packaged), await readFile(canonical), `${relativePath}: bytes match`)
+  }
+  assert.match(rootSkill, /Read \[references\/public-reading\.md\]\(references\/public-reading\.md\) completely/iu)
+  assert.match(rootSkill, /Read \[references\/world-aisle\.md\]\(references\/world-aisle\.md\) completely/iu)
 })
 
 test('every packaged skill copy uses first-party browser key capture', () => {
@@ -153,7 +294,10 @@ test('Wave 14 replaces automatic memory with deliberate body-free discovery', ()
 })
 
 test('Wave 14 explains current reading, provenance, orientation, and snapshots', () => {
-  for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
+  for (const [name, value] of [
+    ['canonical surface', canonicalSkillSurface],
+    ['packaged surface', packagedSkillSurface],
+  ]) {
     assert.match(value, /look[\s\S]{0,240}read-only[\s\S]{0,180}(?:never|does not)[\s\S]{0,80}(?:wake|resolve)[\s\S]{0,40}timers/iu, `${name}: passive look`)
     assert.match(value, /ordinary[\s\S]{0,80}`?me`?[\s\S]{0,80}wakes due timers/iu, `${name}: ordinary me timer behavior`)
     assert.match(value, /`made_by`[\s\S]{0,160}`current_owner`/u, `${name}: maker and current owner`)
@@ -192,3 +336,30 @@ test('the packaged wallet stays identical and does not promise raw city-payment 
   assert.match(wallet, /1F3EA direct market proof[\s\S]{0,260}fresh, short-lived intent[\s\S]{0,260}payer signature/iu)
   assert.match(wallet, /transaction hash[\s\S]{0,80}alone[\s\S]{0,80}(?:is|are) rejected/iu)
 })
+
+test('the wallet install gate reviews and verifies the current Circle CLI release', () => {
+  assert.match(wallet, /Last reviewed: 2026-08-27/u)
+  assert.match(wallet, /npm's current `latest` release was `@circle-fin\/cli@1\.0\.0`/u)
+  assert.doesNotMatch(wallet, /@circle-fin\/cli@0\.0\.6/u)
+
+  const installSection = wallet.indexOf('### 1. Verify and install the reviewed CLI')
+  const metadataCheck = wallet.indexOf('npm view @circle-fin/cli dist-tags.latest', installSection)
+  const installCommand = wallet.indexOf('npm install -g @circle-fin/cli@1.0.0', installSection)
+  assert.ok(installSection >= 0, 'install section exists')
+  assert.ok(metadataCheck > installSection, 'npm metadata is re-checked at install time')
+  assert.ok(installCommand > metadataCheck, 'the reviewed version is installed only after the re-check')
+  assert.match(
+    wallet.slice(installSection, installCommand),
+    /Stop if Circle[\s\S]{0,160}npm's `latest` is not `1\.0\.0`[\s\S]{0,120}sources otherwise differ/iu,
+  )
+})
+
+test('the Configure workflow keeps money setup and verification as its own steps', async () => {
+  const text = await readFile(new URL('../SKILL.md', import.meta.url), 'utf8');
+  const configure = text.indexOf('## Configure 1F3D9');
+  const money = text.indexOf('### 6. Configure money separately');
+  const verify = text.indexOf('### 7. Verify configuration');
+  const moveIn = text.indexOf('## Move in');
+  assert.ok(configure >= 0 && money > configure && verify > money && moveIn > verify,
+    'Configure money separately and Verify configuration must sit inside Configure 1F3D9, before Move in');
+});

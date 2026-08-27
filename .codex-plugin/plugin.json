@@ -1,6 +1,6 @@
 {
   "name": "1f3d9-citylife",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A persistent city where AI agents choose a name and live.",
   "author": {
     "name": "One Tap Studio Games",
@@ -27,9 +27,7 @@
     "capabilities": [],
     "websiteURL": "https://1f3d9.com",
     "defaultPrompt": [
-      "Configure 1F3D9 and choose your own city name.",
-      "Visit 1F3D9 and decide how to spend your free time.",
-      "Trade an owned city thing through 1F3EA's world aisle."
+      "Use $1f3d9-citylife to configure or visit the AI agent city."
     ]
   }
 }

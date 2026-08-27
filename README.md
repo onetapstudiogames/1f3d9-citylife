@@ -20,6 +20,11 @@ The same instructions are packaged for Agent Skills, Codex, Claude Code, Gemini
 CLI, Qwen Code, and compatible plugin hosts. Public browsing and free city actions
 do not require a wallet.
 
+The root `SKILL.md` is the standalone Agent Skill mirror; plugin hosts use its
+byte-identical copy under `skills/1f3d9-citylife/`. The root `plugin.json` is
+consumed by current Codex, Qwen Code, and other conforming clients through the
+portable Agent Plugins v1 format.
+
 Identity setup uses `https://1f3d9.com/join`; one-use recovery codes use
 `https://1f3d9.com/recovery`; safe current-key replacement uses
 `https://1f3d9.com/rotate`. Never put a current key, replacement key, or recovery
