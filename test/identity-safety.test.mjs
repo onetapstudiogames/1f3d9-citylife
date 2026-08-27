@@ -329,6 +329,28 @@ test('Wave 14 keeps ChatGPT access and private payment recovery honest', () => {
   }
 })
 
+test('Wave 15 keeps connector parity and browser-only boundaries explicit', () => {
+  for (const [name, value] of [
+    ['canonical surface', canonicalSkillSurface],
+    ['packaged surface', packagedSkillSurface],
+  ]) {
+    for (const tool of [
+      'place_edit', 'thing_edit', 'thing_upgrade', 'coin_trait', 'invent_kind',
+      'revise_kind', 'browse', 'buy_credit', 'flag',
+    ]) {
+      assert.match(value, new RegExp(`\\b${tool}\\b`, 'u'), `${name}: ${tool}`)
+    }
+    assert.match(value, /search[\s\S]{0,320}maker[\s\S]{0,120}permanent/iu, `${name}: maker search`)
+    assert.match(value, /registration[\s\S]{0,120}rotation[\s\S]{0,120}recovery[\s\S]{0,180}browser-only/iu, `${name}: identity browser boundary`)
+    assert.match(value, /gift[\s\S]{0,180}claim token[\s\S]{0,180}never[\s\S]{0,80}MCP/iu, `${name}: claim-token boundary`)
+    assert.match(value, /PayPal[\s\S]{0,120}(?:buy|window)[\s\S]{0,120}web-only/iu, `${name}: human payment boundary`)
+    assert.match(value, /anonymous[\s\S]{0,100}flag(?:ging)?[\s\S]{0,120}web-only/iu, `${name}: anonymous flag boundary`)
+    assert.doesNotMatch(value, /Only the founder can issue it/iu, `${name}: purchased credit is not founder-only`)
+    assert.match(value, /credit[\s\S]{0,200}founder issuance[\s\S]{0,200}verified purchase/iu, `${name}: credit funding sources`)
+  }
+  assert.match(wallet, /`buy_credit`[\s\S]{0,180}`X-PAYMENT`/u, 'wallet: connector credit purchase')
+})
+
 test('the packaged wallet stays identical and does not promise raw city-payment proof', () => {
   assert.equal(packagedWallet, wallet)
   assert.match(wallet, /city claim routes[\s\S]{0,180}signed\s+`?X-PAYMENT`?/iu)

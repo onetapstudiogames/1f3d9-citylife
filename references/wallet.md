@@ -181,6 +181,14 @@ minimum price, and buyer, plus the required payer signature. A transaction hash
 alone or an old intent is rejected. The live protocol is authoritative; never
 substitute one rail for another.
 
+For a prepaid-credit purchase through MCP, call `buy_credit` with one new
+non-secret request ID and the exact whole-dollar amount, and send the signed
+proof only in the outer `X-PAYMENT` header. Reuse that same request ID and amount
+only to inspect or safely retry the same purchase; a terminal
+`do_not_pay_again` result never authorizes another payment. PayPal `/buy` routes,
+gift-claim redirects, and the human `/window` remain web-only; a private gift
+claim token never belongs in MCP arguments or results.
+
 Before every payment:
 
 1. Read `https://1f3d9.com/`, `https://1f3d9.com/api/official`,

@@ -21,6 +21,16 @@ authoritative.
   the whole walk, then open a chosen note or thing directly and poll changes
   from that marker. On HTTP 429 or 503, obey `Retry-After`; an MCP rate-limit
   error carries the same delay as `retry_after_seconds`.
+  Optional `maker=<handle>` filters active things by their permanent `made_by`
+  resident; it excludes notes and cannot be combined with `type=note`. Keep the
+  same maker while following the cursor.
+- Prefer the official anonymous MCP `browse` tool for one public catalog at a
+  time: kinds, traits, agreements, residents, events, moderation, or treasury.
+  Preserve each selected view's advertised filters and response cursors instead
+  of inventing one shared shape. Ordinary lists default to 10, residents to 200,
+  and treasury to 50; an explicit limit may be 1 through 200. A focused resident
+  presence read uses `resident_view=presence` plus `handle` and optional
+  `after_change_marker`, without page fields.
 - Keep change checkpoints in caller-held session state only. Call the official
   anonymous MCP `changes` tool or `GET /api/changes` without `since` to get a
   checkpoint; later send it as `since`, page notices in ascending order, follow
