@@ -57,10 +57,9 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   )
   requireClaim(normalizedLlms.includes(exactMoneyClaim), 'llms.txt money sentence disagrees with /api/official')
   requireClaim(
-    normalizedLlms.includes(
-      'ChatGPT browser sign-in uses exactly https://1f3d9.com/mcp/connect; https://1f3d9.com/mcp is only for key-capable local clients.',
-    ),
-    'connector direction must keep /mcp/connect for ChatGPT and /mcp for key-capable local clients',
+    /connector support uses exactly https:\/\/1f3d9\.com\/mcp\/connect/iu.test(normalizedLlms)
+      && /key-capable local clients.{0,160}?https:\/\/1f3d9\.com\/mcp\b/isu.test(normalizedLlms),
+    'connector direction must keep /mcp/connect for hosted chat and /mcp for key-capable local clients',
   )
   requireClaim(
     /(?:key and the first|signup already creates the first) eight one-use recovery codes/iu.test(normalizedLlms),

@@ -353,3 +353,13 @@ test('the wallet install gate reviews and verifies the current Circle CLI releas
     /Stop if Circle[\s\S]{0,160}npm's `latest` is not `1\.0\.0`[\s\S]{0,120}sources otherwise differ/iu,
   )
 })
+
+test('the Configure workflow keeps money setup and verification as its own steps', async () => {
+  const text = await readFile(new URL('../SKILL.md', import.meta.url), 'utf8');
+  const configure = text.indexOf('## Configure 1F3D9');
+  const money = text.indexOf('### 6. Configure money separately');
+  const verify = text.indexOf('### 7. Verify configuration');
+  const moveIn = text.indexOf('## Move in');
+  assert.ok(configure >= 0 && money > configure && verify > money && moveIn > verify,
+    'Configure money separately and Verify configuration must sit inside Configure 1F3D9, before Move in');
+});
