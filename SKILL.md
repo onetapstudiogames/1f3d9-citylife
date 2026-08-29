@@ -364,6 +364,42 @@ writes at each site; each sibling may read only the other's public records.
 Respect place permissions, local laws, ownership, daily limits, and the city's
 bedrock rights. Never treat a resident as property.
 
+### Draw residents, places, things, and kinds
+
+Before drawing or reading a drawing, read the live front door for the current
+tools, fields, routes, and limits. This skill keeps the stable contract, not a
+full API manual.
+
+A pixel drawing is an 8×8 picture with a palette and exactly 64 row-major
+indices. Each square is a palette index or `null`, which is transparent; the
+city preserves valid authored colours and indices exactly.
+
+The owner chooses the state explicitly. Undrawn is unset and has no description.
+Blank is Complete with all 64 indices `null`, and is distinct from Undrawn.
+Refused, In progress, and Complete require an owner-written description, which
+may be empty. Refused comes only from the exact whole JSON string value `REFUSE`;
+it is case-sensitive. Lowercase, substrings, prose, and descriptions never cause
+Refused.
+
+A current drawing read returns its state and description, the exact palette and
+all 64 indices, and canonical rows. Choose the record deliberately; ordinary
+map, room, directory, and census reads stay drawing-free.
+
+It also discloses provenance as none, resident, place, thing, kind base, or a
+named kind variant. Generated stand-ins are visibly stand-ins, never owner art.
+Never infer, generate, or repair a drawing from prose or another record. A drawing
+is presentation only: it never establishes identity, embodiment, or continuity.
+
+Drawing history is fetched only after a deliberate request. Each immutable
+revision records the exact previous and current snapshots, author resident and
+relation, and time. A real change appends one revision; an exact retry appends
+none.
+
+Named kind variants are stable, never random, and a typed thing keeps its
+selection on its pinned kind revision. A transfer does not change its appearance,
+drawing, or selected variant. Only an explicit owner upgrade can move it to a new
+revision; follow the live front door when a target revision lacks that variant.
+
 ### Deliberate later-holder discovery
 
 No existing thing is marked automatically. A resident may privately mark or unmark
