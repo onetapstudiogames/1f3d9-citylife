@@ -351,6 +351,33 @@ test('Wave 15 keeps connector parity and browser-only boundaries explicit', () =
   assert.match(wallet, /`buy_credit`[\s\S]{0,180}`X-PAYMENT`/u, 'wallet: connector credit purchase')
 })
 
+test('Wave 16 states the drawing presentation contract without becoming an API manual', () => {
+  for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
+    assert.match(value, /8[×x]8[\s\S]{0,180}64[\s\S]{0,180}`null`[\s\S]{0,80}transparent/iu, `${name}: transparent 8x8 drawing`)
+    assert.match(value, /Blank[\s\S]{0,180}Complete[\s\S]{0,180}(?:64|all)[\s\S]{0,100}`null`/u, `${name}: Blank is complete transparency`)
+    assert.match(value, /Blank[\s\S]{0,180}(?:distinct|different)[\s\S]{0,100}Undrawn/iu, `${name}: Blank differs from Undrawn`)
+    assert.match(value, /exact whole[\s\S]{0,80}`REFUSE`[\s\S]{0,140}case-sensitive/iu, `${name}: exact REFUSE value`)
+    assert.match(value, /(?:lowercase|substring|prose|description)[\s\S]{0,180}(?:does not|never)[\s\S]{0,80}(?:refuse|Refused)/iu, `${name}: prose cannot trigger refusal`)
+    assert.match(value, /Refused[\s\S]{0,260}In progress[\s\S]{0,260}Complete[\s\S]{0,260}owner-written[\s\S]{0,80}description/iu, `${name}: drawn states require owner description`)
+    assert.match(value, /Undrawn[\s\S]{0,160}(?:no|without)[\s\S]{0,80}description/iu, `${name}: Undrawn has no description`)
+    assert.match(value, /current drawing[\s\S]{0,220}(?:state|description)[\s\S]{0,220}(?:exact|all 64)[\s\S]{0,140}(?:rows|indices)/iu, `${name}: exact current readback`)
+    assert.match(value, /provenance[\s\S]{0,220}none[\s\S]{0,100}resident[\s\S]{0,100}place[\s\S]{0,100}thing[\s\S]{0,100}kind base[\s\S]{0,120}named kind variant/iu, `${name}: exact drawing provenance`)
+    assert.match(value, /stand-in[\s\S]{0,100}visibl/iu, `${name}: stand-ins stay visible as stand-ins`)
+    assert.match(value, /never[\s\S]{0,120}(?:infer|generate|repair)[\s\S]{0,160}drawing/iu, `${name}: drawings are never synthesized`)
+    assert.match(value, /drawing[\s\S]{0,180}never[\s\S]{0,120}(?:establish|prove)[\s\S]{0,180}identity[\s\S]{0,180}embodiment[\s\S]{0,180}continuity/iu, `${name}: drawings are not continuity evidence`)
+  }
+})
+
+test('Wave 16 keeps drawing history deliberate and kind appearance revision-pinned', () => {
+  for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
+    assert.match(value, /drawing history[\s\S]{0,180}(?:only|after)[\s\S]{0,100}deliberate/iu, `${name}: deliberate history read`)
+    assert.match(value, /immutable[\s\S]{0,220}exact (?:previous|before)[\s\S]{0,100}(?:current|after)[\s\S]{0,220}author/iu, `${name}: immutable authored before and after`)
+    assert.match(value, /named kind variants[\s\S]{0,220}(?:stable|never random)[\s\S]{0,220}pinned[\s\S]{0,120}(?:kind )?revision/iu, `${name}: stable revision-pinned variants`)
+    assert.match(value, /transfer[\s\S]{0,180}(?:does not|never)[\s\S]{0,100}(?:change|rewrite)[\s\S]{0,100}(?:appearance|drawing|variant)/iu, `${name}: transfer preserves appearance`)
+    assert.match(value, /(?:front door|front_door)[\s\S]{0,200}(?:current|exact)[\s\S]{0,120}(?:fields|routes|protocol)/iu, `${name}: current mechanics stay at the live front door`)
+  }
+})
+
 test('the packaged wallet stays identical and does not promise raw city-payment proof', () => {
   assert.equal(packagedWallet, wallet)
   assert.match(wallet, /city claim routes[\s\S]{0,180}signed\s+`?X-PAYMENT`?/iu)
