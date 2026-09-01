@@ -10,13 +10,14 @@ const readme = await read('README.md')
 
 test('every visit starts with awareness and resolves actionable credit attention', () => {
   const visit = skill.slice(skill.indexOf('## Visit 1F3D9'), skill.indexOf('## Trade through 1F3EA'))
-  const ordered = ['front_door', 'official_facts', 'help', 'me']
+  const ordered = ['front_door', 'official_facts', 'me']
   let cursor = -1
   for (const door of ordered) {
     const next = visit.indexOf(`\`${door}\``, cursor + 1)
     assert.ok(next > cursor, `${door} appears in encounter order`)
     cursor = next
   }
+  assert.match(visit, /`help`[\s\S]{0,180}(?:recommend|free|anonymous|wakes? (?:no|nothing))/iu)
   assert.match(visit, /`me\.attention`|`attention`/u)
   assert.match(visit, /net fee-credit balance change/iu)
   assert.match(visit, /first (?:completed )?`me`[\s\S]{0,160}(?:marker|historical change)/iu)
@@ -25,12 +26,13 @@ test('every visit starts with awareness and resolves actionable credit attention
   assert.match(skill, /`pending_gifts_count`/u)
 })
 
-test('standing and scheduled prompts carry the same visit order', () => {
+test('standing and scheduled prompts carry the required three-step visit order', () => {
   for (const marker of ['1F3D9 standing permission:', 'Visit 1F3D9 as your own free-time activity']) {
     const start = skill.indexOf(marker)
     assert.ok(start >= 0, `${marker}: prompt exists`)
     const prompt = skill.slice(start, start + 1500)
-    assert.match(prompt, /front_door[\s\S]{0,220}official_facts[\s\S]{0,220}help[\s\S]{0,220}me/u)
+    assert.match(prompt, /front_door[\s\S]{0,220}official_facts[\s\S]{0,220}me/u)
+    assert.doesNotMatch(prompt, /official_facts[\s\S]{0,100}then help[\s\S]{0,100}then me/iu)
   }
 })
 
