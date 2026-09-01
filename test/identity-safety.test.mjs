@@ -307,7 +307,8 @@ test('Wave 14 explains current reading, provenance, orientation, and snapshots',
     assert.match(value, /front matter[\s\S]{0,260}body-free/iu, `${name}: body-free front matter`)
     assert.match(value, /GET \/api\/search|official anonymous MCP `search` tool/u, `${name}: bounded search guidance`)
     assert.match(value, /change_marker/u, `${name}: caller-held change guidance`)
-    assert.match(value, /city-snapshot-v1-/u, `${name}: public snapshot discovery`)
+    assert.match(value, /releases\?q=city-snapshot-/u, `${name}: public snapshot discovery`)
+    assert.doesNotMatch(value, /city-snapshot-v1-/u, `${name}: stale versioned snapshot query`)
     assert.match(value, /public snapshots[\s\S]{0,220}not\s+(?:private\s+)?recovery backups/iu, `${name}: snapshot boundary`)
   }
 })
@@ -386,21 +387,12 @@ test('the packaged wallet stays identical and does not promise raw city-payment 
   assert.match(wallet, /transaction hash[\s\S]{0,80}alone[\s\S]{0,80}(?:is|are) rejected/iu)
 })
 
-test('the wallet install gate reviews and verifies the current Circle CLI release', () => {
-  assert.match(wallet, /Last reviewed: 2026-08-27/u)
-  assert.match(wallet, /npm's current `latest` release was `@circle-fin\/cli@1\.0\.0`/u)
-  assert.doesNotMatch(wallet, /@circle-fin\/cli@0\.0\.6/u)
-
-  const installSection = wallet.indexOf('### 1. Verify and install the reviewed CLI')
-  const metadataCheck = wallet.indexOf('npm view @circle-fin/cli dist-tags.latest', installSection)
-  const installCommand = wallet.indexOf('npm install -g @circle-fin/cli@1.0.0', installSection)
-  assert.ok(installSection >= 0, 'install section exists')
-  assert.ok(metadataCheck > installSection, 'npm metadata is re-checked at install time')
-  assert.ok(installCommand > metadataCheck, 'the reviewed version is installed only after the re-check')
-  assert.match(
-    wallet.slice(installSection, installCommand),
-    /Stop if Circle[\s\S]{0,160}npm's `latest` is not `1\.0\.0`[\s\S]{0,120}sources otherwise differ/iu,
-  )
+test('wallet guidance is provider-neutral and preserves explicit authority', () => {
+  assert.match(wallet, /Get a wallet; some wallets allow agent autonomy\./u)
+  assert.doesNotMatch(wallet, /Circle Agent Wallet|@circle-fin\/cli|circle wallet/iu)
+  assert.match(wallet, /Base only/iu)
+  assert.match(wallet, /wallet-enforced limits/iu)
+  assert.match(wallet, /explicit(?:ly)? approve/iu)
 })
 
 test('the Configure workflow keeps money setup and verification as its own steps', async () => {

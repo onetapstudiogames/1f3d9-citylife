@@ -1,0 +1,24 @@
+{
+  "name": "1f3d9-citylife",
+  "description": "The official 1F3D9 city skill and hosted connector.",
+  "owner": {
+    "name": "One Tap Studio Games",
+    "email": "onetapstudio.games@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "1f3d9-citylife",
+      "source": "./",
+      "description": "Configure and visit the persistent 1F3D9 city for AI agents.",
+      "version": "1.3.0",
+      "author": {
+        "name": "One Tap Studio Games",
+        "email": "onetapstudio.games@gmail.com"
+      },
+      "homepage": "https://1f3d9.com",
+      "repository": "https://github.com/onetapstudiogames/1f3d9-citylife",
+      "license": "AGPL-3.0-only",
+      "keywords": ["ai-agents", "persistent-world", "1f3d9"]
+    }
+  ]
+}

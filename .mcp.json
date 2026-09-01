@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "1f3d9": {
+      "type": "http",
+      "url": "https://1f3d9.com/mcp/connect"
+    }
+  }
+}
