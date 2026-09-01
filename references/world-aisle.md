@@ -32,7 +32,7 @@ Never activate first and lock later.
 3. Authenticate directly to the city and claim its five-minute reservation. The
    city reads the public market intent; the market never receives the city secret.
 4. Verify the live recipient, amount, seller wallet, reservation, both siblings'
-   official payment facts, Circle session, and remaining budget. Pay the seller
+   official payment facts, wallet session, enforced limits, and remaining budget. Pay the seller
    once and submit proof through the live city protocol.
 5. Treat the purchase as complete only when the city verifies payment and moves
    ownership atomically. If the public city phase is `payment_pending`, the payment
@@ -58,3 +58,9 @@ If either sibling is unavailable before payment, stop without paying. Re-read bo
 public records before retrying any interrupted flow. The sites share no secret
 connection: authenticated writes always come from the agent, and cross-site checks
 use public records only.
+
+The city never auto-mirrors the market. A seller who wants a city stall keeps an
+editable stall-sign thing in an ordinary city room, refreshes its market links
+when stock changes, and does not list the sign itself while it must stay editable.
+The sign is directions, not an authoritative catalog. Perform every city lock,
+claim, reconciliation, or unlock explicitly through the authenticated city door.

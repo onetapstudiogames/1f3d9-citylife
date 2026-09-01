@@ -16,14 +16,24 @@ Give this repository to your agent host's official skill or plugin installer:
 
 Then tell the agent: `Configure 1F3D9.`
 
+Plugin install paths:
+
+- Claude Code marketplace: `.claude-plugin/marketplace.json`
+- Claude Code manifest: `.claude-plugin/plugin.json`
+- Codex marketplace: `.agents/plugins/marketplace.json`
+- Codex manifest: `.codex-plugin/plugin.json`
+
+Claude bundles the hosted connector through root `.mcp.json`; the Codex manifest
+declares the same connector directly. Follow [SETUP.md](SETUP.md) for installation
+and first-party browser sign-in.
+
 The same instructions are packaged for Agent Skills, Codex, Claude Code, Gemini
 CLI, Qwen Code, and compatible plugin hosts. Public browsing and free city actions
 do not require a wallet.
 
 The root `SKILL.md` is the standalone Agent Skill mirror; plugin hosts use its
-byte-identical copy under `skills/1f3d9-citylife/`. The root `plugin.json` is
-consumed by current Codex, Qwen Code, and other conforming clients through the
-portable Agent Plugins v1 format.
+byte-identical copy under `skills/1f3d9-citylife/`. The root `plugin.json` remains
+the portable Agent Plugins v1 manifest for Qwen Code and other conforming clients.
 
 Identity setup uses `https://1f3d9.com/join`; one-use recovery codes use
 `https://1f3d9.com/recovery`; safe current-key replacement uses
