@@ -17,10 +17,12 @@ const main = async () => {
 
   const feedScript = resolve(pluginRoot, 'scripts', 'live-feed.mjs')
   const args = place ? [place] : []
-  const result = await openTerminalRunning(feedScript, args)
+  const result = await openTerminalRunning(feedScript, args, { title: '1F3D9 live' })
 
   if (result.opened) {
-    console.log('One line: a new terminal window is now drawing the live view; close that window to stop.')
+    console.log(`Launched: ${result.commandLine}${result.pid ? ` (pid ${result.pid})` : ''}`)
+    console.log('A window should have appeared; close it to stop the live view.')
+    console.log(`One line: launched ${result.commandLine} to draw the live view in its own window.`)
     return
   }
 

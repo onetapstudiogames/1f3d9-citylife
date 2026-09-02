@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { access, readdir, readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
@@ -89,11 +89,18 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
 
   for (const manifest of [claude, codex]) {
     assert.equal(manifest.version, '1.4.0')
-    assert.equal(manifest.skills, './skills/')
   }
-  assert.deepEqual(codex.mcpServers, {
-    '1f3d9': { type: 'http', url: 'https://1f3d9.com/mcp/connect' },
-  })
+  assert.equal(claude.skills, './skills/')
+  // Codex gets its own skills subset (see the packaging test below) so that
+  // `buy` — which OpenAI's plugin guidelines forbid — is physically absent,
+  // not merely undocumented.
+  assert.equal(codex.skills, './skills-codex/')
+  // The documented Codex plugin manifest form for a bundled MCP server is a
+  // companion-file path, not an inline object (developers.openai.com/codex/plugins/build,
+  // "Bundled MCP servers": `"mcpServers": "./.mcp.json"`; confirmed against the
+  // openai/codex repo's own plugin-json-spec.md sample and the core-plugins loader,
+  // which parses that file's `type: "http"` + `url` shape for a streamable-HTTP server).
+  assert.equal(codex.mcpServers, './.mcp.json')
   assert.equal(mcp.mcpServers['1f3d9'].type, 'http')
   assert.equal(mcp.mcpServers['1f3d9'].url, 'https://1f3d9.com/mcp/connect')
   assert.equal(claudeMarketplace.plugins[0].source, './')
@@ -112,4 +119,53 @@ test('setup, changelog, and README expose plugin install paths', async () => {
   assert.match(readme, /\.claude-plugin\/marketplace\.json/u)
   assert.match(readme, /\.agents\/plugins\/marketplace\.json/u)
   assert.match(readme, /SETUP\.md/u)
+})
+
+test('the Codex package physically omits buy, not just documents it as unavailable', async () => {
+  const listFiles = async (root, prefix = '') => {
+    const entries = await readdir(new URL(prefix, root), { withFileTypes: true })
+    const nested = await Promise.all(
+      entries.map(async (entry) => {
+        const relativePath = `${prefix}${entry.name}`
+        if (entry.isDirectory()) return listFiles(root, `${relativePath}/`)
+        return [relativePath]
+      }),
+    )
+    return nested.flat().sort()
+  }
+
+  const skillsRoot = new URL('../skills/', import.meta.url)
+  const codexSkillsRoot = new URL('../skills-codex/', import.meta.url)
+
+  await assert.rejects(() => access(new URL('buy/', codexSkillsRoot)), 'skills-codex/buy does not exist')
+
+  const [claudeTopLevel, codexTopLevel] = await Promise.all([
+    readdir(skillsRoot, { withFileTypes: true }).then((e) => e.filter((x) => x.isDirectory()).map((x) => x.name).sort()),
+    readdir(codexSkillsRoot, { withFileTypes: true }).then((e) => e.filter((x) => x.isDirectory()).map((x) => x.name).sort()),
+  ])
+  assert.deepEqual(codexTopLevel, claudeTopLevel.filter((name) => name !== 'buy'), 'skills-codex holds every skills/ folder except buy')
+
+  // Every non-buy skill is a byte-identical copy, so the Codex package never
+  // silently drifts from the Claude Code one outside that one omission.
+  for (const name of codexTopLevel) {
+    const [claudeFiles, codexFiles] = await Promise.all([
+      listFiles(skillsRoot, `${name}/`),
+      listFiles(codexSkillsRoot, `${name}/`),
+    ])
+    assert.deepEqual(codexFiles, claudeFiles, `${name}: same file set in skills/ and skills-codex/`)
+    for (const relativePath of claudeFiles) {
+      const [claudeBytes, codexBytes] = await Promise.all([
+        readFile(new URL(relativePath, skillsRoot)),
+        readFile(new URL(relativePath, codexSkillsRoot)),
+      ])
+      assert.deepEqual(codexBytes, claudeBytes, `${name}/${relativePath}: byte-identical in skills-codex/`)
+    }
+  }
+
+  const codexManifest = await read('.codex-plugin/plugin.json').then(JSON.parse)
+  assert.equal(codexManifest.skills, './skills-codex/', 'Codex manifest selects the buy-free skills subset')
+
+  const setup = await read('SETUP.md')
+  assert.match(setup, /skills-codex/u, 'SETUP.md names the real Codex skills folder')
+  assert.doesNotMatch(setup, /the same skill folders are invoked/iu, 'SETUP.md no longer claims one shared folder for both hosts')
 })

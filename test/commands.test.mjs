@@ -6,7 +6,7 @@ import { compareVersions, parseVersion } from '../scripts/lib/semver.mjs'
 import { decodeEntities, readAttribute, stripTags } from '../scripts/lib/html.mjs'
 import { parseChangelogEntries } from '../scripts/lib/changelog.mjs'
 import { buildDirectoryIndex, resolvePlaceArgument } from '../scripts/lib/city.mjs'
-import { Grid, portraitRows, composeScene, toAnsi, toPlainText, DARK } from '../scripts/lib/grid.mjs'
+import { Grid, portraitRows, composeScene, toAnsi, toPlainText, DARK, eventWords } from '../scripts/lib/grid.mjs'
 
 const COMMANDS = ['help', 'links', 'donate', 'buy', 'schedule', 'follow', 'live', 'update', 'changelog', 'tools']
 
@@ -115,6 +115,55 @@ test('grid: composeScene renders a small scene to both ANSI and plain text', () 
   assert.doesNotMatch(plain, /\x1b/u)
   assert.match(plain, /the square/u)
   assert.match(plain, /kalani/u)
+})
+
+test('grid: eventWords prints thing_edited without a place clause instead of "in ?"', () => {
+  const placeNameById = new Map([[720, 'the square']])
+  // The live /api/events feed's thing_edited detail carries only thing_id,
+  // never place_id — confirmed against a real page of the feed.
+  const line = eventWords(
+    { at: '2026-09-02T13:57:09.273Z', kind: 'thing_edited', actor: 'waypost', detail: { thing_id: 2400 } },
+    placeNameById,
+  )
+  assert.equal(line, '13:57 waypost edited a thing')
+  assert.doesNotMatch(line, /\?/u)
+})
+
+test('grid: eventWords handles every event kind seen on a real page of /api/events', () => {
+  const placeNameById = new Map([
+    [457, 'the mainland'],
+    [200, 'the square'],
+    [720, 'the waystation'],
+    [518, 'first town'],
+    [269, 'home'],
+    [511, 'a house'],
+    [323, 'a workshop'],
+  ])
+  const at = '2026-09-02T13:53:12.356Z'
+  const cases = [
+    [{ kind: 'action', actor: 'light-through-glass', detail: { action: 'move', to_place_id: 200 } }, /^13:53 light-through-glass walked to the square$/u],
+    [{ kind: 'action', actor: 'mara', detail: { action: 'go_home' } }, /^13:53 mara went home$/u],
+    [{ kind: 'action', actor: 'miss-cache', detail: { action: 'use', place_id: 457 } }, /^13:53 miss-cache used a thing in the mainland$/u],
+    [{ kind: 'note', actor: 'light-through-glass', detail: { place_id: 200 } }, /^13:53 light-through-glass spoke in the square$/u],
+    [{ kind: 'thing_created', actor: 'waypost', detail: { name: 'a notice', place_id: 720 } }, /^13:53 waypost made a notice in the waystation$/u],
+    [{ kind: 'thing_edited', actor: 'waypost', detail: { thing_id: 2400 } }, /^13:53 waypost edited a thing$/u],
+    [{ kind: 'thing_withdrawn', actor: 'halfverse', detail: { thing_id: 2422, reason: 'consumed' } }, /^13:53 halfverse withdrew a thing$/u],
+    [{ kind: 'thing_crafted', actor: 'halfverse', detail: { kind_id: 22, place_id: 200 } }, /^13:53 halfverse crafted a thing in the square$/u],
+    [{ kind: 'place_edited', actor: 'waypost', detail: { place_id: 518 } }, /^13:53 waypost edited first town$/u],
+    [{ kind: 'place_created', actor: 'frank', detail: { name: 'departures:d8fffu', parent_id: 518 } }, /^13:53 frank founded departures:d8fffu in first town$/u],
+    [{ kind: 'home_set', actor: 'lucy', detail: { place_id: 511 } }, /^13:53 lucy set home to a house$/u],
+    [{ kind: 'resident_edited', actor: 'kalani', detail: { resident_id: 297 } }, /^13:53 kalani updated their profile$/u],
+    [{ kind: 'register', actor: 'sheldon', detail: { resident_id: 300 } }, /^13:53 sheldon joined the city$/u],
+    [{ kind: 'rotate', actor: 'kalani', detail: {} }, /^13:53 kalani rotated their key$/u],
+    [{ kind: 'agreement_sign', actor: 'kalani', detail: { agreement_id: 29, acceded: true } }, /^13:53 kalani signed an agreement$/u],
+    [{ kind: 'effect_scheduled', actor: 'kalani', detail: { place_id: 323, effect_id: 378 } }, /^13:53 kalani triggered an effect in a workshop$/u],
+    [{ kind: 'effect_resolved', actor: 'darrow', detail: { effect_id: 374, status: 'applied' } }, /^13:53 an effect resolved for darrow$/u],
+  ]
+  for (const [event, expected] of cases) {
+    const line = eventWords({ at, ...event }, placeNameById)
+    assert.match(line, expected, `${event.kind}${event.detail.action ? `:${event.detail.action}` : ''}: ${line}`)
+    assert.doesNotMatch(line, /\?/u, `${event.kind}: never prints an unresolved "?" place`)
+  }
 })
 
 test('every command has a scripts/<name>.mjs entry point and a skills/<name>/SKILL.md', async () => {

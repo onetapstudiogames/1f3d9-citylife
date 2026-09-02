@@ -21,10 +21,12 @@ const main = async () => {
   console.log(`Opening a live text feed for ${handle}, refreshed from the public record every 30 seconds.`)
 
   const feedScript = resolve(pluginRoot, 'scripts', 'follow-feed.mjs')
-  const result = await openTerminalRunning(feedScript, [handle])
+  const result = await openTerminalRunning(feedScript, [handle], { title: `1F3D9 · following ${handle}` })
 
   if (result.opened) {
-    console.log(`One line: a new terminal window is now following ${handle}; close that window to stop.`)
+    console.log(`Launched: ${result.commandLine}${result.pid ? ` (pid ${result.pid})` : ''}`)
+    console.log(`A window should have appeared; close it to stop following ${handle}.`)
+    console.log(`One line: launched ${result.commandLine} to follow ${handle} in its own window.`)
   } else {
     console.log(`No real terminal window is available here (${result.reason}), so here is one snapshot instead:`)
     console.log('')

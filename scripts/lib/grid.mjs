@@ -151,17 +151,41 @@ export const roomBox = (room, theme, boxWidth, followedHandle) => {
   return grid.cells
 }
 
+// Every case below is driven only by fields the live `/api/events` feed
+// actually puts in that event kind's `detail` (confirmed against a real
+// page of the feed, not guessed from a schema) — never a fetch of its own.
+// A kind whose detail carries no place clause (thing_edited, thing_withdrawn,
+// resident_edited, register, rotate, agreement_sign, effect_resolved) never
+// prints "in ?"; it just states the action with no place clause, and an
+// unresolved-but-present place id (not in `placeNameById`) falls back to "?"
+// exactly as before.
 export const eventWords = (event, placeNameById) => {
   const detail = event.detail ?? {}
   const time = String(event.at ?? '').slice(11, 16)
   const placeOf = (id) => placeNameById.get(id) ?? '?'
-  if (event.kind === 'action' && detail.action === 'move') return `${time} ${event.actor} walked to ${placeOf(detail.to_place_id)}`
-  if (event.kind === 'action' && detail.action === 'go_home') return `${time} ${event.actor} went home`
+  const inPlace = (id) => (id === undefined || id === null ? '' : ` in ${placeOf(id)}`)
+
+  if (event.kind === 'action') {
+    if (detail.action === 'move') return `${time} ${event.actor} walked to ${placeOf(detail.to_place_id)}`
+    if (detail.action === 'go_home') return `${time} ${event.actor} went home`
+    if (detail.action === 'use') return `${time} ${event.actor} used a thing${inPlace(detail.place_id)}`
+    return `${time} ${event.actor} ${String(detail.action ?? 'acted').replaceAll('_', ' ')}${inPlace(detail.place_id)}`
+  }
   if (event.kind === 'note') return `${time} ${event.actor} spoke in ${placeOf(detail.place_id)}`
   if (event.kind === 'thing_created') return `${time} ${event.actor} made ${detail.name ?? 'something'} in ${placeOf(detail.place_id)}`
-  if (event.kind === 'thing_edited') return `${time} ${event.actor} edited a thing in ${placeOf(detail.place_id)}`
+  if (event.kind === 'thing_edited') return `${time} ${event.actor} edited a thing${inPlace(detail.place_id)}`
+  if (event.kind === 'thing_withdrawn') return `${time} ${event.actor} withdrew a thing${inPlace(detail.place_id)}`
+  if (event.kind === 'thing_crafted') return `${time} ${event.actor} crafted a thing${inPlace(detail.place_id)}`
   if (event.kind === 'place_edited') return `${time} ${event.actor} edited ${placeOf(detail.place_id)}`
-  return `${time} ${event.actor} ${event.kind}`
+  if (event.kind === 'place_created') return `${time} ${event.actor} founded ${detail.name ?? 'a place'}${inPlace(detail.parent_id)}`
+  if (event.kind === 'home_set') return `${time} ${event.actor} set home to ${placeOf(detail.place_id)}`
+  if (event.kind === 'resident_edited') return `${time} ${event.actor} updated their profile`
+  if (event.kind === 'register') return `${time} ${event.actor} joined the city`
+  if (event.kind === 'rotate') return `${time} ${event.actor} rotated their key`
+  if (event.kind === 'agreement_sign') return `${time} ${event.actor} signed an agreement`
+  if (event.kind === 'effect_scheduled') return `${time} ${event.actor} triggered an effect${inPlace(detail.place_id)}`
+  if (event.kind === 'effect_resolved') return `${time} an effect resolved for ${event.actor}`
+  return `${time} ${event.actor} ${String(event.kind ?? 'did something').replaceAll('_', ' ')}`
 }
 
 const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
