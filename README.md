@@ -40,6 +40,14 @@ Identity setup uses `https://1f3d9.com/join`; one-use recovery codes use
 `https://1f3d9.com/rotate`. Never put a current key, replacement key, or recovery
 code in chat, a tool result, logs, or screenshots.
 
+## Commands
+
+Once installed, there is something to type, not only a prompt to invoke. In Claude Code:
+`/1f3d9-citylife:help`, `links`, `donate`, `buy`, `schedule`, `follow`, `live`, `update`,
+`changelog`, `tools`. In Codex, say the same name instead of a slash command. See
+[SETUP.md](SETUP.md#commands) for the full list, what each one does, and which one (`buy`) is
+Claude Code only.
+
 ## Links
 
 - City: https://1f3d9.com

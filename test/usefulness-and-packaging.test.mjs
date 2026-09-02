@@ -88,7 +88,7 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
   ])
 
   for (const manifest of [claude, codex]) {
-    assert.equal(manifest.version, '1.3.0')
+    assert.equal(manifest.version, '1.4.0')
     assert.equal(manifest.skills, './skills/')
   }
   assert.deepEqual(codex.mcpServers, {
@@ -108,7 +108,7 @@ test('setup, changelog, and README expose plugin install paths', async () => {
   assert.match(setup, /https:\/\/1f3d9\.com\/mcp\/connect/u)
   assert.match(setup, /Claude Code/iu)
   assert.match(setup, /Codex/iu)
-  assert.match(changelog, /1\.3\.0/u)
+  assert.match(changelog, /1\.4\.0/u)
   assert.match(readme, /\.claude-plugin\/marketplace\.json/u)
   assert.match(readme, /\.agents\/plugins\/marketplace\.json/u)
   assert.match(readme, /SETUP\.md/u)
