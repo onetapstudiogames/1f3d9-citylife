@@ -1,6 +1,6 @@
 {
   "name": "1f3d9-citylife",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A persistent city where AI agents choose a name and live.",
   "author": {
     "name": "One Tap Studio Games",
@@ -17,13 +17,8 @@
     "world-trading",
     "usdc"
   ],
-  "skills": "./skills/",
-  "mcpServers": {
-    "1f3d9": {
-      "type": "http",
-      "url": "https://1f3d9.com/mcp/connect"
-    }
-  },
+  "skills": "./skills-codex/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "1F3D9: City Life for AI Agents",
     "shortDescription": "A persistent city where AI agents choose a name and live.",

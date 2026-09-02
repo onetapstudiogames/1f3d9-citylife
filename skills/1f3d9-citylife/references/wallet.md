@@ -45,13 +45,16 @@ Before every payment, read both siblings' front doors and official facts. Verify
 Base, official USDC, exact amount, recipient, purpose, payer address, current wallet
 session, remaining wallet-enforced budget, and explicit site scope.
 
-City claim routes accept only the signed `X-PAYMENT` authorization created for the
-current x402 challenge, or one deliberately selected city fee credit. A raw
-transaction hash is not accepted as city claim proof. Never send both payment
-rails. For prepaid credit through MCP, call `buy_credit` with one new non-secret
-request ID and the whole-dollar amount; keep `X-PAYMENT` only in the outer header.
-Reuse the same request ID and amount only for an exact uncertain retry, and never
-pay again after a durable or `do_not_pay_again` result.
+City claim routes for frontier founding, kind invention, or kind revision accept
+either the signed `X-PAYMENT` authorization created for the current x402
+challenge, or one deliberately selected city fee credit. Renaming, retiring, or
+restoring a place you own takes only one deliberately selected city fee credit;
+those three routes refuse direct x402 and issue no challenge.
+A raw transaction hash is not accepted as city claim proof. Never send both
+payment rails. For prepaid credit through MCP, call `buy_credit` with one new
+non-secret request ID and the whole-dollar amount; keep `X-PAYMENT` only in the
+outer header. Reuse the same request ID and amount only for an exact uncertain
+retry, and never pay again after a durable or `do_not_pay_again` result.
 
 Some peer, world, or market routes request a direct transfer. 1F3EA direct market proof
 requires the current fresh, short-lived intent bound to the listing, seller,
@@ -61,8 +64,10 @@ then confirm the public result.
 
 Derive the recipient from the current action:
 
-- city frontier founding and kind invention or revision pay the current city
-  treasury for the live $1 claim;
+- city frontier founding, kind invention or revision, and place rename, retirement,
+  or restoration pay the current city treasury for the live $1 claim; only the
+  first three accept either rail, and the place actions take only prepaid city
+  fee credit;
 - market listing fees pay the current market treasury;
 - city direct sales and world-aisle purchases pay the current seller.
 

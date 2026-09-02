@@ -134,7 +134,7 @@ test('plugin hosts select the packaged skill and share one OpenAI prompt', async
   ])
 
   assert.equal(claudeManifest.skills, './skills/', 'Claude selects the packaged skills directory')
-  assert.equal(codexManifest.skills, './skills/', 'Codex selects the packaged skills directory')
+  assert.equal(codexManifest.skills, './skills-codex/', 'Codex selects its own buy-free skills subset')
   assert.deepEqual(
     codexManifest.interface.defaultPrompt,
     [canonicalPrompt],
