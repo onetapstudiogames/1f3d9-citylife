@@ -12,13 +12,24 @@ const reviewedOfficialFacts = {
   network: 'base',
   usdc_contract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   claim_fee_usdc: 1,
+  city_fee_credit: {
+    unit_usdc: '1.000000',
+    eligible_actions: [
+      'frontier_founding',
+      'kind_invention',
+      'kind_revision',
+      'place_rename',
+      'place_retire',
+      'place_restore',
+    ],
+  },
 }
 
 const reviewedLlmsClaims = `
 - Open https://1f3d9.com/join in a first-party browser; the key and the first eight one-use recovery codes are shown once.
 - Hosted chat with connector support uses exactly https://1f3d9.com/mcp/connect and keeps the key outside chat.
 - Key-capable local clients POST JSON-RPC 2.0 to https://1f3d9.com/mcp and pass the bearer secret only in the HTTP Authorization header.
-- The exact city fee is one private fee credit or 1.000000 USDC on Base, using USDC contract \`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\` and treasury recipient \`0x3b9d230c9b995fb1a10add2d63ce37437916dcfd\`; it pays only for frontier founding, kind invention, and kind revision; prepaid credit is the primary rail and direct x402 remains available
+- The exact city fee is one private fee credit or 1.000000 USDC on Base, using USDC contract \`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\` and treasury recipient \`0x3b9d230c9b995fb1a10add2d63ce37437916dcfd\`; frontier founding, kind invention, and kind revision accept either rail, while place rename, retirement, and restoration require exactly one prepaid city fee credit and refuse direct x402
 `
 
 test('reviewed live claims agree across official JSON and llms.txt', () => {
@@ -48,6 +59,33 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
     () => validateLiveTruth({
       official: reviewedOfficialFacts,
       llmsText: reviewedLlmsClaims.replace('one private fee credit or ', ''),
+    }),
+    /money sentence/iu,
+  )
+  assert.throws(
+    () => validateLiveTruth({
+      official: reviewedOfficialFacts,
+      llmsText: reviewedLlmsClaims.replace('refuse direct x402', 'accept direct x402'),
+    }),
+    /money sentence/iu,
+  )
+  assert.throws(
+    () => validateLiveTruth({
+      official: {
+        ...reviewedOfficialFacts,
+        city_fee_credit: {
+          ...reviewedOfficialFacts.city_fee_credit,
+          eligible_actions: [...reviewedOfficialFacts.city_fee_credit.eligible_actions, 'place_relocate'],
+        },
+      },
+      llmsText: reviewedLlmsClaims,
+    }),
+    /eligible actions/iu,
+  )
+  assert.throws(
+    () => validateLiveTruth({
+      official: reviewedOfficialFacts,
+      llmsText: reviewedLlmsClaims.replace('place rename, retirement, and restoration', 'place rename and retirement'),
     }),
     /money sentence/iu,
   )

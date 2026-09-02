@@ -11,6 +11,21 @@ const reviewed = {
   network: 'base',
   usdcContract: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
   claimFeeUsdc: 1,
+  unitUsdc: '1.000000',
+  // Actions that accept either rail (prepaid city fee credit or direct x402).
+  dualRailActions: ['frontier_founding', 'kind_invention', 'kind_revision'],
+  // Actions that require exactly one prepaid city fee credit and refuse direct x402 (decision #68).
+  creditOnlyActions: ['place_rename', 'place_retire', 'place_restore'],
+}
+
+// Human-readable phrasing the llms.txt money sentence is expected to use per action id.
+const actionLabels = {
+  frontier_founding: /frontier founding/iu,
+  kind_invention: /kind invention/iu,
+  kind_revision: /kind revision/iu,
+  place_rename: /place rename/iu,
+  place_retire: /retir(?:e|ement)/iu,
+  place_restore: /restor(?:e|ation)/iu,
 }
 
 class FetchUnavailableError extends Error {}
@@ -51,11 +66,65 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   )
   requireClaim(official.claim_fee_usdc === reviewed.claimFeeUsdc, 'claim fee must be 1 USDC')
 
-  const normalizedLlms = compact(llmsText)
-  const exactMoneyClaim = compact(
-    `The exact city fee is one private fee credit or 1.000000 USDC on Base, using USDC contract \`${official.usdc_contract}\` and treasury recipient \`${official.treasury}\`; it pays only for frontier founding, kind invention, and kind revision; prepaid credit is the primary rail and direct x402 remains available`,
+  const feeCredit = official.city_fee_credit
+  requireClaim(feeCredit && typeof feeCredit === 'object', 'official city_fee_credit is missing')
+  requireClaim(feeCredit.unit_usdc === reviewed.unitUsdc, 'city fee credit unit must be 1.000000 USDC')
+
+  const knownActions = [...reviewed.dualRailActions, ...reviewed.creditOnlyActions].sort()
+  const officialActions = [...(feeCredit.eligible_actions ?? [])].sort()
+  requireClaim(
+    JSON.stringify(officialActions) === JSON.stringify(knownActions),
+    'official eligible actions changed; update the reviewed action groups and llms.txt money sentence',
   )
-  requireClaim(normalizedLlms.includes(exactMoneyClaim), 'llms.txt money sentence disagrees with /api/official')
+
+  const normalizedLlms = compact(llmsText)
+  const moneyLine = llmsText.split(/\r?\n/u).find((entry) => /the exact city fee is/iu.test(entry))
+  requireClaim(Boolean(moneyLine), 'llms.txt money sentence disagrees with /api/official (sentence not found)')
+  const moneySentence = compact(moneyLine)
+
+  requireClaim(
+    moneySentence.includes(`\`${official.usdc_contract}\``),
+    'llms.txt money sentence disagrees with /api/official (USDC contract)',
+  )
+  requireClaim(
+    moneySentence.includes(`\`${official.treasury}\``),
+    'llms.txt money sentence disagrees with /api/official (treasury)',
+  )
+  requireClaim(
+    moneySentence.includes(`${feeCredit.unit_usdc} USDC`),
+    'llms.txt money sentence disagrees with /api/official (unit)',
+  )
+  requireClaim(
+    /one private fee credit/iu.test(moneySentence),
+    'llms.txt money sentence disagrees with /api/official (prepaid credit rail)',
+  )
+
+  const [acceptClause = '', refuseClause = ''] = moneySentence.split(/,?\s+while\s+/iu)
+  requireClaim(
+    refuseClause.length > 0,
+    'llms.txt money sentence disagrees with /api/official (missing credit-only clause)',
+  )
+  requireClaim(
+    /accept either rail/iu.test(acceptClause),
+    'llms.txt money sentence disagrees with /api/official (dual-rail actions must accept either rail)',
+  )
+  requireClaim(
+    /refuses? direct x402/iu.test(refuseClause) && /prepaid city fee credit/iu.test(refuseClause),
+    'llms.txt money sentence disagrees with /api/official (credit-only actions must refuse direct x402)',
+  )
+  for (const action of reviewed.dualRailActions) {
+    requireClaim(
+      actionLabels[action].test(acceptClause),
+      `llms.txt money sentence disagrees with /api/official (missing dual-rail action ${action})`,
+    )
+  }
+  for (const action of reviewed.creditOnlyActions) {
+    requireClaim(
+      actionLabels[action].test(refuseClause),
+      `llms.txt money sentence disagrees with /api/official (missing credit-only action ${action})`,
+    )
+  }
+
   requireClaim(
     /connector support uses exactly https:\/\/1f3d9\.com\/mcp\/connect/iu.test(normalizedLlms)
       && /key-capable local clients.{0,160}?https:\/\/1f3d9\.com\/mcp\b/isu.test(normalizedLlms),

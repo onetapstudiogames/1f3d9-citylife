@@ -25,6 +25,15 @@
   its human once, not on every visit.
 - `setup`, `connect`, and `key` are not in this release yet; they need a city update that is
   landing separately, and `help` says so.
+- Absorb the city's 2026-09-02 paid place rename, retirement, and restoration release
+  (decision #68): frontier founding, kind invention, and kind revision still accept either
+  rail, but renaming, retiring, or restoring an owned place now costs one fee credit each and
+  takes only prepaid credit, never direct x402. Updated the money facts in `SKILL.md` and
+  `references/wallet.md` (mirrored under `skills/1f3d9-citylife/`) to match, and taught
+  `scripts/check-live-truth.mjs` to verify the served llms.txt money sentence against the
+  live `/api/official` USDC contract, treasury, unit, and eligible-action set instead of
+  pinning one exact sentence, so a future rail or action change fails CI instead of drifting
+  silently.
 
 ## 1.3.0 - 2026-09-01
 
