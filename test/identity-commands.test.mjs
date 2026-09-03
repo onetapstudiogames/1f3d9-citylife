@@ -7,10 +7,10 @@
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
 
 import { deleteSecret, readSecret, storeSecret } from '../scripts/identity-client.mjs'
@@ -44,6 +44,26 @@ function assertNoSecretLeaked(result, label) {
   assert.doesNotMatch(result.stdout ?? '', NO_SECRET_LITERAL, `${label}: stdout never carries a raw secret`)
   assert.doesNotMatch(result.stderr ?? '', NO_SECRET_LITERAL, `${label}: stderr never carries a raw secret`)
 }
+
+/**
+ * Mirrors promoteLockPath's own naming (identity-client.mjs, not exported)
+ * so a test can hold the exact same per-(origin, handle) lock file
+ * promoteReplacementKey acquires, WITHOUT reaching into identity-client.mjs
+ * internals. Only used by the round-4 finding 1 e2e test below, to force a
+ * register() run's own vault promotion to fail after the city has already
+ * confirmed the resident server-side.
+ */
+function promoteLockPathForTest(origin, handle, homeDir) {
+  const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
+  const safeHandle = handle.replace(/[^a-z0-9._-]/giu, '_')
+  return join(homeDir, '.1f3d9', `promote-lock__${safeOrigin}__${safeHandle}.lock`)
+}
+
+// --import URL for register-incomplete-vault-loader.mjs (see that file and
+// incomplete-vault-loader.mjs for what this does) -- used only by the
+// "injected incomplete enumeration" test below.
+const INCOMPLETE_VAULT_LOADER_IMPORT_URL =
+  pathToFileURL(fileURLToPath(new URL('./helpers/register-incomplete-vault-loader.mjs', import.meta.url))).href
 
 /**
  * Enumerates every RAW label this platform's vault backend currently holds
@@ -1547,6 +1567,55 @@ test('key rotate, key recover generate, key status, and connect.mjs all disclose
   }
 })
 
+// round-4 finding 5 (part 2): the disclosure test above only ever pins the
+// happy path -- probeMatchesOrRefuse's OTHER branch (the stored key simply
+// does not work) had no coverage at all, so a change that dropped its
+// refusal wording, or started claiming success there, would leave `npm
+// test` green.
+test(
+  'key rotate and key recover generate refuse, and never claim a successful `me` read, when the stored key ' +
+  'does not work at all (finding 5)',
+  async () => {
+    const stub = await startStubCityServer()
+    const home = makeTempHome('key-probe-failed-')
+    try {
+      // A vault entry whose key the stub has never heard of -- GET /api/me
+      // 401s, so probeMe returns { ok: false }, the branch this test
+      // targets.
+      storeSecret(stub.origin, 'agent-dead-key-rotate', {
+        kind: 'resident', handle: 'agent-dead-key-rotate', client_class: 'coding_persistent',
+        resident_key: `1f3d9_sk_${'d'.repeat(48)}`, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+      }, { homeDir: home.dir })
+      const rotateResult = await runNode(keyPath, ['rotate', '--origin', stub.origin, '--handle', 'agent-dead-key-rotate'], { env: home.env })
+      assert.notEqual(rotateResult.status, 0, 'refuses rather than attempting to rotate a key that already fails')
+      assert.match(rotateResult.stderr, /key rotate: stored key does not work/u)
+      assert.match(rotateResult.stderr, /refusing to act on a key that already fails/u)
+      assert.doesNotMatch(rotateResult.stdout, /stored key works/u, 'never claims the probe succeeded')
+      assert.doesNotMatch(rotateResult.stdout, /wakes any due timers/u, 'never prints the success disclosure on this branch')
+      assertNoSecretLeaked(rotateResult, 'key rotate probe-failed')
+
+      storeSecret(stub.origin, 'agent-dead-key-generate', {
+        kind: 'resident', handle: 'agent-dead-key-generate', client_class: 'coding_persistent',
+        resident_key: `1f3d9_sk_${'e'.repeat(48)}`, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+      }, { homeDir: home.dir })
+      const generateResult = await runNode(
+        keyPath, ['recover', 'generate', '--origin', stub.origin, '--handle', 'agent-dead-key-generate'], { env: home.env },
+      )
+      assert.notEqual(generateResult.status, 0, 'refuses rather than attempting to mint codes for a key that already fails')
+      assert.match(generateResult.stderr, /key recover generate: stored key does not work/u)
+      assert.match(generateResult.stderr, /refusing to act on a key that already fails/u)
+      assert.doesNotMatch(generateResult.stdout, /stored key works/u, 'never claims the probe succeeded')
+      assert.doesNotMatch(generateResult.stdout, /wakes any due timers/u, 'never prints the success disclosure on this branch')
+      assertNoSecretLeaked(generateResult, 'key recover generate probe-failed')
+    } finally {
+      deleteSecret(stub.origin, 'agent-dead-key-rotate', { homeDir: home.dir })
+      deleteSecret(stub.origin, 'agent-dead-key-generate', { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
 test('key recover begin refuses a malformed --handle before ever contacting the recovery door (finding 2)', async () => {
   const result = await runNode(keyPath, [
     'recover', 'begin', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
@@ -1620,16 +1689,22 @@ test('setup.mjs refuses to register under a new handle when this origin already 
   }
 })
 
-// A leftover REGISTRATION staging label (a run that died between staging
-// and promotion) is not a real second identity -- listVaultLabels must
-// exclude it by the `kind: 'staging'` marker its bundle carries (see
+// A leftover REGISTRATION staging label (a run that died before ever
+// confirming, or confirmed and then died before promoting -- see round-4
+// finding 1's own scenario below) is excluded from listVaultLabels' ordinary
+// label array by the `kind: 'staging'` marker its bundle carries (see
 // storeSecret/isStagingLabel in identity-client.mjs), covering the per-run
 // suffixed registration form the same way it already covers rotation/
-// recovery, or the guard above wrongly refuses a legitimate fresh
-// registration because of a label this script itself created and never
-// meant as anything but scratch space.
+// recovery -- so it never trips the ORDINARY "vault already holds an entry
+// under a different label" refusal. It DOES still trip a separate, more
+// specific refusal, though (round-4 finding 1): setup.mjs cannot tell
+// locally whether this particular staging entry is a harmless pre-confirm
+// abandon or a confirmed-but-unpromoted resident already permanent
+// server-side, so it refuses conservatively either way rather than guessing
+// -- see registrationStagingLabels (identity-client.mjs) and the guard that
+// reads it (setup.mjs).
 
-test('setup.mjs does not treat a leftover registration staging label as a second identity', async () => {
+test('setup.mjs refuses a fresh registration while a registration staging label exists for this origin, even one from a run that never confirmed', async () => {
   const stub = await startStubCityServer()
   const home = makeTempHome('setup-stale-registration-staging-')
   try {
@@ -1656,14 +1731,210 @@ test('setup.mjs does not treat a leftover registration staging label as a second
       ['--origin', stub.origin, '--handle', 'agent-fresh', '--client-class', 'coding_persistent'],
       { env: home.env },
     )
+    assert.notEqual(result.status, 0, 'refuses rather than guessing whether the staging entry was ever confirmed')
+    // Never the ORDINARY "already holds ... entries under a different
+    // label" wording -- this is the more specific registration-staging
+    // refusal, checked separately below.
     assert.doesNotMatch(
       result.stderr,
       /already holds .* entr(?:y|ies) for this origin under a different/u,
-      'a staging-only label must never trip the duplicate-identity guard',
+      'a staging-only label trips the specific registration-staging refusal, never the ordinary other-label one',
     )
+    assert.match(result.stderr, /agent-abandoned--pending-registration-deadbeef/u, 'names the staging label itself')
+    assert.match(result.stderr, /key status --handle agent-abandoned/u, 'points at the base handle to check')
+    assert.match(
+      result.stderr,
+      /key show --handle agent-abandoned--pending-registration-deadbeef --reveal/u,
+      'points at reading the key back from the staging label itself',
+    )
+    assert.equal(stub.residents.size, 0, 'nothing was registered')
     assertNoSecretLeaked(result, 'setup.mjs leftover registration staging label')
   } finally {
     deleteSecret(stub.origin, 'agent-abandoned--pending-registration-deadbeef', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+// --- round-4 finding 1: a register whose vault promotion fails strands the
+// confirmed resident key under a registration staging label while the
+// resident is already permanent server-side -- a later run under a
+// DIFFERENT handle must refuse rather than silently registering a second,
+// permanent resident. Reproduced end to end: hold the exact per-(origin,
+// handle) lock file promoteReplacementKey acquires (identity-client.mjs)
+// for the length of one real register() subprocess's own promotion
+// attempt, so it fails exactly the way a lock timeout, a CredWrite hiccup,
+// or an unreadable live entry would in the wild.
+
+test(
+  'setup.mjs refuses a second handle when an earlier registration confirmed server-side but its vault ' +
+  'promotion failed, leaving the confirmed key only under a registration staging label (finding 1)',
+  async () => {
+    const stub = await startStubCityServer()
+    const home = makeTempHome('setup-stranded-registration-')
+    try {
+      const firstPass = await runNode(
+        setupPath,
+        ['--origin', stub.origin, '--handle', 'alice-agent', '--client-class', 'coding_persistent'],
+        { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+      )
+      const token = extractApprovalToken(firstPass.stderr)
+      assert.ok(token, 'first pass mints a token')
+
+      // Hold the exact lock promoteReplacementKey will try to acquire for
+      // (stub.origin, 'alice-agent') -- a plain create-exclusive lock file,
+      // the same shape withFileLock (identity-client.mjs) itself creates,
+      // so this needs no access to that file's internals beyond the path
+      // convention promoteLockPathForTest mirrors.
+      const lockPath = promoteLockPathForTest(stub.origin, 'alice-agent', home.dir)
+      mkdirSync(join(home.dir, '.1f3d9'), { recursive: true })
+      closeSync(openSync(lockPath, 'wx'))
+
+      let secondPass
+      try {
+        // register()'s own promoteReplacementKey retries for
+        // VAULT_INDEX_LOCK_MAX_WAIT_MS (2s) before giving up -- this call
+        // genuinely takes that long.
+        secondPass = await runNode(
+          setupPath,
+          ['--origin', stub.origin, '--handle', 'alice-agent', '--client-class', 'coding_persistent', '--human-approved', token],
+          { env: home.env },
+        )
+      } finally {
+        try {
+          unlinkSync(lockPath)
+        } catch {
+          // Best effort -- the assertions below are what actually matter.
+        }
+      }
+      assert.notEqual(secondPass.status, 0, 'the held lock makes this run\'s own promotion fail')
+      // The detailed failure comes from the register() subprocess setup.mjs
+      // spawns internally -- setup.mjs buffers that child's stderr into its
+      // own `lines` array and prints it via console.log (stdout), not
+      // console.error, reserving its OWN stderr for the summary line
+      // ("registration did not complete...") printed right after.
+      assert.match(secondPass.stdout, /could not acquire the per-handle vault lock/u)
+      assert.equal(stub.residents.size, 1, 'the city already confirmed "alice-agent" server-side despite the local promotion failure')
+      assert.ok(stub.residents.has('alice-agent'))
+      assertNoSecretLeaked(secondPass, 'setup.mjs stranded-registration pass 2')
+
+      // A later, unattended session -- state file lost or never written,
+      // vault intact -- picks a DIFFERENT handle. Round-4 finding 1: this
+      // must refuse, not silently register a second permanent resident.
+      const thirdPass = await runNode(
+        setupPath,
+        ['--origin', stub.origin, '--handle', 'bob-agent', '--client-class', 'coding_persistent'],
+        { env: home.env },
+      )
+      assert.notEqual(thirdPass.status, 0, 'refuses while a registration staging label for this origin still exists')
+      assert.match(
+        thirdPass.stderr,
+        /alice-agent--pending-registration-[0-9a-f]+/u,
+        'names the actual staging label left behind',
+      )
+      assert.match(thirdPass.stderr, /key status --handle alice-agent/u, 'points at the base handle to check')
+      assert.match(
+        thirdPass.stderr,
+        /key show --handle alice-agent--pending-registration-[0-9a-f]+ --reveal/u,
+        'points at reading the already-confirmed key back from the staging label',
+      )
+      assertNoSecretLeaked(thirdPass, 'setup.mjs stranded-registration pass 3 (different handle)')
+
+      assert.equal(stub.residents.size, 1, 'exactly one resident exists server-side -- "bob-agent" was never registered')
+      assert.ok(!stub.residents.has('bob-agent'))
+    } finally {
+      for (const label of listRawVaultLabels(stub.origin, home.dir)) {
+        if (label === 'alice-agent' || /^alice-agent--pending-registration-[0-9a-f]+$/u.test(label)) {
+          deleteSecret(stub.origin, label, { homeDir: home.dir })
+        }
+      }
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+// --- round-4 finding 3: setup.mjs must never spend its single-use approval
+// nonce on a registration the city was always going to refuse because the
+// coding-client identity doors are dormant (decision row 74's own
+// default-off switch) -- checked via GET /api/official before the nonce is
+// consumed, not learned only from the eventual /api/register 503.
+
+test(
+  'setup.mjs refuses to spend the approval token while GET /api/official reports the coding-client doors ' +
+  'disabled, and the same token still works once they report enabled (finding 3)',
+  async () => {
+    const stub = await startStubCityServer({ officialDoorsEnabled: false })
+    const home = makeTempHome('setup-doors-dormant-')
+    try {
+      const firstPass = await runNode(
+        setupPath,
+        ['--origin', stub.origin, '--handle', 'carol-agent', '--client-class', 'coding_persistent'],
+        { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+      )
+      const token = extractApprovalToken(firstPass.stderr)
+      assert.ok(token, 'first pass mints a token regardless of the doors state -- only pass 2 spends it')
+
+      const secondPass = await runNode(
+        setupPath,
+        ['--origin', stub.origin, '--handle', 'carol-agent', '--client-class', 'coding_persistent', '--human-approved', token],
+        { env: home.env },
+      )
+      assert.notEqual(secondPass.status, 0, 'refuses while the doors are dormant')
+      assert.match(secondPass.stderr, /coding_client_json\.doors_enabled is false/u)
+      assert.match(secondPass.stderr, /UNCHANGED/u, 'says plainly that the token was not spent')
+      assert.equal(stub.residents.size, 0, 'nothing was registered')
+      assertNoSecretLeaked(secondPass, 'setup.mjs doors-dormant refusal')
+
+      // The token was never consumed -- turn the doors on and replay the
+      // EXACT SAME token; it must still work.
+      stub.official.doorsEnabled = true
+      const thirdPass = await runNode(
+        setupPath,
+        ['--origin', stub.origin, '--handle', 'carol-agent', '--client-class', 'coding_persistent', '--human-approved', token],
+        { env: home.env },
+      )
+      assert.equal(thirdPass.status, 0, thirdPass.stderr)
+      assert.equal(stub.residents.size, 1, 'the same, still-unspent token registered once the doors opened')
+      assert.ok(stub.residents.has('carol-agent'))
+      assertNoSecretLeaked(thirdPass, 'setup.mjs doors-enabled replay')
+    } finally {
+      deleteSecret(stub.origin, 'carol-agent', { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+// --- round-4 finding 5 (part 1): setup.mjs's refusal on an incomplete vault
+// enumeration (KeychainEnumerationIncomplete) has real end-to-end coverage,
+// not just the unit-level listVaultLabels tests in identity-client.test.mjs.
+// CI never runs on darwin (see vault-roundtrip-windows.test.mjs's own header
+// comment -- this repo's matrix is ubuntu-latest/windows-latest only), so
+// the real darwin `security dump-keychain` ENOBUFS/ETIMEDOUT path is
+// otherwise unreachable through a real subprocess on any runner this repo
+// actually has. This drives the real setup.mjs subprocess through that
+// refusal anyway, by redirecting ONLY its own `import ... from
+// './identity-client.mjs'` to a fake module whose listVaultLabels always
+// throws KeychainEnumerationIncomplete -- see test/helpers/
+// incomplete-vault-loader.mjs and fake-incomplete-identity-client.mjs for
+// exactly how, and why the redirect cannot loop back into itself.
+
+test('setup.mjs refuses to register when its own vault enumeration is incomplete (injected KeychainEnumerationIncomplete, finding 5)', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-incomplete-enum-')
+  try {
+    const result = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'dana-agent', '--client-class', 'coding_persistent'],
+      { env: { ...home.env, NODE_OPTIONS: `--import=${INCOMPLETE_VAULT_LOADER_IMPORT_URL}` } },
+    )
+    assert.notEqual(result.status, 0, 'refuses rather than proceeding on an incomplete enumeration')
+    assert.match(result.stderr, /this host's macOS Keychain could not be fully scanned/u)
+    assert.match(result.stderr, /injected by test\/helpers\/fake-incomplete-identity-client\.mjs/u)
+    assert.equal(stub.residents.size, 0, 'nothing was registered')
+    assertNoSecretLeaked(result, 'setup.mjs injected incomplete enumeration')
+  } finally {
     home.cleanup()
     await stub.close()
   }
