@@ -265,6 +265,15 @@ export async function startStubCityServer({
           })
           return send(res, 200, { handle: pending.handle, resident_id: residents.size })
         }
+        if (body.action === 'cancel') {
+          // Same rationale as /api/rotate's and /api/recovery's own
+          // 'cancel' branches -- cancelStage (identity-client.mjs) is
+          // best-effort and never inspects this response, so any 200 with
+          // a JSON body is enough; what matters for a test to actually pin
+          // is that the pending stage is genuinely gone afterward.
+          pendingRegistrations.delete(body.stage_token)
+          return send(res, 200, { ok: true })
+        }
         return send(res, 400, { error: `unknown register action "${body.action}"` })
       }
 
@@ -281,7 +290,15 @@ export async function startStubCityServer({
         }
         if (body.action === 'confirm') {
           const pending = pendingRotations.get(body.stage_token)
-          if (!pending || pending.resident_key !== body.resident_key) {
+          // Two distinct refusals on purpose: a confirm naming a
+          // stage_token that was never issued, or was already
+          // cancelled/confirmed, is a DIFFERENT failure than a confirm
+          // naming a real pending stage with the wrong resident_key -- a
+          // test asserting "the stage is genuinely gone" must be able to
+          // tell those apart, or the assertion proves nothing (round-3
+          // reintroduction of the round-1 blind-coverage finding).
+          if (!pending) return send(res, 404, { error: 'no such stage_token', reason: 'no_such_stage' })
+          if (pending.resident_key !== body.resident_key) {
             return send(res, 403, { error: 'stage token or resident key mismatch' })
           }
           if (holdRecoveryGenerateUntilRotateConfirms && holdRecoveryGenerateUntilRotateConfirms.handle === pending.handle) {
@@ -368,7 +385,11 @@ export async function startStubCityServer({
         }
         if (body.action === 'confirm') {
           const pending = pendingRecoveries.get(body.stage_token)
-          if (!pending || pending.resident_key !== body.resident_key) {
+          // Same rationale as /api/rotate's own confirm branch above: an
+          // unknown/already-cancelled stage_token must answer distinctly
+          // from a real pending stage whose resident_key does not match.
+          if (!pending) return send(res, 404, { error: 'no such stage_token', reason: 'no_such_stage' })
+          if (pending.resident_key !== body.resident_key) {
             return send(res, 403, { error: 'stage token or resident key mismatch' })
           }
           pendingRecoveries.delete(body.stage_token)
