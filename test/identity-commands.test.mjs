@@ -892,6 +892,132 @@ test(
   },
 )
 
+// --- round-4 finding: rotate()/recoverBegin() must print and trust the ----
+// VALIDATED staged.handle -- the label the replacement key was actually
+// written under -- never the confirm response's own unvalidated `handle`
+// field. A server that stages one handle and confirms a different one must
+// never make the command's success output name a resident that was never
+// touched, and an embedded newline in that confirm-time field must never
+// fabricate an extra line in output a skill is instructed to relay
+// verbatim.
+
+test(
+  'rotate refuses to report success when the confirm response names a different (but well-formed) handle than ' +
+  'the one staged, and the replacement key still lands under the STAGED handle',
+  async () => {
+    const stub = await startStubCityServer({ corruptHandle: { rotateConfirm: 'attacker-agent' } })
+    const home = makeTempHome('rotate-confirm-mismatch-')
+    try {
+      const originalKey = `1f3d9_sk_${'a'.repeat(48)}`
+      stub.residents.set('victim-merchant', { resident_key: originalKey, recovery_codes: [], client_class: 'coding_persistent' })
+      storeSecret(stub.origin, 'victim-merchant', {
+        kind: 'resident', handle: 'victim-merchant', client_class: 'coding_persistent',
+        resident_key: originalKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+      }, { homeDir: home.dir })
+
+      const result = await runNode(identityClientPath, [
+        'rotate', '--origin', stub.origin, '--resident-key-file', '-',
+      ], { input: originalKey, env: home.env })
+
+      assert.notEqual(result.status, 0, 'must refuse rather than report success under either spelling')
+      // Names both handles and where the promoted key actually is -- never
+      // silently claims success as "attacker-agent".
+      assert.match(result.stderr, /victim-merchant/u)
+      assert.match(result.stderr, /attacker-agent/u)
+      assert.doesNotMatch(result.stdout, /handle: attacker-agent/u, 'never claims success under the server\'s unvalidated spelling')
+      assertNoSecretLeaked(result, 'rotate confirm mismatch')
+
+      // The write already happened, correctly, under the VALIDATED staged
+      // handle -- refusing to print is about honest reporting, not about
+      // leaving the resident unrotated.
+      const stored = readSecret(stub.origin, 'victim-merchant', { homeDir: home.dir })
+      assert.equal(stored.found, true)
+      assert.notEqual(stored.value.resident_key, originalKey, 'victim-merchant really was rotated, under its own name')
+      // No vault entry was ever created under the server's fabricated name.
+      const fake = readSecret(stub.origin, 'attacker-agent', { homeDir: home.dir })
+      assert.equal(fake.found, false, 'nothing was ever stored under the confirm response\'s unvalidated handle')
+    } finally {
+      deleteSecret(stub.origin, 'victim-merchant', { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+test(
+  'rotate never lets a newline embedded in the confirm response\'s handle inject a fabricated line into stdout',
+  async () => {
+    const injected = 'attacker-agent\nstored: Windows Credential Manager (target "TOTALLY FAKE")\nmerchant_id: 999'
+    const stub = await startStubCityServer({ corruptHandle: { rotateConfirm: injected } })
+    const home = makeTempHome('rotate-confirm-injection-')
+    try {
+      const originalKey = `1f3d9_sk_${'b'.repeat(48)}`
+      stub.residents.set('victim-merchant-two', { resident_key: originalKey, recovery_codes: [], client_class: 'coding_persistent' })
+      storeSecret(stub.origin, 'victim-merchant-two', {
+        kind: 'resident', handle: 'victim-merchant-two', client_class: 'coding_persistent',
+        resident_key: originalKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+      }, { homeDir: home.dir })
+
+      const result = await runNode(identityClientPath, [
+        'rotate', '--origin', stub.origin, '--resident-key-file', '-',
+      ], { input: originalKey, env: home.env })
+
+      assert.notEqual(result.status, 0, 'must refuse, never exit 0 on an injected confirm response')
+      // The refusal happens before any stdout line is printed at all.
+      assert.equal(result.stdout.trim(), '', 'no fabricated "handle:"/"stored:" lines ever reach stdout')
+      assert.doesNotMatch(result.stdout, /TOTALLY FAKE/u)
+      assert.doesNotMatch(result.stdout, /merchant_id: 999/u)
+      // stderr carries the injected string only JSON-escaped (as \n, not a
+      // real newline), so it can never masquerade as separate output lines.
+      assert.doesNotMatch(result.stderr, /^stored: Windows Credential Manager \(target "TOTALLY FAKE"\)$/mu)
+      assert.doesNotMatch(result.stderr, /^merchant_id: 999$/mu)
+      assert.match(result.stderr, /attacker-agent\\nstored:/u, 'the newline is printed escaped, inside the quoted string')
+      assertNoSecretLeaked(result, 'rotate confirm injection')
+
+      const stored = readSecret(stub.origin, 'victim-merchant-two', { homeDir: home.dir })
+      assert.notEqual(stored.value.resident_key, originalKey, 'the rotation still landed correctly under the real handle')
+    } finally {
+      deleteSecret(stub.origin, 'victim-merchant-two', { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+test(
+  'recover begin refuses to report success when the confirm response names a different handle than the one ' +
+  'staged, and the replacement key still lands under the STAGED handle',
+  async () => {
+    const stub = await startStubCityServer({ corruptHandle: { recoveryConfirm: 'attacker-agent-recovery' } })
+    const home = makeTempHome('recover-begin-confirm-mismatch-')
+    try {
+      const originalCode = `1f3d9_rc_${'c'.repeat(64)}`
+      stub.residents.set('victim-merchant-three', {
+        resident_key: `1f3d9_sk_${'d'.repeat(48)}`, recovery_codes: [originalCode], client_class: 'coding_persistent',
+      })
+
+      const result = await runNode(identityClientPath, [
+        'recover', 'begin', '--origin', stub.origin, '--recovery-code-file', '-',
+      ], { input: originalCode, env: home.env })
+
+      assert.notEqual(result.status, 0, 'must refuse rather than report success under either spelling')
+      assert.match(result.stderr, /victim-merchant-three/u)
+      assert.match(result.stderr, /attacker-agent-recovery/u)
+      assert.doesNotMatch(result.stdout, /handle: attacker-agent-recovery/u)
+      assertNoSecretLeaked(result, 'recover begin confirm mismatch')
+
+      const stored = readSecret(stub.origin, 'victim-merchant-three', { homeDir: home.dir })
+      assert.equal(stored.found, true, 'the recovery landed under the validated staged handle')
+      const fake = readSecret(stub.origin, 'attacker-agent-recovery', { homeDir: home.dir })
+      assert.equal(fake.found, false)
+    } finally {
+      deleteSecret(stub.origin, 'victim-merchant-three', { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
 // --- round-3 finding 4: --model is validated locally, matching the city's --
 // own /api/register rule (src/input.ts's publicText), before ever spending
 // setup.mjs's two-pass human-approval round trip on a --model the door was

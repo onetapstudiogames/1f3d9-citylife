@@ -1461,7 +1461,7 @@ async function register(flags) {
     // this function that cancels the stage before refusing.
     await cancelStage(origin, '/api/register', staged.stage_token)
     throw new Error(
-      `refusing to store or print the handle "${finalHandle}" the city confirmed for this registration: it ` +
+      `refusing to store or print the handle ${JSON.stringify(finalHandle)} the city confirmed for this registration: it ` +
       `does not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" ` +
       'sequence this script uses for its own in-flight staging labels. The resident was already created ' +
       'server-side under that exact spelling, and its confirmed resident key and recovery codes were NOT ' +
@@ -1517,7 +1517,7 @@ async function rotate(flags) {
   ) {
     await cancelStage(origin, '/api/rotate', staged.stage_token)
     throw new Error(
-      `refusing to stage a replacement key under the handle the city returned ("${staged.handle}"): it does ` +
+      `refusing to stage a replacement key under the handle the city returned (${JSON.stringify(staged.handle)}): it does ` +
       `not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" sequence ` +
       'this script uses for its own in-flight staging labels. The rotation was cancelled before confirming; ' +
       'the old key is unaffected.',
@@ -1569,8 +1569,31 @@ async function rotate(flags) {
     recovery_codes_invalidated_at: new Date().toISOString(),
   }))
 
+  // The replacement key was written under staged.handle -- the label this
+  // script validated (HANDLE_RE, reserved-substring check above) BEFORE
+  // ever confirming, and the only spelling this call trusted as a vault
+  // target. The confirm response's own `handle` field is server-supplied
+  // and was never validated: printing it instead of staged.handle would
+  // let a server that stages one handle and confirms a different one make
+  // this command's success output name a resident that was never touched,
+  // while the write itself silently landed elsewhere. If the two disagree,
+  // refuse to report success under either spelling -- the write already
+  // happened under staged.handle regardless, so this is purely about not
+  // mis-describing what happened to the caller (and to a skill instructed
+  // to relay this output verbatim).
+  if (typeof confirmed.handle === 'string' && confirmed.handle !== staged.handle) {
+    throw new Error(
+      `the city staged this rotation under the handle ${JSON.stringify(staged.handle)} but its confirm ` +
+      `response named a different handle, ${JSON.stringify(confirmed.handle)}. The replacement resident ` +
+      `key WAS stored -- under ${JSON.stringify(staged.handle)}, at "${location}" -- because that is the ` +
+      "label this script validated and staged before confirming; the confirm response's spelling is not " +
+      `trusted for storage or display. Run \`key status --handle ${staged.handle}\` to verify the live ` +
+      'entry before relying on this rotation.',
+    )
+  }
+
   revealOrHide(flags, 'Replacement resident key', [staged.resident_key])
-  console.log(`handle: ${confirmed.handle}`)
+  console.log(`handle: ${staged.handle}`)
   console.log(`stored: ${location}`)
   console.log(
     'your recovery codes were invalidated by this rotation (the city invalidates every recovery code on ' +
@@ -1606,7 +1629,7 @@ async function recoverGenerate(flags) {
   ) {
     throw new Error(
       `refusing to store the fresh recovery codes the city already generated under the handle it returned ` +
-      `("${generated.handle}"): it does not match the local handle rule ${HANDLE_RE.source}, or contains ` +
+      `(${JSON.stringify(generated.handle)}): it does not match the local handle rule ${HANDLE_RE.source}, or contains ` +
       'the reserved "--pending-" sequence this script uses for its own in-flight staging labels. The codes ' +
       'are already live server-side and were printed above if --reveal was passed; nothing was stored locally.',
     )
@@ -1712,7 +1735,7 @@ async function recoverBegin(flags) {
   ) {
     await cancelStage(origin, '/api/recovery', staged.stage_token)
     throw new Error(
-      `refusing to stage a replacement key under the handle the city returned ("${staged.handle}"): it does ` +
+      `refusing to stage a replacement key under the handle the city returned (${JSON.stringify(staged.handle)}): it does ` +
       `not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" sequence ` +
       'this script uses for its own in-flight staging labels. The recovery was cancelled before confirming; ' +
       'the old key is unaffected.',
@@ -1754,8 +1777,25 @@ async function recoverBegin(flags) {
     recovery_codes_invalidated_at: new Date().toISOString(),
   }))
 
+  // Same discipline as rotate() above, and for the same reason: the
+  // replacement key was written under staged.handle -- the validated,
+  // pre-confirm spelling -- never the confirm response's own unvalidated
+  // `handle` field. If the two disagree, refuse to report success under
+  // either spelling rather than naming a resident that was never touched;
+  // the write already happened under staged.handle regardless.
+  if (typeof confirmed.handle === 'string' && confirmed.handle !== staged.handle) {
+    throw new Error(
+      `the city staged this recovery under the handle ${JSON.stringify(staged.handle)} but its confirm ` +
+      `response named a different handle, ${JSON.stringify(confirmed.handle)}. The replacement resident ` +
+      `key WAS stored -- under ${JSON.stringify(staged.handle)}, at "${location}" -- because that is the ` +
+      "label this script validated and staged before confirming; the confirm response's spelling is not " +
+      `trusted for storage or display. Run \`key status --handle ${staged.handle}\` to verify the live ` +
+      'entry before relying on this recovery.',
+    )
+  }
+
   revealOrHide(flags, 'Replacement resident key', [staged.resident_key])
-  console.log(`handle: ${confirmed.handle}`)
+  console.log(`handle: ${staged.handle}`)
   console.log(`stored: ${location}`)
   console.log(
     'every remaining recovery code was invalidated by this recovery (the city invalidates every sibling ' +
@@ -1782,9 +1822,14 @@ async function pair(flags) {
   // single-use, expires in ten minutes, and never substitutes for the key.
   // Printing it is the entire point of this command, so it is not gated
   // behind --reveal the way the resident key and recovery codes are above.
+  // minted.pairing_code and minted.expires_at are server-supplied and
+  // never validated against any local format rule (unlike a handle) --
+  // JSON.stringify neutralizes an embedded newline (or other control
+  // character) that could otherwise inject a fabricated extra line into
+  // output a human or a skill is instructed to relay verbatim.
   console.log('Pairing code (shown once, give it to the human completing hosted-chat sign-in):')
-  console.log(minted.pairing_code)
-  console.log(`expires_at: ${minted.expires_at}`)
+  console.log(JSON.stringify(minted.pairing_code))
+  console.log(`expires_at: ${JSON.stringify(minted.expires_at)}`)
 }
 
 async function main() {

@@ -124,7 +124,8 @@ const REGISTER_CONFIRM_BARRIER_TIMEOUT_MS = 10_000
 const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
 
 /**
- * `corruptHandle` (optional): `{ rotateBegin, recoveryBegin, recoveryGenerate }`,
+ * `corruptHandle` (optional):
+ * `{ rotateBegin, rotateConfirm, recoveryBegin, recoveryConfirm, recoveryGenerate }`,
  * each an optional replacement handle string. When set, the matching door
  * response returns that string as `handle` instead of the real resident's
  * handle -- simulating a compromised or misbehaving server answering with a
@@ -135,6 +136,17 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
  * confirmed handle, which rotate()/recoverBegin()/recoverGenerate() now
  * mirror). Exists for exactly the handle-validation tests in
  * identity-client.test.mjs.
+ *
+ * The `*Confirm` variants exist separately from `*Begin` because they
+ * reproduce a narrower, later-stage scenario: a server that answers
+ * `begin` with a well-formed handle (passing the client's pre-confirm
+ * HANDLE_RE check) and then answers `confirm` with a DIFFERENT string --
+ * one the client never validates at all, because rotate()/recoverBegin()
+ * only ever used the confirm response's `handle` for a printed status
+ * line, never as the vault label (that has always been the validated
+ * `staged.handle`). A `*Confirm` value may be any string, including one
+ * containing embedded newlines, to reproduce the transcript-injection half
+ * of that same finding.
  */
 export async function startStubCityServer({
   registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle,
@@ -283,7 +295,7 @@ export async function startStubCityServer({
             heldRecoveryGenerateRelease = null
             release()
           }
-          return send(res, 200, { handle: pending.handle })
+          return send(res, 200, { handle: corruptHandle?.rotateConfirm ?? pending.handle })
         }
         return send(res, 400, { error: `unknown rotate action "${body.action}"` })
       }
@@ -332,7 +344,7 @@ export async function startStubCityServer({
           pendingRecoveries.delete(body.stage_token)
           const resident = residents.get(pending.handle)
           residents.set(pending.handle, { ...resident, resident_key: pending.resident_key, recovery_codes: [] })
-          return send(res, 200, { handle: pending.handle })
+          return send(res, 200, { handle: corruptHandle?.recoveryConfirm ?? pending.handle })
         }
         return send(res, 400, { error: `unknown recovery action "${body.action}"` })
       }
