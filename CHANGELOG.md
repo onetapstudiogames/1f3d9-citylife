@@ -31,12 +31,16 @@
   handle: it stages the new bundle first and only promotes it after the city confirms, exactly
   like `key rotate`/`key recover` already did. `--replace-vault-entry` is the explicit override.
   That check is now re-verified immediately before the final vault write, not only once before
-  the staging/confirm network round trips — closing the window where a concurrent run could
-  create the same handle in between; the confirmed key is never lost either way, since it stays
-  in the staging entry until the live write actually succeeds. The handle the city confirms is
-  also validated against the same local naming rule before it is ever used as a vault label,
-  printed, or persisted, refusing cleanly (rather than storing under an unvalidated name) on the
-  rare mismatch.
+  the staging/confirm network round trips — and that re-check, the read before it, and the write
+  after it now all run inside one per-(origin, handle) file lock, so two `register` runs racing
+  the same handle on the same host are fully serialized: the second one's re-check can never
+  observe a stale answer the first one already read past. This closes the race completely on one
+  host; it decides nothing between two different hosts racing the same handle at once — that is
+  settled by the city's own confirm, not by anything this client does locally. The confirmed key
+  is never lost either way, since it stays in the staging entry until the live write actually
+  succeeds. The handle the city confirms is also validated against the same local naming rule
+  before it is ever used as a vault label, printed, or persisted, refusing cleanly (rather than
+  storing under an unvalidated name) on the rare mismatch.
 - The interactive human-approval follow-up now asks the identical text the first-pass refusal
   told the human to expect, built from one shared template instead of two separately worded
   strings, and times out (about two minutes) with a plain refusal — creating nothing — rather
