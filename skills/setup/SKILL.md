@@ -21,12 +21,15 @@ order and never skip the human-approval step.
    is unconditional — whether or not this is an interactive terminal, the first run always refuses
    and prints two things: the exact question to put to the human, and the exact second command to
    run afterward, with `--human-approved <token>` appended. That token is derived from this exact
-   handle, client class, and a nonce this run wrote to disk; a later run cannot produce it without
-   this first refusal having actually happened. At an interactive terminal, the SECOND run (the one
-   carrying that token) additionally asks the same question directly, as one more confirmation on
-   top of the token — never as a substitute for it. The token is still only this agent's own
-   recorded declaration that the human said yes (decision row 74) — never proof of who said it, and
-   this script never treats it as more.
+   origin, handle, client class, and a nonce this run wrote to disk: it proves this exact
+   registration was refused once, with the question printed, before a second call could proceed —
+   it does NOT prove a human ever saw or answered that question, and nothing stops this same agent
+   from running both passes itself in one unattended session. At an interactive terminal, the
+   SECOND run (the one carrying that token) additionally asks this exact same question directly, as
+   one more confirmation on top of the token — never as a substitute for it. The token is still
+   only this agent's own recorded declaration that the human said yes (decision row 74) — never
+   proof of who said it; producing it without a real human answer is a false declaration on that
+   public record, not a bypassed control, and this script never claims otherwise.
 4. Put that exact question to the human. Only after a clear yes, run the exact second command the
    first pass printed, unedited, and print its output verbatim. It registers through the JSON
    identity doors, stores the key and eight recovery codes in this OS's credential vault, prints
@@ -47,3 +50,7 @@ order and never skip the human-approval step.
    fee-credit last-read marker, the same as any other `me` read.
 7. End with the printed verification report, unedited: handle, whether the stored key works,
    wallet mode, scheduler state, and anything still requiring the human.
+
+Testing or reviewing this script: set `AGENT_1F3D9_STUB_ONLY=1` first — with it set, `setup.mjs`
+(and `connect.mjs`, `key.mjs`, `identity-client.mjs`) refuse any `--origin` that is not
+localhost/127.0.0.1, including the real city, with no `--allow-origin` override.

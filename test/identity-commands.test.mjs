@@ -29,6 +29,17 @@ const identityClientPath = fileURLToPath(new URL('../scripts/identity-client.mjs
 
 const NO_SECRET_LITERAL = /1f3d9_(?:sk|rc)_[0-9a-f]+/u
 
+// runNode sets AGENT_1F3D9_STUB_ONLY=1 by default (see run-identity-cli.mjs)
+// so a test driving these scripts can never reach the real city. The
+// handful of tests below that deliberately drive a script against
+// https://example.invalid instead of a real stub server -- to exercise flag
+// parsing, printed output shape, or refusal wording unrelated to the origin
+// guard itself -- override it back to '0' with this constant. That origin
+// is reserved by RFC 2606 and can never resolve to anything, real city
+// included, so the stricter guard is not needed there and would only mask
+// the behavior actually under test.
+const NOT_A_REAL_ORIGIN_ENV = { AGENT_1F3D9_STUB_ONLY: '0' }
+
 function assertNoSecretLeaked(result, label) {
   assert.doesNotMatch(result.stdout ?? '', NO_SECRET_LITERAL, `${label}: stdout never carries a raw secret`)
   assert.doesNotMatch(result.stderr ?? '', NO_SECRET_LITERAL, `${label}: stderr never carries a raw secret`)
@@ -96,7 +107,7 @@ test('register refuses a handle that does not match the city\'s handle rule, bef
   const result = await runNode(identityClientPath, [
     'register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
     '--handle', 'AB', '--client-class', 'coding_persistent', '--human-approved',
-  ])
+  ], { env: NOT_A_REAL_ORIGIN_ENV })
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /does not match the city's handle rule/u)
 })
@@ -105,7 +116,7 @@ test('setup.mjs refuses a handle that does not match the city\'s handle rule bef
   const result = await runNode(setupPath, [
     '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
     '--handle', 'AB', '--client-class', 'coding_persistent',
-  ])
+  ], { env: NOT_A_REAL_ORIGIN_ENV })
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /does not match the city's handle rule/u)
   assert.doesNotMatch(result.stderr, /put this exact question to the human/u, 'never reaches the approval gate')
@@ -146,17 +157,17 @@ test('setup.mjs accepts --human-approved=<token> in equals form, not just the sp
 })
 
 test('connect.mjs and key.mjs accept --handle=<value> in equals form, not just the space form', async () => {
-  const connectResult = await runNode(connectPath, ['--origin=https://example.invalid', '--allow-origin=https://example.invalid', '--handle=agent-equals-connect'])
+  const connectResult = await runNode(connectPath, ['--origin=https://example.invalid', '--allow-origin=https://example.invalid', '--handle=agent-equals-connect'], { env: NOT_A_REAL_ORIGIN_ENV })
   assert.match(connectResult.stdout, /agent-equals-connect/u, 'connect.mjs actually used the equals-form --handle, not a fallback')
 
-  const keyResult = await runNode(keyPath, ['status', '--origin=https://example.invalid', '--allow-origin=https://example.invalid', '--handle=agent-equals-key'])
+  const keyResult = await runNode(keyPath, ['status', '--origin=https://example.invalid', '--allow-origin=https://example.invalid', '--handle=agent-equals-key'], { env: NOT_A_REAL_ORIGIN_ENV })
   assert.match(keyResult.stderr, /agent-equals-key/u, 'key.mjs actually used the equals-form --handle, not a fallback')
 })
 
 // --- Findings 1-4: the printed MCP connector commands are correct ---------
 
 test('connect.mjs prints a single-quoted, unexpanded Claude Code header targeting /mcp on one line (PowerShell-safe), under a distinct server name, and the real Codex flag', async () => {
-  const result = await runNode(connectPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'nobody'])
+  const result = await runNode(connectPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'nobody'], { env: NOT_A_REAL_ORIGIN_ENV })
   const out = result.stdout
   const claudeLine = out.split(/\r?\n/u).find(line => line.trimStart().startsWith('claude mcp add'))
   assert.ok(claudeLine, 'the Claude Code command line is present')
@@ -198,7 +209,7 @@ test('setup.mjs prints the same corrected MCP connector command shape, on one li
       `${stateDir}/setup-state.json`,
       JSON.stringify({ 'https://example.invalid': { handle: 'nobody', client_class: 'coding_persistent' } }),
     )
-    const result = await runNode(setupPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid'], { env: home.env })
+    const result = await runNode(setupPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid'], { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } })
     const out = result.stdout
     const claudeLine = out.split(/\r?\n/u).find(line => line.trimStart().startsWith('claude mcp add'))
     assert.ok(claudeLine, 'the Claude Code command line is present')
@@ -462,7 +473,7 @@ test('setup.mjs refuses to guess on a corrupt setup-state.json rather than silen
     const result = await runNode(
       setupPath,
       ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'agent-three', '--client-class', 'coding_persistent', '--human-approved'],
-      { env: home.env },
+      { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } },
     )
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /could not be parsed as JSON/u)
@@ -617,7 +628,7 @@ test('key/connect/setup refuse cleanly on a corrupt vault entry, never an uncaug
         ['connect', connectPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle]],
         ['setup', setupPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle, '--client-class', 'coding_persistent']],
       ]) {
-        const result = await runNode(scriptPath, args)
+        const result = await runNode(scriptPath, args, { env: NOT_A_REAL_ORIGIN_ENV })
         assert.notEqual(result.status, 0, `${label}: exits non-zero on a corrupt vault entry`)
         assert.doesNotMatch(result.stderr, STACK_TRACE_LINE, `${label}: no raw stack trace`)
         assert.match(result.stderr, /could not be decoded/iu, `${label}: caller-words explanation`)
@@ -644,7 +655,7 @@ test('key/connect/setup refuse cleanly on a corrupt vault entry, never an uncaug
       ['connect', connectPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle]],
       ['setup', setupPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle, '--client-class', 'coding_persistent']],
     ]) {
-      const result = await runNode(scriptPath, args, { env: home.env })
+      const result = await runNode(scriptPath, args, { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } })
       assert.notEqual(result.status, 0, `${label}: exits non-zero on a corrupt vault entry`)
       assert.doesNotMatch(result.stderr, STACK_TRACE_LINE, `${label}: no raw stack trace`)
       assert.match(result.stderr, /could not be parsed as JSON/iu, `${label}: caller-words explanation`)
@@ -832,7 +843,7 @@ test('key show refuses to print "undefined" when a stored bundle has no resident
     const result = await runNode(
       keyPath,
       ['show', '--origin', origin, '--allow-origin', origin, '--handle', 'no-key-handle', '--reveal'],
-      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+      { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV }, stdio: ['pipe', 'pipe', 'pipe'] },
     )
     assert.doesNotMatch(result.stdout, /undefined/u)
     assert.match(result.stdout, /carries no resident_key/u)

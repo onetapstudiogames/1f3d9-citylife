@@ -35,9 +35,23 @@ export function makeTempHome(prefix) {
  * shell, from silently reaching the identity client under test: neither
  * name appears here, so a child only ever sees them if a test's own `env`
  * overlay explicitly adds them.
+ *
+ * AGENT_1F3D9_STUB_ONLY=1 is set here by default: this makes every child
+ * refuse any --origin that is not
+ * localhost/127.0.0.1 (see scripts/lib/origin-guard.mjs), with no
+ * --allow-origin exception, so a test that drives these scripts can never
+ * reach the real city even by a typo or a copy-paste mistake. The handful
+ * of tests in test/identity-commands.test.mjs that deliberately drive a
+ * script against a fake, non-real https://example.invalid origin (to test
+ * behavior unrelated to the origin guard itself -- flag parsing, printed
+ * output shape, refusal wording) explicitly override this back to '0' in
+ * their own `env`, with a comment explaining why: that origin can never
+ * resolve to anything (reserved by RFC 2606) and is not the real city
+ * either way, so the stricter guard is not needed there and would only
+ * mask the behavior actually under test.
  */
 function minimalBaseEnv() {
-  const base = { PATH: process.env.PATH }
+  const base = { PATH: process.env.PATH, AGENT_1F3D9_STUB_ONLY: '1' }
   if (process.platform === 'win32') {
     base.SystemRoot = process.env.SystemRoot
     base.ComSpec = process.env.ComSpec
