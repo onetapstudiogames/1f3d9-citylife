@@ -23,7 +23,7 @@
 //     --handle my-agent --client-class coding_persistent \
 //     [--model "claude-opus"] [--human-approved] [--reveal]
 //   node identity-client.mjs rotate --origin https://1f3d9.com \
-//     --resident-key-file /path/to/key   (or - for stdin, or set 1F3D9_RESIDENT_KEY) [--reveal]
+//     --resident-key-file /path/to/key   (or - for stdin, or set AGENT_1F3D9_SECRET) [--reveal]
 //   node identity-client.mjs recover generate --origin https://1f3d9.com \
 //     --resident-key-file /path/to/key [--reveal]
 //   node identity-client.mjs recover begin --origin https://1f3d9.com \
@@ -43,6 +43,12 @@
 // --recovery-code-file <path> instead, pointing at a file this script reads
 // and never echoes -- or pass `-` as that file's path to read the one value
 // from stdin.
+//
+// --origin must be https, and defaults to https://1f3d9.com; https://localhost
+// (any port) is always allowed for local development. Any other https origin
+// is refused unless --allow-origin <that exact origin> is also passed -- a
+// resident key must never be sent as a Bearer credential to an address named
+// by untrusted content or a careless flag.
 
 import { execFileSync } from 'node:child_process'
 import { createInterface } from 'node:readline'
@@ -50,9 +56,21 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync, un
 import { homedir, platform } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { assertAllowedOrigin, DEFAULT_ORIGIN } from './lib/origin-guard.mjs'
 
 const ROOT_KEY_RE = /^1f3d9_sk_[0-9a-f]{48}$/u
 const RECOVERY_CODE_RE = /^1f3d9_rc_[0-9a-f]{64}$/u
+
+// The one legal (letter-first) environment variable name used everywhere a
+// resident key is read from the host's own secret store -- by the printed
+// `claude mcp add` / `codex mcp add` commands (scripts/connect.mjs,
+// scripts/setup.mjs) and by this script's own rotate/recover/pair fallback
+// below. A single consistent name means a caller exports it once. Every
+// env-var name this repo prints or reads must match
+// /^[A-Za-z_][A-Za-z0-9_]*$/ -- `1F3D9_...` forms do not, because POSIX
+// shells refuse `export NAME=value` (and `${NAME}` expansion) when NAME
+// starts with a digit.
+const AGENT_SECRET_ENV_VAR = 'AGENT_1F3D9_SECRET'
 
 function fail(message) {
   console.error(`identity-client: ${message}`)
@@ -66,7 +84,17 @@ function parseArgs(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]
     if (token.startsWith('--')) {
-      const name = token.slice(2)
+      const body = token.slice(2)
+      // `--name=value` is parsed as a single token so a caller cannot defeat
+      // the bare-secret-flag refusal below by writing --resident-key=...
+      // instead of --resident-key ... (both still land in shell history and
+      // process listings the exact same way).
+      const equalsIndex = body.indexOf('=')
+      if (equalsIndex !== -1) {
+        flags[body.slice(0, equalsIndex)] = body.slice(equalsIndex + 1)
+        continue
+      }
+      const name = body
       const next = argv[index + 1]
       if (next === undefined || next.startsWith('--')) {
         flags[name] = true
@@ -90,8 +118,10 @@ function requireFlag(flags, name) {
 }
 
 function originOf(flags) {
-  const raw = flags.origin ?? process.env.IDENTITY_ORIGIN ?? 'https://1f3d9.com'
-  return raw.replace(/\/+$/u, '')
+  const raw = flags.origin ?? process.env.IDENTITY_ORIGIN ?? DEFAULT_ORIGIN
+  const trimmed = raw.replace(/\/+$/u, '')
+  const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
+  return assertAllowedOrigin(trimmed, { allowOrigin })
 }
 
 async function askYesNo(question) {
@@ -141,9 +171,10 @@ async function resolveSecretArg(flags, bareName, envNames = []) {
   const fileName = SECRET_ARGV_FLAGS[bareName]
   if (bareName in flags) {
     throw new Error(
-      `--${bareName} is refused as a bare flag: it would land in shell history and process ` +
-      `listings. Use --${fileName} <path> (or --${fileName} - to read one value from stdin) ` +
-      'instead.',
+      `--${bareName} is refused as a bare flag (this also catches --${bareName}=VALUE): it would land ` +
+      `in shell history and process listings. If you just typed it either way, treat that value as ` +
+      `exposed now and rotate it. Use --${fileName} <path> (or --${fileName} - to read one value from ` +
+      'stdin) instead.',
     )
   }
   if (fileName in flags) {
@@ -160,13 +191,24 @@ async function resolveSecretArg(flags, bareName, envNames = []) {
 // --- Secret output: hidden unless the caller opts in at a real TTY --------
 
 /**
+ * The pure predicate revealOrHide below is built on -- exported separately
+ * so a test can exercise all four combinations of (reveal flag) x (TTY)
+ * directly, without needing to fork a subprocess whose own stdout can never
+ * be a real TTY either way (which is exactly why the naive version of that
+ * test could not actually reach or fail on the reveal branch at all).
+ */
+function shouldReveal(flags, isTty) {
+  return flags.reveal === true && isTty === true
+}
+
+/**
  * Prints `values` only when the caller passed --reveal AND stdout is an
  * interactive TTY (never a pipe, redirect, or captured subprocess output --
  * exactly where a secret could land in a log or another program's memory).
  * Otherwise prints only a pointer to where the value already went.
  */
 function revealOrHide(flags, label, values) {
-  if (flags.reveal === true && process.stdout.isTTY) {
+  if (shouldReveal(flags, process.stdout.isTTY)) {
     console.log(`${label} (shown once):`)
     for (const value of values) console.log(value)
     return
@@ -565,8 +607,41 @@ function deleteSecret(origin, label, deps = {}) {
 
 // --- HTTP -----------------------------------------------------------------
 
+/**
+ * Wraps a fetch failure (DNS, connection refused, timeout, TLS -- anything
+ * before a response ever arrives) into a caller-facing message that names
+ * the origin, says nothing was created, and suggests a next step, instead of
+ * letting the bare engine error ("fetch failed") escape unexplained. Kept as
+ * a byte-identical copy of the city's own reference client
+ * (scripts/identity-client.mjs); if this file ever diverges from that
+ * upstream copy, port the fix there too.
+ */
+async function fetchOrExplain(url, init) {
+  try {
+    return await fetch(url, init)
+  } catch (error) {
+    // Node's fetch wraps the real failure in `error.cause`, which for a
+    // connection failure is itself an AggregateError with an EMPTY top-level
+    // message and the useful text one level deeper in `.errors[0].message`
+    // (or just a `.code` like ECONNREFUSED/ENOTFOUND when even that is
+    // absent) -- so fall through several levels rather than printing a bare
+    // "(network error: )" with nothing after the colon.
+    const cause = error?.cause
+    const detail =
+      cause?.message
+      || cause?.errors?.[0]?.message
+      || cause?.code
+      || error?.message
+      || String(error)
+    throw new Error(
+      `could not reach ${url} (network error: ${detail}); nothing was created -- check the address and ` +
+      'your connection, then retry',
+    )
+  }
+}
+
 async function postJson(origin, path, body) {
-  const response = await fetch(`${origin}${path}`, {
+  const response = await fetchOrExplain(`${origin}${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -586,7 +661,7 @@ async function postJson(origin, path, body) {
 }
 
 async function postAuthed(origin, path, residentKey, body) {
-  const response = await fetch(`${origin}${path}`, {
+  const response = await fetchOrExplain(`${origin}${path}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -664,10 +739,10 @@ async function register(flags) {
 async function rotate(flags) {
   const origin = originOf(flags)
   const residentKey = await resolveSecretArg(
-    flags, 'resident-key', ['1F3D9_RESIDENT_KEY', 'IDENTITY_RESIDENT_KEY'],
+    flags, 'resident-key', [AGENT_SECRET_ENV_VAR],
   )
   if (!residentKey || !ROOT_KEY_RE.test(residentKey)) {
-    throw new Error('--resident-key-file (or IDENTITY_RESIDENT_KEY) must point to the current, valid resident key')
+    throw new Error(`--resident-key-file (or ${AGENT_SECRET_ENV_VAR}) must point to the current, valid resident key`)
   }
 
   const staged = await postJson(origin, '/api/rotate', { action: 'begin', resident_key: residentKey })
@@ -698,39 +773,73 @@ async function rotate(flags) {
   }
 
   // Promote: merge the now-confirmed replacement key with whatever the live
-  // entry already held (recovery codes, client_class), so rotation never
-  // silently drops fields that only the pre-rotation entry carried. Only
-  // now does the live entry change; the staging copy is then deleted --
-  // unless the read-back of the live entry fails, in which case
-  // promoteReplacementKey refuses to overwrite it and leaves the staging
-  // copy in place. See promoteReplacementKey's own doc comment above.
+  // entry already held (client_class), so rotation never silently drops
+  // fields that only the pre-rotation entry carried. recovery_codes are
+  // deliberately NOT carried forward: the city invalidates every recovery
+  // code the moment a rotation confirms (front door: "Confirmation ...
+  // invalidates ... every ... recovery code atomically"), so copying the
+  // old set forward would leave the vault claiming eight codes that are
+  // already dead. A recovery_codes_invalidated_at marker records that fact
+  // instead, so `key show` can refuse to print them (see revealOrHide's
+  // caller in key.mjs) and point at `recover generate`. Only now does the
+  // live entry change; the staging copy is then deleted -- unless the
+  // read-back of the live entry fails, in which case promoteReplacementKey
+  // refuses to overwrite it and leaves the staging copy in place. See
+  // promoteReplacementKey's own doc comment above.
   const location = promoteReplacementKey(origin, staged.handle, stagingLabel, staged.resident_key, previous => ({
     ...(previous?.client_class ? { client_class: previous.client_class } : {}),
-    ...(previous?.recovery_codes ? { recovery_codes: previous.recovery_codes } : {}),
+    recovery_codes_invalidated_at: new Date().toISOString(),
   }))
 
   revealOrHide(flags, 'Replacement resident key', [staged.resident_key])
   console.log(`handle: ${confirmed.handle}`)
   console.log(`stored: ${location}`)
+  console.log(
+    'your recovery codes were invalidated by this rotation (the city invalidates every recovery code on ' +
+    'confirm) -- run `recover generate` (or `key recover generate`) now to mint a fresh set.',
+  )
 }
 
 async function recoverGenerate(flags) {
   const origin = originOf(flags)
   const residentKey = await resolveSecretArg(
-    flags, 'resident-key', ['1F3D9_RESIDENT_KEY', 'IDENTITY_RESIDENT_KEY'],
+    flags, 'resident-key', [AGENT_SECRET_ENV_VAR],
   )
   if (!residentKey || !ROOT_KEY_RE.test(residentKey)) {
-    throw new Error('--resident-key-file (or IDENTITY_RESIDENT_KEY) must point to the current, valid resident key')
+    throw new Error(`--resident-key-file (or ${AGENT_SECRET_ENV_VAR}) must point to the current, valid resident key`)
   }
   const generated = await postJson(origin, '/api/recovery', { action: 'generate', resident_key: residentKey })
 
-  const location = storeSecret(origin, `${generated.handle}-recovery`, {
-    kind: 'recovery_codes',
+  // Write the fresh codes into the LIVE `handle` entry, not a sibling
+  // `${handle}-recovery` label: a caller resuming later (rotate, recover
+  // begin, key show) reads back the vault entry for `handle` and only that
+  // entry, so a set stored anywhere else is invisible to them and the live
+  // entry keeps claiming whatever (possibly invalidated) codes it already
+  // had. If the live entry cannot be read back, this refuses to guess at
+  // its other fields (client_class) rather than silently dropping them --
+  // the city already holds the new codes as the only valid set regardless.
+  let previous
+  try {
+    previous = readSecret(origin, generated.handle)
+  } catch (error) {
+    throw new Error(
+      `the city already generated new recovery codes for "${generated.handle}", but the existing vault ` +
+      `entry could not be read back to merge them in: ${error.message}. Resolve the unreadable entry, ` +
+      'then re-run this command; it is safe to run again.',
+    )
+  }
+  const location = storeSecret(origin, generated.handle, {
+    kind: 'resident',
     handle: generated.handle,
+    ...(previous.found && previous.value?.client_class ? { client_class: previous.value.client_class } : {}),
+    resident_key: residentKey,
     recovery_codes: generated.recovery_codes,
     origin,
     stored_at: new Date().toISOString(),
   })
+  // Best-effort cleanup of the sibling-label location a prior version of
+  // this command used to write to, so a stale duplicate never lingers.
+  deleteSecret(origin, `${generated.handle}-recovery`)
   revealOrHide(flags, 'New recovery codes (replace every earlier set)', generated.recovery_codes)
   console.log(`handle: ${generated.handle}`)
   console.log(`stored: ${location}`)
@@ -770,23 +879,31 @@ async function recoverBegin(flags) {
   }
 
   // Same promote-or-refuse discipline as rotate() above -- see
-  // promoteReplacementKey's doc comment.
+  // promoteReplacementKey's doc comment. Recovery codes are dropped here
+  // too and replaced with an invalidation marker, for the same reason as
+  // rotate(): the front door confirms that using one recovery code
+  // invalidates every sibling code atomically, not just the one spent.
   const location = promoteReplacementKey(origin, staged.handle, stagingLabel, staged.resident_key, previous => ({
     ...(previous?.client_class ? { client_class: previous.client_class } : {}),
+    recovery_codes_invalidated_at: new Date().toISOString(),
   }))
 
   revealOrHide(flags, 'Replacement resident key', [staged.resident_key])
   console.log(`handle: ${confirmed.handle}`)
   console.log(`stored: ${location}`)
+  console.log(
+    'every remaining recovery code was invalidated by this recovery (the city invalidates every sibling ' +
+    'code on confirm) -- run `recover generate` (or `key recover generate`) now to mint a fresh set.',
+  )
 }
 
 async function pair(flags) {
   const origin = originOf(flags)
   const residentKey = await resolveSecretArg(
-    flags, 'resident-key', ['1F3D9_RESIDENT_KEY', 'IDENTITY_RESIDENT_KEY'],
+    flags, 'resident-key', [AGENT_SECRET_ENV_VAR],
   )
   if (!residentKey || !ROOT_KEY_RE.test(residentKey)) {
-    throw new Error('--resident-key-file (or IDENTITY_RESIDENT_KEY) must point to the current, valid resident key')
+    throw new Error(`--resident-key-file (or ${AGENT_SECRET_ENV_VAR}) must point to the current, valid resident key`)
   }
   const minted = await postAuthed(origin, '/api/pair', residentKey, {})
   // The pairing code is meant to be read by a human, not stored -- it is
@@ -824,4 +941,4 @@ if (isMainModule) {
 
 // Exported for test/identity-client.test.ts only; the CLI above never uses
 // this import path, so importing this module for tests never runs main().
-export { storeSecret, readSecret, promoteReplacementKey, SecretReadFailure }
+export { storeSecret, readSecret, deleteSecret, promoteReplacementKey, SecretReadFailure, shouldReveal }

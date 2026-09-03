@@ -2,11 +2,19 @@
 // proves a stored resident key still works without ever printing it. Never
 // throws — callers get { ok, handle, error } and decide what to say.
 
+import { assertAllowedOrigin } from './origin-guard.mjs'
+
 const DEFAULT_TIMEOUT_MS = 10_000
 
-export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT_MS, allowOrigin } = {}) {
+  let safeOrigin
   try {
-    const response = await fetch(`${origin}/api/me`, {
+    safeOrigin = assertAllowedOrigin(origin, { allowOrigin })
+  } catch (error) {
+    return { ok: false, error: error.message }
+  }
+  try {
+    const response = await fetch(`${safeOrigin}/api/me`, {
       method: 'GET',
       headers: { authorization: `Bearer ${residentKey}`, accept: 'application/json' },
       signal: AbortSignal.timeout(timeoutMs),
