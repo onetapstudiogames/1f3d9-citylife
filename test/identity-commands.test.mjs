@@ -72,8 +72,8 @@ test('register refuses to overwrite an existing vault entry under the confirmed 
     const staging = readSecret(stub.origin, 'agent-collide--pending-registration', { homeDir: home.dir })
     assert.equal(staging.found, false, 'the staging copy was cleaned up, not left behind')
   } finally {
-    deleteSecret(stub.origin, 'agent-collide')
-    deleteSecret(stub.origin, 'agent-collide--pending-registration')
+    deleteSecret(stub.origin, 'agent-collide', { homeDir: home.dir })
+    deleteSecret(stub.origin, 'agent-collide--pending-registration', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -97,7 +97,7 @@ test('register --replace-vault-entry deliberately overwrites an existing entry',
     assert.notEqual(now.value.resident_key, `1f3d9_sk_${'y'.repeat(48)}`, 'the old key was deliberately replaced')
     assertNoSecretLeaked(result, 'register --replace-vault-entry')
   } finally {
-    deleteSecret(stub.origin, 'agent-replace')
+    deleteSecret(stub.origin, 'agent-replace', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -150,7 +150,7 @@ test('setup.mjs accepts --human-approved=<token> in equals form, not just the sp
     assert.equal(stub.residents.size, 1, 'the equals-form token actually registered')
     assertNoSecretLeaked(secondPass, 'setup.mjs equals-form token')
   } finally {
-    deleteSecret(stub.origin, 'agent-equals')
+    deleteSecret(stub.origin, 'agent-equals', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -336,7 +336,7 @@ test('setup.mjs: human approval needs two real passes -- a bare or fabricated --
     // test's CLI-driven `setup` registration must be cleaned up explicitly,
     // the same way test/vault-roundtrip-windows.test.mjs does for its own
     // fixture entries.
-    deleteSecret(stub.origin, 'agent-one')
+    deleteSecret(stub.origin, 'agent-one', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -377,8 +377,8 @@ test('setup.mjs: the approval token is genuinely single-use -- once consumed by 
     assert.notEqual(replay.status, 0, 'the already-consumed token cannot approve a later registration')
     assert.equal(stub.residents.size, 1, 'no second resident was registered by replaying a spent token')
   } finally {
-    deleteSecret(stub.origin, 'agent-token-reuse')
-    deleteSecret(stub.origin, 'agent-token-reuse-2')
+    deleteSecret(stub.origin, 'agent-token-reuse', { homeDir: home.dir })
+    deleteSecret(stub.origin, 'agent-token-reuse-2', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -413,7 +413,7 @@ test('setup.mjs adopts an existing working vault entry instead of registering a 
     assert.equal(stub.residents.size, 1, 'no second resident was registered')
     assertNoSecretLeaked(result, 'setup.mjs adopt')
   } finally {
-    deleteSecret(stub.origin, 'agent-two')
+    deleteSecret(stub.origin, 'agent-two', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -458,7 +458,7 @@ test('setup.mjs: --new-identity bypasses adoption and attempts a real registrati
     assert.match(forced.stdout + forced.stderr, /--new-identity was passed/u)
     assert.equal(stub.residents.size, 1, 'still exactly the one, pre-existing resident')
   } finally {
-    deleteSecret(stub.origin, 'agent-two-b')
+    deleteSecret(stub.origin, 'agent-two-b', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -510,7 +510,7 @@ test('key rotate invalidates recovery codes instead of carrying them forward, an
     assert.equal(typeof stored.value.recovery_codes_invalidated_at, 'string',
       'the vault entry is marked so `key show` can refuse to print stale codes')
   } finally {
-    deleteSecret(stub.origin, 'agent-four')
+    deleteSecret(stub.origin, 'agent-four', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -540,8 +540,8 @@ test('key recover generate writes the fresh codes into the live vault entry, not
     const sibling = readSecret(stub.origin, 'agent-five-recovery', { homeDir: home.dir })
     assert.equal(sibling.found, false, 'no separate sibling-label entry is left behind')
   } finally {
-    deleteSecret(stub.origin, 'agent-five')
-    deleteSecret(stub.origin, 'agent-five-recovery')
+    deleteSecret(stub.origin, 'agent-five', { homeDir: home.dir })
+    deleteSecret(stub.origin, 'agent-five-recovery', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -573,7 +573,7 @@ test('key rotate/recover generate refuse --reveal outright when stdout is not a 
     assert.notEqual(recoverResult.status, 0)
     assert.match(recoverResult.stderr, /--reveal cannot work through this wrapper/u)
   } finally {
-    deleteSecret(stub.origin, 'agent-six')
+    deleteSecret(stub.origin, 'agent-six', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -697,7 +697,7 @@ test('setup.mjs refuses to adopt a vault entry whose stored key authenticates as
     assert.equal(stub.residents.size, 1, 'no new resident was registered, and the true resident is untouched')
     assertNoSecretLeaked(result, 'setup.mjs mismatch refusal')
   } finally {
-    deleteSecret(stub.origin, 'agent-alpha')
+    deleteSecret(stub.origin, 'agent-alpha', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -725,7 +725,7 @@ test('key status reports a mismatch instead of claiming success when the stored 
     assert.doesNotMatch(result.stdout, /works \(one me read succeeded\)/u, 'never claims plain success on a mismatch')
     assertNoSecretLeaked(result, 'key status mismatch')
   } finally {
-    deleteSecret(stub.origin, 'agent-gamma')
+    deleteSecret(stub.origin, 'agent-gamma', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -754,7 +754,7 @@ test('connect.mjs reports a mismatch instead of claiming OK when the stored key 
     assert.doesNotMatch(result.stdout, /one me read: OK/u, 'never claims OK on a mismatch')
     assertNoSecretLeaked(result, 'connect.mjs mismatch')
   } finally {
-    deleteSecret(stub.origin, 'agent-epsilon')
+    deleteSecret(stub.origin, 'agent-epsilon', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -788,7 +788,7 @@ test('setup.mjs refuses to register under a new handle when this origin already 
     assert.equal(stub.residents.size, 0, 'nothing was registered')
     assertNoSecretLeaked(result, 'setup.mjs other-label refusal')
   } finally {
-    deleteSecret(stub.origin, 'agent-old')
+    deleteSecret(stub.origin, 'agent-old', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -848,7 +848,7 @@ test('key show refuses to print "undefined" when a stored bundle has no resident
     assert.doesNotMatch(result.stdout, /undefined/u)
     assert.match(result.stdout, /carries no resident_key/u)
   } finally {
-    deleteSecret(origin, 'no-key-handle')
+    deleteSecret(origin, 'no-key-handle', { homeDir: home.dir })
     home.cleanup()
   }
 })
