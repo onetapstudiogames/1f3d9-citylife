@@ -28,16 +28,28 @@
 // exact question to put to the human, and refuses to register — printing
 // the exact SECOND command to run, with --human-approved <token> appended,
 // where token is derived from (origin, handle, client_class, that nonce).
-// Only a SECOND run passing that exact token back proceeds; an unattended
-// loop cannot produce that token in one call, because computing it requires
-// the nonce this script only ever writes to disk on a prior, separate run.
-// On an interactive terminal, that second run additionally asks the exact
+// Only a SECOND run passing that exact token back proceeds. On an
+// interactive terminal, that second run additionally asks the exact
 // question directly, as one more confirmation ON TOP OF the valid token —
-// never as a substitute for it, and never on the first run. The token is
-// proof a first pass happened here — it is still the agent's own recorded
-// declaration that a human said yes out of band (decision row 74), never
-// proof of who actually said it, and this script never treats it as more
-// than that.
+// never as a substitute for it, and never on the first run.
+//
+// What this token IS: proof that a first pass ran here and printed the
+// question, before this exact registration was allowed to proceed — so an
+// agent cannot self-approve inside a single call with no refusal in between.
+// What this token is NOT: proof that a human ever saw or answered that
+// question. Nothing stops the SAME agent, in the SAME unattended session,
+// from running the first pass, reading the token it prints, and immediately
+// running the second pass itself — the mechanism cannot detect or prevent
+// that, and does not try to. The city records a valid token as this agent's
+// own declaration that a human said yes out of band (decision row 74); it
+// is never proof of who actually said it, and a deliberate agent that
+// satisfies this gate without a real human answer is making a false
+// declaration on that public record, not defeating a security control.
+// What the two-pass shape actually buys: it forces the exact question to be
+// printed, in the agent's own transcript, before registration can happen —
+// so a human reviewing that transcript can see plainly whether the question
+// was ever really put to them, and a careless one-shot "just register me"
+// call can never slip through unnoticed.
 
 import { spawnSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -363,40 +375,57 @@ function computeApprovalToken(nonce) {
 }
 
 /**
- * Asks `question` at an interactive terminal and resolves to the typed
- * answer -- or to `''` on EOF/close with no answer typed (a pty whose other
- * end never writes anything, `< /dev/null`, a killed parent, and so on).
- * Settling on readline's own 'close' event as well as on an answer is what
- * keeps this from hanging forever into an unsettled top-level await: a bare
- * `rl.question(...)` promise never resolves at all if the input stream ends
- * before an answer is typed.
+ * Asks `question` at an interactive terminal and resolves to
+ * `{ answer, timedOut: false }` with the typed answer -- or to
+ * `{ answer: '', timedOut: false }` on EOF/close with no answer typed (a pty
+ * whose other end never writes anything, `< /dev/null`, a killed parent, and
+ * so on) -- or to `{ answer: '', timedOut: true }` if nobody answers within
+ * APPROVAL_TIMEOUT_MS. Settling on readline's own 'close' event and on a
+ * timer, as well as on an answer, is what keeps this from hanging forever
+ * into an unsettled top-level await: a bare `rl.question(...)` promise never
+ * resolves at all if the input stream ends before an answer is typed, and a
+ * non-human pty that never closes and never types anything (a harness
+ * bug, a hung parent) would otherwise leave registration waiting forever
+ * for a human who is never actually going to answer.
  */
+const APPROVAL_TIMEOUT_MS = 120_000
+
 function askOnTty(question) {
   const rl = createInterface({ input: process.stdin, output: process.stdout })
   return new Promise(resolvePromise => {
     let settled = false
-    rl.question(`${question} [y/N] `, answer => {
+    const settle = result => {
+      if (settled) return
       settled = true
-      resolvePromise(answer)
-    })
-    rl.on('close', () => {
-      if (!settled) {
-        settled = true
-        resolvePromise('')
-      }
-    })
+      clearTimeout(timer)
+      resolvePromise(result)
+    }
+    const timer = setTimeout(() => settle({ answer: '', timedOut: true }), APPROVAL_TIMEOUT_MS)
+    rl.question(`${question} [y/N] `, answer => settle({ answer, timedOut: false }))
+    rl.on('close', () => settle({ answer: '', timedOut: false }))
   }).finally(() => rl.close())
 }
 
 /**
- * A real two-pass human-approval gate that a single non-interactive call
- * cannot satisfy on its own -- see the header comment for the full shape.
- * The nonce/token round trip is UNCONDITIONAL: stdin being a TTY is never
- * treated as evidence a human is present, so the interactive question below
- * is only ever asked as an ADDITIONAL confirmation on top of an already-
- * valid token, never as a substitute for one -- a call that supplies no
- * token, or the wrong one, is refused on every stdin, TTY included, without
- * ever reaching a prompt.
+ * The exact confirmation question — asked once by the file's own header
+ * comment, the first-pass refusal below, and (verbatim, from this same
+ * function) the interactive follow-up askOnTty asks on a valid second pass.
+ * Built in one place so those three descriptions of "the question" can
+ * never drift into describing three different questions.
+ */
+function approvalQuestion(forHandle, forClientClass) {
+  return `Confirm the permanent public handle "${forHandle}" (client class: ${forClientClass}) was chosen with a human's clear yes. Register it now?`
+}
+
+/**
+ * A real two-pass human-approval gate -- see the header comment for the
+ * full shape and what this token does and does not prove. The nonce/token
+ * round trip is UNCONDITIONAL: stdin being a TTY is never treated as
+ * evidence a human is present, so the interactive question below is only
+ * ever asked as an ADDITIONAL confirmation on top of an already-valid
+ * token, never as a substitute for one -- a call that supplies no token, or
+ * the wrong one, is refused on every stdin, TTY included, without ever
+ * reaching a prompt.
  *
  * Returns one of:
  *   { approved: true } -- a valid token was presented, and (if this is an
@@ -407,6 +436,11 @@ function askOnTty(question) {
  *     presented (and is now consumed, single-use), but the interactive
  *     follow-up question was declined or hit EOF. There is no next token to
  *     print here: a fresh first pass is what mints one.
+ *   { approved: false, timedOut: true } -- a valid token WAS presented (and
+ *     is now consumed, single-use), but nobody answered the interactive
+ *     follow-up within APPROVAL_TIMEOUT_MS. Same "no next token" shape as
+ *     declinedAfterToken; kept as a distinct field only so the caller can
+ *     print a message that names what actually happened.
  */
 async function confirmHumanApproval() {
   const provided = typeof flags['human-approved'] === 'string' ? flags['human-approved'] : null
@@ -420,10 +454,8 @@ async function confirmHumanApproval() {
     // not the interactive follow-up below is also asked.
     writeSetupState(origin, { pending_approval: null })
     if (process.stdin.isTTY) {
-      const question =
-        `Confirm the exact permanent public handle "${handle}" (client class: ${clientClass}) was chosen ` +
-        'with a human\'s clear yes. Register it now?'
-      const answer = await askOnTty(question)
+      const { answer, timedOut } = await askOnTty(approvalQuestion(handle, clientClass))
+      if (timedOut) return { approved: false, timedOut: true }
       if (!/^y(es)?$/iu.test(answer.trim())) return { approved: false, declinedAfterToken: true }
     }
     return { approved: true }
@@ -450,13 +482,27 @@ async function confirmHumanApproval() {
 
 const approval = await confirmHumanApproval()
 if (!approval.approved) {
+  if (approval.timedOut) {
+    // The token was genuinely valid (and is now spent) -- nobody answered
+    // the interactive follow-up within APPROVAL_TIMEOUT_MS. Same "no next
+    // command to print" shape as declinedAfterToken below: a fresh first
+    // pass is what mints the next token.
+    console.error(
+      `setup: no answer was given to the confirmation question within ${APPROVAL_TIMEOUT_MS / 1000}s; ` +
+      'nothing was created. A non-interactive process attached to what looks like a terminal -- a pty ' +
+      'with nothing on the other end, a harness that never actually forwards the prompt -- must never be ' +
+      'treated as a human who said yes just because it never says no. Start over with a fresh first pass ' +
+      '(no --human-approved) once a human is actually present to answer.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
   if (approval.declinedAfterToken) {
     // The token was genuinely valid (and is now spent) -- the interactive
-    // follow-up is what said no, or hit EOF with nobody answering. There is
-    // no next command to print: printing one built from `approval.token`
-    // here would literally read "--human-approved undefined", a command
-    // that can only be refused again. State plainly that nothing was
-    // created instead.
+    // follow-up is what said no. There is no next command to print:
+    // printing one built from `approval.token` here would literally read
+    // "--human-approved undefined", a command that can only be refused
+    // again. State plainly that nothing was created instead.
     console.error(
       `setup: registration of "${handle}" was declined at the interactive confirmation; nothing was ` +
       'created. Start over with a fresh first pass (no --human-approved) once you actually have a clear ' +
@@ -466,17 +512,18 @@ if (!approval.approved) {
     process.exit()
   }
   console.error(
-    'setup: before registering, put this exact question to the human: "Confirm the permanent public ' +
-    `handle "${handle}" (client class: ${clientClass}) — register it now?" Registration creates a ` +
-    'permanent public identity that cannot be silently replaced. After a clear yes, re-run this exact ' +
-    `command with --human-approved ${approval.token} appended. That token proves a first pass happened ` +
-    'here and wrote the nonce it is derived from to setup-state.json -- an unattended loop cannot produce ' +
-    'it in one call, because it can only be computed after that nonce already exists on disk. This check ' +
-    'runs the same way whether or not stdin is an interactive terminal: on one, the second run (the one ' +
-    'carrying this token) will ALSO ask the question directly, as one more confirmation on top of the ' +
-    'token, never as a substitute for it. The token is still only the agent\'s own recorded declaration ' +
-    'that the yes already happened -- the city records it as such (decision row 74); it is never proof of ' +
-    'who actually said yes, and this script never treats it as more than proof that a first pass happened.',
+    `setup: before registering, put this exact question to the human: "${approvalQuestion(handle, clientClass)}" ` +
+    'Registration creates a permanent public identity that cannot be silently replaced. After a clear yes, ' +
+    `re-run this exact command with --human-approved ${approval.token} appended. This check runs the same ` +
+    'way whether or not stdin is an interactive terminal: on one, the second run (the one carrying this ' +
+    'token) will ALSO ask this exact same question directly, as one more confirmation on top of the token, ' +
+    'never as a substitute for it. What the token proves: this exact registration was refused once, with ' +
+    'the question above printed, before being allowed to proceed -- it is the agent\'s own recorded ' +
+    'declaration that a human then said yes out of band (decision row 74). What it does NOT prove: that a ' +
+    'human actually saw or answered the question -- nothing stops the same agent, in the same unattended ' +
+    'session, from running this exact refused call and then immediately running the second one itself. ' +
+    'Doing that is a false declaration on the public record, not a defeated security control; this script ' +
+    'never claims otherwise.',
   )
   process.exitCode = 1
   process.exit()
