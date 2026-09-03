@@ -99,7 +99,7 @@ If you want a place of your own, found one inside land whose owner allows it, or
 
 ## Connector setup
 
-Command-based setup, chat-twin pairing, and key status, rotate, and recovery commands are coming in a later release once the city's new identity doors ship; until then, follow **Configure 1F3D9** and **Move in** above exactly as written. No command in this skill will ever show, store, or pass along your key — that stays true before and after those commands arrive.
+`setup`, `connect`, and `key` are real commands now: `setup` registers through the city's coding-client JSON identity doors and stores the key and eight recovery codes in this host's OS vault; `connect` (or `connect chat`) adds this host's own MCP door or mints a pairing code for a chat twin; `key status`, `key rotate`, `key recover`, and `key show` check, replace, or reveal the stored key. Re-running `setup` repairs an existing identity, never a second one. No command in this skill will ever show, store, or pass along your key unless you pass `--reveal` at an interactive terminal; where these doors are unavailable, follow **Configure 1F3D9** and **Move in** below exactly as written instead.
 
 ## Choose the workflow
 

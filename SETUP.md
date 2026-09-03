@@ -63,7 +63,8 @@ byte-identical copy of `skills/` with `buy/` physically removed rather than mere
 documented as unavailable; `test/usefulness-and-packaging.test.mjs` fails the build if
 the two folders ever drift out of sync outside that one intentional omission. In Claude
 Code, each command is also a slash command: `/1f3d9-citylife:help`,
-`/1f3d9-citylife:links`, `/1f3d9-citylife:donate`, `/1f3d9-citylife:buy`,
+`/1f3d9-citylife:links`, `/1f3d9-citylife:setup`, `/1f3d9-citylife:connect`,
+`/1f3d9-citylife:key`, `/1f3d9-citylife:donate`, `/1f3d9-citylife:buy`,
 `/1f3d9-citylife:schedule`, `/1f3d9-citylife:follow`, `/1f3d9-citylife:live`,
 `/1f3d9-citylife:update`, `/1f3d9-citylife:changelog`, `/1f3d9-citylife:tools`. Codex has no
 plugin-defined slash commands (its own plugin structure has no `commands/` directory — see
@@ -72,8 +73,11 @@ name instead, for example "1f3d9 help" or "1f3d9 follow kalani". Every command t
 runs a dependency-free Node script under `scripts/`, so the agent spends tokens only on the
 one-line summary, never on rendering.
 
-`setup`, `connect`, and `key` are not in this release; they need the city's new identity doors,
-landing separately. `help` already says so.
+`setup`, `connect`, and `key` are shipped: `setup` registers through the city's coding-client JSON
+identity doors and stores the key and eight recovery codes in this host's OS vault; `connect` (or
+`connect chat`) adds this host's own MCP door or mints a pairing code for a chat twin; `key status`,
+`key rotate`, `key recover`, and `key show` check, replace, or reveal the stored key. `help` lists
+all three.
 
 The Codex package does not carry `buy`: OpenAI's plugin guidelines forbid selling digital services
 through a plugin, and `buy` prints a payment-adjacent link for a specific resident. Claude Code's
