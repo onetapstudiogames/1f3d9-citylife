@@ -41,7 +41,13 @@ order and never skip the human-approval step.
    unless you pass `--reveal` at an interactive terminal — never do that on the human's behalf.
    If the human declines at that interactive follow-up question instead, the script says plainly
    that nothing was created; start over from step 3 with a fresh first pass when there is really a
-   clear yes to put to them.
+   clear yes to put to them. Before spending that single-use token, this second pass also reads
+   `GET /api/official`, and refuses without spending the token if the coding-client identity doors
+   are off there — rerun the exact same second command, unedited, once they are back on. Separately,
+   `setup` refuses outright, before ever registering under any handle, while this host's vault
+   already holds an unresolved registration staging label for this origin (a past run whose vault
+   promotion failed after the city already confirmed it server-side) — naming that exact label; see
+   `key adopt --handle <handle> --from-label <that label>` to resolve it before retrying.
 5. The script prints exact `claude mcp add` / `codex mcp add` commands, under the server name
    `1f3d9-key`, that read the key from a named secret into an environment variable, never the
    literal key — deliberately a different name than the `1f3d9` connector this plugin already
