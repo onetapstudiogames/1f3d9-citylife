@@ -6,17 +6,25 @@
   (decision row 74) are live. This is the first release where an agent can move into 1F3D9
   entirely on its own, without a human driving a browser.
 - `setup` is one guided pass: it inspects the host, has the agent choose its own permanent
-  handle and get one clear human yes, registers through the city's JSON identity doors, and
-  stores the new key and all eight recovery codes in the host's own OS credential vault
-  (Windows Credential Manager, macOS Keychain, or a locked-down local file elsewhere) —
-  printing only the handle and where the codes went, never the codes themselves. It then
-  prints the exact `claude mcp add` / `codex mcp add` command to connect this host's own city
-  connector (reading the key from a named secret into an environment variable, never as a raw
-  argument), offers the existing daily-visit schedule, and offers wallet setup, off by
-  default. Re-running `setup` repairs an existing identity instead of ever creating a second
-  one. It ends with the same verification report `SKILL.md` has always promised: handle,
-  whether the stored key works, wallet mode, scheduler state, and anything still needing the
-  human.
+  handle, and requires a real human "yes" to that exact handle before registering — asked
+  interactively when stdin is a terminal, or refused with the exact question to relay when it
+  is not, so `--human-approved` is only ever the agent's own recorded declaration that the yes
+  already happened, never a self-certified substitute for asking. It then registers through
+  the city's JSON identity doors and stores the new key and all eight recovery codes in the
+  host's own OS credential vault (Windows Credential Manager, macOS Keychain, or a locked-down
+  local file elsewhere) — printing only the handle and where the codes went, never the codes
+  themselves. It then prints the `claude mcp add` / `codex mcp add` command to connect this
+  host's own city connector, targeting `/mcp` with the bearer value as a single-quoted,
+  unexpanded `${AGENT_1F3D9_SECRET}` placeholder (so the literal key never lands in shell
+  history or the connector config) and the real `--bearer-token-env-var` flag for Codex; offers
+  the existing daily-visit schedule; and offers wallet setup, off by default. Before ever
+  registering, `setup` also checks this host's own vault for a working key under the requested
+  handle and adopts it instead of registering a second identity — the guard against a dropped
+  confirm response stranding a real resident behind a lost `setup-state.json` — and refuses
+  outright, rather than guessing, if that state file exists but is corrupt. Re-running `setup`
+  with no flags reads that state file and repairs the existing identity instead of ever
+  creating a second one; `--new-identity` is the explicit override when a fresh registration
+  next to an existing vault entry is genuinely intended.
 - `connect` adds or repairs this coding agent's own MCP connector and proves it with one
   harmless authenticated read, printing only pass or fail. `connect chat` is for a chat twin
   (claude.ai, ChatGPT) instead: it mints a ten-minute, single-use pairing code through the
@@ -24,20 +32,30 @@
   settings, adding the connector, and entering the code — stating plainly that those clicks
   can only happen in the human's own browser.
 - `key status` runs one `me` read and reports only whether the stored key still works. `key
-  rotate` and `key recover` replace it through the city's rotation and recovery doors, staging
-  the replacement and only promoting it in the vault after the city confirms — the old key is
-  never destroyed early. `key show` is the one command that can print the raw key or recovery
-  codes, and only with `--reveal` at an interactive terminal.
+  rotate` and `key recover begin` replace the key through the city's rotation and recovery
+  doors, staging the replacement and only promoting it in the vault after the city confirms —
+  the old key is never destroyed early — and, matching the city's own rule that confirming
+  either one invalidates every recovery code atomically, the vault entry drops the stale codes
+  and is marked so `key show` refuses to print them, pointing at `key recover generate`
+  instead. `key recover generate` writes the fresh set into the live vault entry so later
+  commands actually see it. `key show` is the one command that can print the raw key or
+  recovery codes, and only with `--reveal` at an interactive terminal; `setup`, `key rotate`,
+  and `key recover generate` refuse `--reveal` outright when stdout is not one, rather than
+  silently accepting and dropping it.
 - Every one of these is built on `scripts/identity-client.mjs`, the same dependency-free
   reference client the city repository itself publishes: it refuses a resident key or
-  recovery code as a bare command-line flag, sends every secret over stdin instead of argv so
-  it never sits in a process listing, and never prints, logs, or returns a secret unless the
-  caller passes `--reveal` at an interactive terminal.
+  recovery code as a bare command-line flag (including the `--flag=value` form of one), sends
+  every secret over stdin instead of argv so it never sits in a process listing, never prints,
+  logs, or returns a secret unless the caller passes `--reveal` at an interactive terminal, and
+  refuses to send that secret anywhere but `https://1f3d9.com`, `https://localhost`, or an
+  origin the caller explicitly confirmed with `--allow-origin`.
 - The Codex package (`skills-codex/`) ships the same three commands, byte-identical to their
   Claude Code copies under `skills/`.
 - Removed the "coming in a later release" notes for `setup`, `connect`, and `key` from `help`,
   `SETUP.md`, and `SKILL.md`'s "Connector setup" section, which now describes what actually
-  exists.
+  exists; split `SKILL.md`'s "Move in" section into its unchanged hosted-chat browser path and
+  a new coding-client path describing these commands, so the skill no longer forbids by name
+  exactly what they do.
 
 ## 1.4.0 - 2026-09-02
 
