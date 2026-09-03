@@ -348,9 +348,9 @@ if (priorVaultEntry.keyWorks && newIdentity) {
 // session that then chooses a different handle would otherwise register a
 // second, permanent, unrecoverable resident right next to the first one.
 // Enumerate every OTHER label this vault already holds for this origin
-// (never the handle just checked above, and never a rotation/recovery
-// staging label, which is not a real registered identity) and refuse
-// outright unless --new-identity was passed.
+// (never the handle just checked above, and never a registration/rotation/
+// recovery staging label, which is not a real registered identity) and
+// refuse outright unless --new-identity was passed.
 if (!newIdentity) {
   const otherLabels = listVaultLabels(origin).filter(label => label !== handle)
   if (otherLabels.length > 0) {
