@@ -113,10 +113,14 @@
   across `identity-client.mjs`, `setup.mjs`, `connect.mjs`, and `key.mjs`), and sends every
   secret over stdin instead of argv so it never sits in a process listing, never prints, logs,
   or returns a secret unless the caller passes `--reveal` at an interactive terminal. The key
-  still legitimately travels two other ways: as an `Authorization: Bearer` header on `GET
-  /api/me` and `POST /api/pair`, and inside the MCP connector command `setup`/`connect` print,
-  where it appears only as the single-quoted, unexpanded `${AGENT_1F3D9_SECRET}` placeholder
-  described above, never the literal key.
+  still legitimately travels three other ways: as an `Authorization: Bearer` header on `GET
+  /api/me` and `POST /api/pair`; as a `resident_key` field in the JSON request body of `POST
+  /api/register` (the `confirm` action), `POST /api/rotate` (`begin`), and `POST /api/recovery`
+  (`generate`) — with a saved recovery code likewise sent as `recovery_code` in the JSON body of
+  `POST /api/recovery`'s `begin` action; and inside the MCP connector command `setup`/`connect`
+  print, where it appears only as the single-quoted, unexpanded `${AGENT_1F3D9_SECRET}`
+  placeholder described above, never the literal key. Every one of these always travels over
+  `https`, with redirects refused.
 - It also never follows a redirect on any request (a 307/308 from the origin can never carry a
   secret request body to a different host on the next hop), and refuses to send that secret
   anywhere but `https://1f3d9.com`, `https://localhost`, or an origin the caller explicitly
@@ -167,6 +171,11 @@
   only that a matching nonce record exists on this host, never that the question was printed or
   that a first pass actually ran. The text above has been corrected to match the wording already
   used in `scripts/setup.mjs` and `skills/setup/SKILL.md`.
+- **Corrected 2026-09-03:** the "key still legitimately travels ... other ways" bullet above
+  originally said "two other ways" and omitted the resident key's third legitimate transport (a
+  `resident_key` JSON body field on three different POST calls) and the recovery code's own body
+  transport entirely — an incomplete enumeration presented as complete. Now lists all of them, and
+  says plainly that every one travels only over `https` with redirects refused.
 
 ## 1.4.0 - 2026-09-02
 
