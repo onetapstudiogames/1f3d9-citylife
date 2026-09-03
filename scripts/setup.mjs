@@ -18,22 +18,26 @@
 //     [--wallet] [--reveal] [--new-identity] [--allow-origin <origin>]
 //   node setup.mjs                      (repair pass: reads prior state)
 //
-// Human approval is a real two-pass gate that a single non-interactive call
-// cannot satisfy on its own. When stdin IS an interactive terminal, this
-// script asks the exact question itself and proceeds only on a real "yes" —
-// no second run needed. Off a terminal, the FIRST run (no --human-approved,
-// or a bare --human-approved with no token) can never approve itself: it
-// writes a random nonce into ~/.1f3d9/setup-state.json for this origin,
-// prints the exact question to put to the human, and refuses to register —
-// printing the exact SECOND command to run, with --human-approved <token>
-// appended, where token is derived from (origin, handle, client_class, that
-// nonce). Only a SECOND run passing that exact token back proceeds; an
-// unattended loop cannot produce that token in one call, because computing
-// it requires the nonce this script only ever writes to disk on a prior,
-// separate run. The token is proof a first pass happened here — it is
-// still the agent's own recorded declaration that a human said yes out of
-// band (decision row 74), never proof of who actually said it, and this
-// script never treats it as more than that.
+// Human approval is a real two-pass gate, and the nonce/token round trip
+// below is UNCONDITIONAL — stdin being a TTY is never treated as evidence a
+// human is present (an agent harness running under a pty, tmux, or `script`
+// looks exactly like a real terminal here). The FIRST run (no
+// --human-approved, or a bare --human-approved with no token, or a token
+// that does not match) can never approve itself, on any stdin: it writes a
+// random nonce into ~/.1f3d9/setup-state.json for this origin, prints the
+// exact question to put to the human, and refuses to register — printing
+// the exact SECOND command to run, with --human-approved <token> appended,
+// where token is derived from (origin, handle, client_class, that nonce).
+// Only a SECOND run passing that exact token back proceeds; an unattended
+// loop cannot produce that token in one call, because computing it requires
+// the nonce this script only ever writes to disk on a prior, separate run.
+// On an interactive terminal, that second run additionally asks the exact
+// question directly, as one more confirmation ON TOP OF the valid token —
+// never as a substitute for it, and never on the first run. The token is
+// proof a first pass happened here — it is still the agent's own recorded
+// declaration that a human said yes out of band (decision row 74), never
+// proof of who actually said it, and this script never treats it as more
+// than that.
 
 import { spawnSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -42,7 +46,7 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
-import { readSecret, SecretReadFailure, listVaultLabels } from './identity-client.mjs'
+import { readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 function parseArgs(argv) {
@@ -50,7 +54,21 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
     if (!token.startsWith('--')) continue
-    const name = token.slice(2)
+    const body = token.slice(2)
+    // `--name=value` is parsed as a single token, matching
+    // identity-client.mjs's parseArgs exactly -- without this split, a
+    // caller passing `--human-approved=<token>` (the equals form) silently
+    // fell through to `flags['human-approved=<token>']` instead of
+    // `flags['human-approved']`, so the correct token was ignored and this
+    // script minted a fresh nonce that invalidated the very token it had
+    // just printed. Same gap affected `--handle=`, `--client-class=`,
+    // `--origin=`, and `--allow-origin=`.
+    const equalsIndex = body.indexOf('=')
+    if (equalsIndex !== -1) {
+      flags[body.slice(0, equalsIndex)] = body.slice(equalsIndex + 1)
+      continue
+    }
+    const name = body
     const next = argv[i + 1]
     if (next === undefined || next.startsWith('--')) {
       flags[name] = true
@@ -130,7 +148,12 @@ async function verifyStoredKey(handle) {
         `--handle ${probe.handle}, or fix the entry`,
     }
   }
-  return { keyWorks: true, note: `me read succeeded (handle: ${probe.handle ?? handle})` }
+  return {
+    keyWorks: true,
+    note: `me read succeeded (handle: ${probe.handle ?? handle}); this GET /api/me read wakes due timers ` +
+      'and advances the fee-credit last-read marker, same as any other `me` read -- it is the one call ' +
+      'here that genuinely needs the handle it returns, to catch a mismatched vault label',
+  }
 }
 
 /** Wraps a call to verifyStoredKey, turning SecretReadFailure into a clean, caller-worded refusal and exit. */
@@ -160,16 +183,26 @@ function printConnectStep(handle) {
   // One line, deliberately: a POSIX `\` line continuation is a hard parse
   // error in PowerShell, one of the shells this command is most often
   // pasted into, while this single-line form works unchanged in bash, zsh,
-  // and PowerShell alike.
-  say(`    claude mcp add --transport http 1f3d9 ${origin}/mcp --header 'Authorization: Bearer \${AGENT_1F3D9_SECRET}'`)
+  // and PowerShell alike. Named `1f3d9-key` (not `1f3d9`): the plugin's own
+  // bundled `.mcp.json` already registers a server named `1f3d9` for
+  // hosted-chat browser sign-in at a different URL and auth mode -- adding
+  // a second, DIFFERENT server under that same name would silently shadow
+  // or collide with it, with nothing on screen saying which one a client
+  // actually uses.
+  say(`    claude mcp add --transport http 1f3d9-key ${origin}/mcp --header 'Authorization: Bearer \${AGENT_1F3D9_SECRET}'`)
   say('    (that placeholder must reach the CLI single-quoted and unexpanded — copy it exactly; export')
   say('    AGENT_1F3D9_SECRET from your secret store first, never the literal key.)')
   say('')
   say('  Codex:')
-  say(`    codex mcp add 1f3d9 --url ${origin}/mcp --bearer-token-env-var AGENT_1F3D9_SECRET`)
+  say(`    codex mcp add 1f3d9-key --url ${origin}/mcp --bearer-token-env-var AGENT_1F3D9_SECRET`)
+  say('')
+  say('  (This plugin also bundles a connector already named `1f3d9`, for hosted-chat browser sign-in --')
+  say('  that one is separate from the key-based connector above and needs no key.)')
   say('')
   say(`Then run: node "${resolve(pluginRoot, 'scripts', 'connect.mjs')}" --origin ${origin}`)
-  say(`to run one harmless authenticated read (GET /api/me) proving the connection actually works.`)
+  say('to run one authenticated read (GET /api/me) proving the connection actually works -- this also')
+  say('wakes any due timers and advances this resident\'s fee-credit last-read marker, the same as any')
+  say('other `me` read; it is not free of side effects, just proof the key still works.')
   say('')
 }
 
@@ -246,6 +279,20 @@ if (!handle || !clientClass) {
   process.exit()
 }
 
+// Checked locally, before any approval step or network call, against the
+// exact rule the city itself enforces -- so a human is never asked to
+// approve a name the city cannot create, and setup-state.json never ends up
+// naming a handle no vault entry could ever be stored under.
+if (!HANDLE_RE.test(handle)) {
+  console.error(
+    `setup: --handle "${handle}" does not match the city's handle rule ${HANDLE_RE.source} (lowercase ` +
+    'letters, digits, and hyphens, 3-32 characters, must start with a letter or digit). Choose a handle ' +
+    'that already matches this rule, then re-run.',
+  )
+  process.exitCode = 1
+  process.exit()
+}
+
 // Before ever attempting to register, check whether this host's vault
 // already has a WORKING key for the exact handle requested. A lost or
 // truncated setup-state.json must never turn a resident that already exists
@@ -316,46 +363,84 @@ function computeApprovalToken(nonce) {
 }
 
 /**
+ * Asks `question` at an interactive terminal and resolves to the typed
+ * answer -- or to `''` on EOF/close with no answer typed (a pty whose other
+ * end never writes anything, `< /dev/null`, a killed parent, and so on).
+ * Settling on readline's own 'close' event as well as on an answer is what
+ * keeps this from hanging forever into an unsettled top-level await: a bare
+ * `rl.question(...)` promise never resolves at all if the input stream ends
+ * before an answer is typed.
+ */
+function askOnTty(question) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  return new Promise(resolvePromise => {
+    let settled = false
+    rl.question(`${question} [y/N] `, answer => {
+      settled = true
+      resolvePromise(answer)
+    })
+    rl.on('close', () => {
+      if (!settled) {
+        settled = true
+        resolvePromise('')
+      }
+    })
+  }).finally(() => rl.close())
+}
+
+/**
  * A real two-pass human-approval gate that a single non-interactive call
  * cannot satisfy on its own -- see the header comment for the full shape.
- * Returns { approved: true } once a real yes has been obtained (either
- * interactively just now, or by a valid token from a prior refused pass);
- * otherwise { approved: false, token } where `token` is the value the next
- * run must pass back with --human-approved.
+ * The nonce/token round trip is UNCONDITIONAL: stdin being a TTY is never
+ * treated as evidence a human is present, so the interactive question below
+ * is only ever asked as an ADDITIONAL confirmation on top of an already-
+ * valid token, never as a substitute for one -- a call that supplies no
+ * token, or the wrong one, is refused on every stdin, TTY included, without
+ * ever reaching a prompt.
+ *
+ * Returns one of:
+ *   { approved: true } -- a valid token was presented, and (if this is an
+ *     interactive terminal) the human also answered yes to the follow-up.
+ *   { approved: false, token } -- no valid token was presented; `token` is
+ *     what the next run must pass back with --human-approved.
+ *   { approved: false, declinedAfterToken: true } -- a valid token WAS
+ *     presented (and is now consumed, single-use), but the interactive
+ *     follow-up question was declined or hit EOF. There is no next token to
+ *     print here: a fresh first pass is what mints one.
  */
 async function confirmHumanApproval() {
-  if (process.stdin.isTTY) {
-    const question =
-      `Confirm the exact permanent public handle "${handle}" (client class: ${clientClass}) was chosen ` +
-      'with a human\'s clear yes. Register it now?'
-    const rl = createInterface({ input: process.stdin, output: process.stdout })
-    try {
-      const answer = await new Promise(resolve => rl.question(`${question} [y/N] `, resolve))
-      return { approved: /^y(es)?$/iu.test(answer.trim()) }
-    } finally {
-      rl.close()
-    }
-  }
-
   const provided = typeof flags['human-approved'] === 'string' ? flags['human-approved'] : null
   const pending = existing?.pending_approval
-  if (
-    provided
-    && pending
-    && pending.handle === handle
-    && pending.client_class === clientClass
-    && provided === computeApprovalToken(pending.nonce)
-  ) {
-    // Single-use: consume the nonce so this exact token can never approve a
-    // later, separate registration attempt.
+  const matchingPending = Boolean(pending) && pending.handle === handle && pending.client_class === clientClass
+  const tokenValid = Boolean(provided) && matchingPending && provided === computeApprovalToken(pending.nonce)
+
+  if (tokenValid) {
+    // Single-use: consume the nonce immediately, so this exact token can
+    // never approve a later, separate registration attempt -- whether or
+    // not the interactive follow-up below is also asked.
     writeSetupState(origin, { pending_approval: null })
+    if (process.stdin.isTTY) {
+      const question =
+        `Confirm the exact permanent public handle "${handle}" (client class: ${clientClass}) was chosen ` +
+        'with a human\'s clear yes. Register it now?'
+      const answer = await askOnTty(question)
+      if (!/^y(es)?$/iu.test(answer.trim())) return { approved: false, declinedAfterToken: true }
+    }
     return { approved: true }
   }
 
-  // No valid token was presented -- mint a fresh nonce, persist it, and
-  // hand back the token derived from it so the caller can print the exact
-  // next command. This never approves on this call, even if a (wrong or
-  // stale) --human-approved value was given.
+  if (provided && matchingPending) {
+    // A value WAS supplied but did not match the outstanding nonce -- keep
+    // that nonce alive and hand back the SAME token rather than minting a
+    // new one, so one wrong paste (a stale token, a typo) does not destroy
+    // a still-valid token nobody has used yet.
+    return { approved: false, token: computeApprovalToken(pending.nonce) }
+  }
+
+  // No token was supplied at all (or it names a different handle/client
+  // class than this run) -- mint a fresh nonce, persist it, and hand back
+  // the token derived from it so the caller can print the exact next
+  // command. This never approves on this call, on any stdin.
   const nonce = randomBytes(16).toString('hex')
   writeSetupState(origin, {
     pending_approval: { handle, client_class: clientClass, nonce, created_at: new Date().toISOString() },
@@ -365,18 +450,33 @@ async function confirmHumanApproval() {
 
 const approval = await confirmHumanApproval()
 if (!approval.approved) {
+  if (approval.declinedAfterToken) {
+    // The token was genuinely valid (and is now spent) -- the interactive
+    // follow-up is what said no, or hit EOF with nobody answering. There is
+    // no next command to print: printing one built from `approval.token`
+    // here would literally read "--human-approved undefined", a command
+    // that can only be refused again. State plainly that nothing was
+    // created instead.
+    console.error(
+      `setup: registration of "${handle}" was declined at the interactive confirmation; nothing was ` +
+      'created. Start over with a fresh first pass (no --human-approved) once you actually have a clear ' +
+      'yes to put to the human.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
   console.error(
     'setup: before registering, put this exact question to the human: "Confirm the permanent public ' +
     `handle "${handle}" (client class: ${clientClass}) — register it now?" Registration creates a ` +
     'permanent public identity that cannot be silently replaced. After a clear yes, re-run this exact ' +
-    `command with --human-approved ${approval.token} appended. That token proves THIS first pass ran and ` +
-    'wrote the nonce it is derived from to setup-state.json -- an unattended loop cannot produce it in ' +
-    'one call, because it can only be computed after that nonce already exists on disk. The token is ' +
-    'still only the agent\'s own recorded declaration that the yes already happened, exactly as before -- ' +
-    'the city records it as such (decision row 74); it is never proof of who actually said yes, and this ' +
-    'script never treats it as more than proof that a first pass happened. (stdin was not an interactive ' +
-    'terminal here, so this script could not ask directly; on one, it would have asked instead of ' +
-    'requiring a second run.)',
+    `command with --human-approved ${approval.token} appended. That token proves a first pass happened ` +
+    'here and wrote the nonce it is derived from to setup-state.json -- an unattended loop cannot produce ' +
+    'it in one call, because it can only be computed after that nonce already exists on disk. This check ' +
+    'runs the same way whether or not stdin is an interactive terminal: on one, the second run (the one ' +
+    'carrying this token) will ALSO ask the question directly, as one more confirmation on top of the ' +
+    'token, never as a substitute for it. The token is still only the agent\'s own recorded declaration ' +
+    'that the yes already happened -- the city records it as such (decision row 74); it is never proof of ' +
+    'who actually said yes, and this script never treats it as more than proof that a first pass happened.',
   )
   process.exitCode = 1
   process.exit()
@@ -392,6 +492,16 @@ const registerArgs = [
 ]
 if (typeof flags.model === 'string') registerArgs.push('--model', flags.model)
 if (allowOrigin) registerArgs.push('--allow-origin', allowOrigin)
+
+// The identity of record from here on is whatever the city actually
+// confirms, not necessarily the spelling requested above -- the city may
+// normalize a handle at registration. register()'s own stdout always prints
+// `handle: <confirmed handle>` (see identity-client.mjs), so parse that back
+// out rather than assuming the request and the result matched. Falls back to
+// the requested handle only when that line cannot be read at all, which
+// happens only under --reveal (the child's stdout goes straight to the real
+// terminal, uncaptured, in that one case).
+let registeredHandle = handle
 
 let registerResult
 if (flags.reveal === true) {
@@ -418,6 +528,8 @@ if (flags.reveal === true) {
 } else {
   registerResult = spawnSync(process.execPath, registerArgs, { stdio: ['inherit', 'pipe', 'pipe'], encoding: 'utf8' })
   say((registerResult.stdout || '').trimEnd())
+  const confirmedHandleLine = /^handle: (.+)$/mu.exec(registerResult.stdout ?? '')
+  if (confirmedHandleLine) registeredHandle = confirmedHandleLine[1]
 }
 if (registerResult.status !== 0) {
   if (registerResult.stderr) say((registerResult.stderr || '').trimEnd())
@@ -428,11 +540,11 @@ if (registerResult.status !== 0) {
 }
 say('')
 
-writeSetupState(origin, { handle, client_class: clientClass })
+writeSetupState(origin, { handle: registeredHandle, client_class: clientClass })
 
-printConnectStep(handle)
+printConnectStep(registeredHandle)
 printScheduleStep()
 printWalletStep()
-await report(handle)
+await report(registeredHandle)
 
 console.log(lines.join('\n'))
