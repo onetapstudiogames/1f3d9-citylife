@@ -392,12 +392,25 @@ const REGISTRATION_STAGING_LABEL_RE = /^(.+)--pending-registration-[0-9a-f]+$/u
  * live entry sits under the same handle the guard already checks against
  * (rotate/recoverBegin never mint a fresh, not-yet-owned handle the way
  * register does), so an abandoned one there is already covered.
+ *
+ * The suffix test alone is authoritative only where the index has nothing
+ * to say: it consults `indexMap` FIRST, with the same precedence
+ * isStagingLabel uses -- a label the index positively marks `staging:
+ * false` is real resident metadata, not a guess about what the label text
+ * looks like, and is routed to `kept` even when its shape matches
+ * REGISTRATION_STAGING_LABEL_RE (HANDLE_RE permits handles up to 32
+ * characters, long enough to collide with this suffix by coincidence, e.g.
+ * "abc--pending-registration-a"). Only when the index is silent about a
+ * label (no entry, or an entry with no boolean `staging`) does the suffix
+ * shape decide -- see isStagingLabel's own doc comment for why.
  */
 function splitStagingLabels(labels, indexMap) {
   const kept = []
   const registrationStaging = []
   for (const label of labels) {
-    if (REGISTRATION_STAGING_LABEL_RE.test(label)) {
+    const meta = indexMap.get(label)
+    const known = meta && typeof meta.staging === 'boolean'
+    if (REGISTRATION_STAGING_LABEL_RE.test(label) && (!known || meta.staging === true)) {
       registrationStaging.push(label)
       continue
     }
