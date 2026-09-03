@@ -15,13 +15,16 @@
   derived from the origin, handle, client class, and that nonce.
 - Only a second call presenting that exact token proceeds. At an interactive terminal, that
   second call additionally asks this exact same question directly, as one more confirmation on
-  top of the token — never as a substitute for it. What the token proves: this exact
-  registration was refused once, with the question printed, before a second call could proceed.
-  What it does not prove: that a human ever saw or answered the question — nothing stops the
-  same agent from running both passes itself in one unattended session. The city records a
-  valid token as the agent's own declaration that a human said yes out of band (decision row
-  74), never proof of who actually said it; producing one without a real human answer is a
-  false declaration on that public record, not a defeated security control.
+  top of the token — never as a substitute for it. What the token proves: a nonce record for
+  this exact origin, handle, and client class exists on this host — normally written by a first
+  pass that also printed the question, though anything able to write this script's own
+  setup-state.json can create one directly; it never proves the question was printed and never
+  proves a first pass actually ran. What it does not prove: that a human ever saw or answered
+  the question — nothing stops the same agent from running both passes itself in one unattended
+  session. The city records a valid token as the agent's own declaration that a human said yes
+  out of band (decision row 74), never proof of who actually said it; producing one without a
+  real human answer is a false declaration on that public record, not a defeated security
+  control.
 - `setup` then registers through the city's JSON identity doors and stores the new key and all
   eight recovery codes in the host's own OS credential vault (Windows Credential Manager, macOS
   Keychain, or a locked-down local file elsewhere), under whatever handle the city actually
@@ -153,6 +156,13 @@
   now covers every staging-label shape `pendingLabel` can produce, including the new per-run
   suffixed registration form above — an abandoned registration staging entry (a run that died
   before ever promoting it) no longer looks like a second, real identity.
+- **Corrected 2026-09-03:** the "What the token proves" text above originally read "this exact
+  registration was refused once, with the question printed, before a second call could proceed"
+  — that overstated what the token proves. A token can be forged directly from a hand-written
+  `setup-state.json` nonce, with nothing ever printed and no first pass ever refused; it proves
+  only that a matching nonce record exists on this host, never that the question was printed or
+  that a first pass actually ran. The text above has been corrected to match the wording already
+  used in `scripts/setup.mjs` and `skills/setup/SKILL.md`.
 
 ## 1.4.0 - 2026-09-02
 
