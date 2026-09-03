@@ -12,7 +12,18 @@ import { dirname, join } from 'node:path'
 
 const statePath = (homeDir = homedir()) => join(homeDir, '.1f3d9', 'setup-state.json')
 
-/** Returns `null` when no state file exists yet, or it cannot be parsed. */
+/**
+ * Thrown by readSetupState when the state file exists but could not be
+ * parsed as JSON -- kept distinct from "no file yet" (readSetupState returns
+ * `null` for that case) so a caller can refuse to guess whether an identity
+ * already exists rather than silently treating "unreadable" the same as
+ * "definitely nothing here". Treating those the same is exactly how a lost
+ * or truncated setup-state.json used to risk registering a second, real,
+ * permanent resident on top of one that already existed.
+ */
+export class SetupStateReadFailure extends Error {}
+
+/** Returns `null` only when no state file exists yet -- the genuine first run. */
 export function readSetupState(origin, homeDir) {
   let raw
   try {
@@ -23,8 +34,11 @@ export function readSetupState(origin, homeDir) {
   let all
   try {
     all = JSON.parse(raw)
-  } catch {
-    return null
+  } catch (error) {
+    throw new SetupStateReadFailure(
+      `the setup-state file at ${statePath(homeDir)} exists but could not be parsed as JSON: ` +
+      `${error.message}`,
+    )
   }
   return all && typeof all === 'object' && all[origin] ? all[origin] : null
 }

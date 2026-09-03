@@ -10,11 +10,15 @@
 //   node key.mjs recover generate [--origin ...] [--handle ...] [--reveal]
 //   node key.mjs recover begin --recovery-code-file <path|-> [--origin ...] [--reveal]
 //   node key.mjs show [--origin ...] [--handle ...] [--reveal]
+//
+// --origin must be https, and defaults to https://1f3d9.com; https://localhost
+// is always allowed for local development. Any other https origin needs
+// --allow-origin <that exact origin> too — see scripts/identity-client.mjs.
 
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
-import { readSetupState } from './lib/identity-state.mjs'
+import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
 import { readSecret } from './identity-client.mjs'
 
@@ -41,6 +45,7 @@ function parseArgs(argv) {
 
 const { flags, positionals } = parseArgs(process.argv.slice(2))
 const origin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
+const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
 const identityClientPath = resolve(pluginRoot, 'scripts', 'identity-client.mjs')
 
 function resolveHandle() {
@@ -50,7 +55,15 @@ function resolveHandle() {
 }
 
 function requireHandle() {
-  const handle = resolveHandle()
+  let handle
+  try {
+    handle = resolveHandle()
+  } catch (error) {
+    if (!(error instanceof SetupStateReadFailure)) throw error
+    console.error(`key: ${error.message}; pass --handle <handle> explicitly, or fix that file first.`)
+    process.exitCode = 1
+    return null
+  }
   if (!handle) {
     console.error('key: no handle known for this origin. Pass --handle <handle>, or run setup first.')
     process.exitCode = 1
@@ -74,9 +87,42 @@ async function status() {
   if (!handle) return
   const residentKey = requireStoredKey(handle)
   if (!residentKey) return
-  const probe = await probeMe(origin, residentKey)
+  const probe = await probeMe(origin, residentKey, { allowOrigin })
   console.log(`handle: ${handle}`)
   console.log(probe.ok ? 'stored key: works (one me read succeeded)' : `stored key: does not work (${probe.error})`)
+}
+
+/**
+ * Runs `node identity-client.mjs <args...>` with `residentKey` piped in on
+ * stdin. When --reveal was requested, this can only take effect if the
+ * CHILD's own stdout is a real interactive terminal (revealOrHide there
+ * checks process.stdout.isTTY on the child, not this wrapper) — a captured
+ * pipe, which this function otherwise always uses so it can print or
+ * re-throw the child's output itself, can never be a TTY. So --reveal here
+ * either hands the child the real terminal directly (this wrapper's own
+ * stdout must be a TTY too) or is refused up front, never silently dropped.
+ */
+function runIdentityClient(label, args, residentKey) {
+  if (flags.reveal === true) {
+    if (!process.stdout.isTTY) {
+      console.error(`${label}: --reveal cannot work through this wrapper; run scripts/identity-client.mjs ` +
+        'directly at an interactive terminal.')
+      process.exitCode = 1
+      return
+    }
+    const result = spawnSync(process.execPath, [...args, '--reveal'], {
+      input: residentKey,
+      stdio: [residentKey === undefined ? 'inherit' : 'pipe', 'inherit', 'inherit'],
+    })
+    if (result.status !== 0) process.exitCode = 1
+    return
+  }
+  const result = spawnSync(process.execPath, args, { input: residentKey, encoding: 'utf8' })
+  process.stdout.write(result.stdout || '')
+  if (result.status !== 0) {
+    process.stderr.write(result.stderr || `${label}: failed\n`)
+    process.exitCode = 1
+  }
 }
 
 function rotate() {
@@ -85,13 +131,8 @@ function rotate() {
   const residentKey = requireStoredKey(handle)
   if (!residentKey) return
   const args = [identityClientPath, 'rotate', '--origin', origin, '--resident-key-file', '-']
-  if (flags.reveal === true) args.push('--reveal')
-  const result = spawnSync(process.execPath, args, { input: residentKey, encoding: 'utf8' })
-  process.stdout.write(result.stdout || '')
-  if (result.status !== 0) {
-    process.stderr.write(result.stderr || 'key rotate: failed\n')
-    process.exitCode = 1
-  }
+  if (allowOrigin) args.push('--allow-origin', allowOrigin)
+  runIdentityClient('key rotate', args, residentKey)
 }
 
 function recoverGenerate() {
@@ -100,13 +141,8 @@ function recoverGenerate() {
   const residentKey = requireStoredKey(handle)
   if (!residentKey) return
   const args = [identityClientPath, 'recover', 'generate', '--origin', origin, '--resident-key-file', '-']
-  if (flags.reveal === true) args.push('--reveal')
-  const result = spawnSync(process.execPath, args, { input: residentKey, encoding: 'utf8' })
-  process.stdout.write(result.stdout || '')
-  if (result.status !== 0) {
-    process.stderr.write(result.stderr || 'key recover generate: failed\n')
-    process.exitCode = 1
-  }
+  if (allowOrigin) args.push('--allow-origin', allowOrigin)
+  runIdentityClient('key recover generate', args, residentKey)
 }
 
 function recoverBegin() {
@@ -117,6 +153,7 @@ function recoverBegin() {
     return
   }
   const args = [identityClientPath, 'recover', 'begin', '--origin', origin, '--recovery-code-file', codeSource]
+  if (allowOrigin) args.push('--allow-origin', allowOrigin)
   if (flags.reveal === true) args.push('--reveal')
   const result = spawnSync(process.execPath, args, { stdio: 'inherit' })
   if (result.status !== 0) process.exitCode = 1
@@ -137,6 +174,13 @@ function show() {
     if (Array.isArray(stored.value.recovery_codes)) {
       console.log('Recovery codes:')
       for (const code of stored.value.recovery_codes) console.log(code)
+    } else if (stored.value.recovery_codes_invalidated_at) {
+      console.log(
+        `Recovery codes: invalidated by the last rotation/recovery (${stored.value.recovery_codes_invalidated_at}); ` +
+        'run `key recover generate` to mint a fresh set.',
+      )
+    } else {
+      console.log('Recovery codes: none stored.')
     }
     return
   }
