@@ -633,6 +633,33 @@ test('storeSecret/listVaultLabels: an abandoned (stale) vault-index lock is brok
 
 const posixFileBackendForStagingTests = process.platform !== 'win32'
 
+// A single-entry sample in the captured shape of real `security
+// dump-keychain` output (metadata only -- this repo never runs `-d`, so this
+// sample never includes one either). Real output additionally carries a
+// leading "keychain: ..." / "version: ..." / "class: \"genp\"" preamble and
+// many more attribute lines per entry (acct, cdat, crtr, ...); only "svce"
+// matters to darwinKeychainServiceLabels, so this sample keeps just enough
+// shape around it to exercise the parser honestly, per entry.
+function darwinKeychainDumpEntry(service, account) {
+  return [
+    'keychain: "/Users/agent/Library/Keychains/login.keychain-db"',
+    'version: 512',
+    'class: "genp"',
+    'attributes:',
+    `    0x00000007 <blob>="${account}"`,
+    '    "acct"<blob>="' + account + '"',
+    '    "cdat"<timedate>=0x32303236303930333030303030305A00  "20260903000000Z\\000"',
+    '    "crtr"<uint32>=<NULL>',
+    '    "svce"<blob>="' + service + '"',
+    '    "type"<uint32>=<NULL>',
+    '',
+  ].join('\n')
+}
+
+function darwinKeychainDumpSample(origin, label) {
+  return darwinKeychainDumpEntry(`1f3d9:${origin}:${label}`, label)
+}
+
 for (const backendPlatform of ['win32', 'darwin', 'linux']) {
   const skip = backendPlatform === 'linux' && !posixFileBackendForStagingTests
     ? 'temp-file backend depends on POSIX permission bits; run on Linux/macOS or in this repo\'s CI'
@@ -702,13 +729,14 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
   test(
     `listVaultLabels (${backendPlatform}): a v1.5.0 bundle discoverable with no index entry at all still falls back to the suffix guess`,
     // Meaningful only where a label can be discovered by something other
-    // than the index itself: the file backend discovers labels by
-    // reading the credentials directory, and win32 additionally unions a
-    // real cmdkey scrape. On darwin, listVaultLabels has no such
-    // alternate source -- an unindexed label is not discoverable at all,
-    // so this scenario collapses into "nothing enumerated" for a reason
-    // unrelated to the staging marker and is not worth asserting here.
-    { skip: skip || backendPlatform === 'darwin' },
+    // than the index itself: the file backend discovers labels by reading
+    // the credentials directory, win32 additionally unions a real cmdkey
+    // scrape, and darwin additionally unions a real (metadata-only)
+    // `security dump-keychain` scan (see the MEDIUM finding this also
+    // covers: on darwin, a resident findable only in the Keychain itself
+    // must not be dropped just because the index never recorded it, or
+    // never survived a reset HOME).
+    { skip },
     async () => {
       const homeDir = await mkdtemp(join(tmpdir(), `identity-client-legacy-staging-${backendPlatform}-`))
       try {
@@ -726,6 +754,15 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
             `${JSON.stringify({ kind: 'resident', handle: 'agent-abandoned', origin })}\n`,
           )
           deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+        } else if (backendPlatform === 'darwin') {
+          // darwin: discoverable only via the (metadata-only) Keychain
+          // scan -- a captured-shape sample of real `security dump-keychain`
+          // output (see darwinKeychainDumpSample below), never `-d`.
+          deps = {
+            platform: backendPlatform,
+            homeDir,
+            execFileSync: () => darwinKeychainDumpSample(origin, label),
+          }
         } else {
           // win32: discoverable only via the cmdkey scrape (see the LOW
           // finding this also covers: a real resident found only that way
@@ -784,3 +821,66 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
     },
   )
 }
+
+// --- darwin: `security dump-keychain` parser, pinned on a captured sample -
+// The real darwin branch cannot run on this host (this repo's CI and every
+// dev machine this was written on is not macOS), so the fixture below is a
+// hand-built sample in the CAPTURED SHAPE of real `security dump-keychain`
+// output (metadata only -- no `-d` was ever run to produce it, and this
+// script itself never passes `-d`) rather than a live capture. It exercises
+// darwinKeychainServiceLabels indirectly through listVaultLabels's public
+// surface (deps.execFileSync), the same way the win32 cmdkey-scrape tests
+// above exercise cmdkey parsing, so this pins the parser without exporting
+// an internal.
+test(
+  'listVaultLabels (darwin): the security dump-keychain scan reads only this plugin\'s own service prefix, ' +
+  'ignores every other entry in the keychain, and unescapes octal byte escapes in the service name',
+  async () => {
+    const origin = 'https://example.invalid'
+    const otherOrigin = 'https://other.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-scan-'))
+    try {
+      // Four entries in one dump: (1) this plugin, this origin -- must be
+      // found; (2) this plugin, a DIFFERENT origin -- must be excluded, the
+      // service prefix match is origin-scoped, not just "1f3d9:"-scoped;
+      // (3) a wholly unrelated application's entry -- must be excluded, and
+      // must not throw or otherwise disrupt parsing the entries around it;
+      // (4) this plugin, this origin, with an octal-escaped byte in the
+      // label (the shape `security`'s own output uses for a non-printable
+      // or otherwise escaped character) -- must be unescaped back to the
+      // real label, not left as the literal six characters `\140`.
+      const output = [
+        darwinKeychainDumpEntry(`1f3d9:${origin}:agent-found`, 'agent-found'),
+        darwinKeychainDumpEntry(`1f3d9:${otherOrigin}:agent-other-origin`, 'agent-other-origin'),
+        darwinKeychainDumpEntry('com.example.totallyUnrelatedApp', 'someone-elses-account'),
+        darwinKeychainDumpEntry(`1f3d9:${origin}:agent\\140escaped`, 'agent`escaped'),
+      ].join('\n')
+      const deps = { platform: 'darwin', homeDir, execFileSync: () => output }
+
+      assert.deepEqual(
+        listVaultLabels(origin, deps).sort(),
+        ['agent-found', 'agent`escaped'].sort(),
+        'only this origin\'s own service-prefixed entries are returned, with octal escapes decoded',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test('listVaultLabels (darwin): a failing security binary is treated as "found nothing", not an error', async () => {
+  const origin = 'https://example.invalid'
+  const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-fail-'))
+  try {
+    const deps = {
+      platform: 'darwin',
+      homeDir,
+      execFileSync: () => {
+        throw new Error('security: command not found')
+      },
+    }
+    assert.deepEqual(listVaultLabels(origin, deps), [])
+  } finally {
+    await rm(homeDir, { recursive: true, force: true })
+  }
+})

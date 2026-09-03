@@ -733,6 +733,240 @@ test('key recover generate writes the fresh codes into the live vault entry, not
   }
 })
 
+// --- recoverGenerate races a concurrent rotate for the SAME handle: the ----
+// live vault entry must never be reverted to an already-revoked key (round-3
+// finding 1). recoverGenerate reads the live entry's resident_key inside the
+// SAME per-(origin,handle) file lock promoteReplacementKey uses, and refuses
+// to overwrite it if that key no longer matches what THIS call authenticated
+// with -- rather than blindly writing back the stale key it resolved from
+// --resident-key-file before ever reaching the network.
+
+test(
+  'recover generate refuses to revert the vault to an already-rotated-away key when it races a concurrent rotate ' +
+  '(finding 1)',
+  { timeout: 20_000 },
+  async () => {
+    const handle = 'race-recover-vs-rotate'
+    const stub = await startStubCityServer({ holdRecoveryGenerateUntilRotateConfirms: { handle } })
+    const home = makeTempHome('recover-rotate-race-')
+    try {
+      const originalKey = `1f3d9_sk_${'a'.repeat(48)}`
+      stub.residents.set(handle, { resident_key: originalKey, recovery_codes: [], client_class: 'coding_persistent' })
+      storeSecret(stub.origin, handle, {
+        kind: 'resident', handle, client_class: 'coding_persistent',
+        resident_key: originalKey, recovery_codes: [], origin: stub.origin,
+        stored_at: new Date().toISOString(),
+      }, { homeDir: home.dir })
+
+      // Both real subprocesses authenticate with the SAME pre-rotation key
+      // -- exactly the race's precondition: recover generate resolves its
+      // resident_key from --resident-key-file BEFORE it ever talks to the
+      // network, so it can only ever know the key that was live when it
+      // started, never one a concurrent rotation mints after that.
+      const [rotateResult, recoverResult] = await Promise.all([
+        runNode(identityClientPath, [
+          'rotate', '--origin', stub.origin, '--resident-key-file', '-',
+        ], { input: originalKey, env: home.env }),
+        runNode(identityClientPath, [
+          'recover', 'generate', '--origin', stub.origin, '--resident-key-file', '-',
+        ], { input: originalKey, env: home.env }),
+      ])
+
+      assert.equal(rotateResult.status, 0, `rotate must win the race and confirm normally: ${rotateResult.stderr}`)
+      assert.notEqual(
+        recoverResult.status, 0,
+        'recover generate must refuse rather than silently revert the vault to the now-revoked pre-rotation key',
+      )
+      assert.match(
+        recoverResult.stderr,
+        /changed while this command was talking to the city/u,
+        `refusal names the concurrent-change reason, not a generic failure (stderr: ${recoverResult.stderr})`,
+      )
+      assertNoSecretLeaked(rotateResult, 'rotate (race winner)')
+      assertNoSecretLeaked(recoverResult, 'recover generate (raced, refused)')
+
+      const live = readSecret(stub.origin, handle, { homeDir: home.dir })
+      assert.equal(live.found, true)
+      assert.notEqual(
+        live.value.resident_key, originalKey,
+        'the live vault entry still holds the ROTATED key -- the raced recover generate never reverted it',
+      )
+      assert.equal(
+        live.value.resident_key, stub.residents.get(handle).resident_key,
+        'the vault agrees with the city on which key is actually live',
+      )
+    } finally {
+      deleteSecret(stub.origin, handle, { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+// --- round-3 finding 4: rotate()/recoverBegin()/recoverGenerate() validate -
+// the server's own returned `handle` with HANDLE_RE and the reserved rule,
+// the same defense in depth register() already applies to its own confirmed
+// handle -- a wrong or hostile response must never be used verbatim as a
+// local vault label.
+
+test('rotate refuses and cancels the stage when the rotate door returns a handle failing HANDLE_RE (finding 4)', async () => {
+  const stub = await startStubCityServer({ corruptHandle: { rotateBegin: 'AB' } })
+  const home = makeTempHome('rotate-corrupt-handle-')
+  try {
+    const originalKey = `1f3d9_sk_${'5'.repeat(48)}`
+    stub.residents.set('agent-corrupt-one', { resident_key: originalKey, recovery_codes: [], client_class: 'coding_persistent' })
+
+    const result = await runNode(identityClientPath, [
+      'rotate', '--origin', stub.origin, '--resident-key-file', '-',
+    ], { input: originalKey, env: home.env })
+
+    assert.notEqual(result.status, 0, 'must refuse a handle the local naming rule rejects')
+    assert.match(result.stderr, /does not match the local handle rule/u)
+    assert.match(result.stderr, /cancelled before confirming/u)
+    assertNoSecretLeaked(result, 'rotate corrupt handle')
+
+    // The old key is still the live one server-side -- confirm never ran.
+    assert.equal(stub.residents.get('agent-corrupt-one').resident_key, originalKey)
+  } finally {
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test(
+  'recover begin refuses and cancels the stage when the recovery door returns a handle containing the reserved ' +
+  '"--pending-" sequence (finding 4)',
+  async () => {
+    const stub = await startStubCityServer({ corruptHandle: { recoveryBegin: 'agent--pending-rotation' } })
+    const home = makeTempHome('recover-begin-corrupt-handle-')
+    try {
+      const originalCode = `1f3d9_rc_${'6'.repeat(64)}`
+      stub.residents.set('agent-corrupt-two', {
+        resident_key: `1f3d9_sk_${'7'.repeat(48)}`, recovery_codes: [originalCode], client_class: 'coding_persistent',
+      })
+
+      const result = await runNode(identityClientPath, [
+        'recover', 'begin', '--origin', stub.origin, '--recovery-code-file', '-',
+      ], { input: originalCode, env: home.env })
+
+      assert.notEqual(result.status, 0, 'must refuse a handle containing the reserved staging-label sequence')
+      assert.match(result.stderr, /reserved "--pending-" sequence/u)
+      assert.match(result.stderr, /cancelled before confirming/u)
+      assertNoSecretLeaked(result, 'recover begin corrupt handle')
+
+      // The recovery code is still unused server-side -- confirm never ran.
+      assert.deepEqual(stub.residents.get('agent-corrupt-two').recovery_codes, [originalCode])
+    } finally {
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+test(
+  'recover generate refuses to store fresh codes when the recovery door returns a handle failing HANDLE_RE ' +
+  '(finding 4)',
+  async () => {
+    const stub = await startStubCityServer({ corruptHandle: { recoveryGenerate: 'AB' } })
+    const home = makeTempHome('recover-generate-corrupt-handle-')
+    try {
+      const originalKey = `1f3d9_sk_${'9'.repeat(48)}`
+      stub.residents.set('agent-corrupt-three', { resident_key: originalKey, recovery_codes: [], client_class: 'coding_persistent' })
+
+      const result = await runNode(identityClientPath, [
+        'recover', 'generate', '--origin', stub.origin, '--resident-key-file', '-',
+      ], { input: originalKey, env: home.env })
+
+      assert.notEqual(result.status, 0, 'must refuse a handle the local naming rule rejects')
+      assert.match(result.stderr, /does not match the local handle rule/u)
+      assert.match(result.stderr, /nothing was stored locally/u)
+      assertNoSecretLeaked(result, 'recover generate corrupt handle')
+
+      // Nothing was stored under the corrupted "AB" label.
+      const badLabel = readSecret(stub.origin, 'AB', { homeDir: home.dir })
+      assert.equal(badLabel.found, false)
+    } finally {
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+// --- round-3 finding 4: --model is validated locally, matching the city's --
+// own /api/register rule (src/input.ts's publicText), before ever spending
+// setup.mjs's two-pass human-approval round trip on a --model the door was
+// always going to refuse.
+
+test('register refuses a --model longer than 120 characters, before any network call', async () => {
+  const result = await runNode(identityClientPath, [
+    'register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+    '--handle', 'agent-model-too-long', '--client-class', 'coding_persistent', '--human-approved',
+    '--model', 'x'.repeat(121),
+  ], { env: NOT_A_REAL_ORIGIN_ENV })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /--model must be at most 120 characters/u)
+})
+
+test('register refuses a --model containing a control character, before any network call', async () => {
+  const result = await runNode(identityClientPath, [
+    'register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+    '--handle', 'agent-model-control-char', '--client-class', 'coding_persistent', '--human-approved',
+    '--model', `claude${String.fromCharCode(1)}opus`,
+  ], { env: NOT_A_REAL_ORIGIN_ENV })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /--model must not contain control characters/u)
+})
+
+test('setup.mjs refuses a --model longer than 120 characters before ever asking for approval', async () => {
+  // A temp HOME here too (not just NOT_A_REAL_ORIGIN_ENV), defensively: this
+  // check must run before setup.mjs ever writes to ~/.1f3d9/setup-state.json,
+  // and a temp HOME is what keeps that guarantee from ever being able to
+  // touch the real one even if that ordering ever regresses.
+  const home = makeTempHome('setup-model-too-long-')
+  try {
+    const result = await runNode(setupPath, [
+      '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+      '--handle', 'agent-setup-model-too-long', '--client-class', 'coding_persistent', '--model', 'x'.repeat(121),
+    ], { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /--model must be at most 120 characters/u)
+    assert.doesNotMatch(result.stderr, /put this exact question to the human/u, 'never reaches the approval gate')
+  } finally {
+    home.cleanup()
+  }
+})
+
+test(
+  'the stub city server itself also refuses a --model the real /api/register door would refuse, so the local ' +
+  '--model check above has something real to agree with (finding 4)',
+  async () => {
+    const stub = await startStubCityServer()
+    const previousTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+    try {
+      const response = await fetch(`${stub.origin}/api/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          action: 'stage',
+          handle: 'agent-stub-model-check',
+          model: 'x'.repeat(121),
+          client_class: 'coding_persistent',
+          human_approved: true,
+        }),
+      })
+      assert.equal(response.status, 400, 'the stub refuses server-side too, matching the local client-side check')
+      const parsed = await response.json()
+      assert.match(parsed.error, /--model must be at most 120 characters/u)
+      assert.equal(stub.residents.has('agent-stub-model-check'), false, 'nothing was created')
+    } finally {
+      if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
+      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting
+      await stub.close()
+    }
+  },
+)
+
 // --- Finding 11: --reveal is refused through a piped wrapper, not dropped -
 
 test('key rotate/recover generate refuse --reveal outright when stdout is not a TTY, instead of silently dropping it', async () => {
@@ -945,6 +1179,109 @@ test('connect.mjs reports a mismatch instead of claiming OK when the stored key 
     await stub.close()
   }
 })
+
+// --- round-3 finding 2: key rotate / recover generate / recover begin run -
+// the same label-vs-identity probe status()/connect() already run, instead
+// of silently rotating/recovering whatever resident the STORED key actually
+// belongs to when it does not match the label it was stored under.
+
+test('key rotate refuses, before ever contacting the rotate door, when the vault entry authenticates as a different handle (finding 2)', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-rotate-mismatch-')
+  try {
+    const realKey = `1f3d9_sk_${'1'.repeat(48)}`
+    stub.residents.set('agent-real', { resident_key: realKey, recovery_codes: [], client_class: 'coding_persistent' })
+    // Vault entry mislabeled "agent-wrong-label" but actually holds
+    // agent-real's key -- the exact stale/hand-copied-label case status()
+    // and connect() already refuse on.
+    storeSecret(stub.origin, 'agent-wrong-label', {
+      kind: 'resident', handle: 'agent-wrong-label', client_class: 'coding_persistent',
+      resident_key: realKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(keyPath, ['rotate', '--origin', stub.origin, '--handle', 'agent-wrong-label'], { env: home.env })
+    assert.notEqual(result.status, 0, 'must refuse, not silently rotate the wrong resident')
+    assert.match(result.stderr, /agent-wrong-label/u)
+    assert.match(result.stderr, /agent-real/u)
+    assertNoSecretLeaked(result, 'key rotate mismatch')
+
+    // Neither resident's key changed -- the refusal happened before any
+    // network call to the rotate door.
+    assert.equal(stub.residents.get('agent-real').resident_key, realKey, 'agent-real was never rotated')
+    const stillStored = readSecret(stub.origin, 'agent-wrong-label', { homeDir: home.dir })
+    assert.equal(stillStored.value.resident_key, realKey, 'the mislabeled vault entry is untouched')
+  } finally {
+    deleteSecret(stub.origin, 'agent-wrong-label', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key recover generate refuses, before ever contacting the recovery door, when the vault entry authenticates as a different handle (finding 2)', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-recover-gen-mismatch-')
+  try {
+    const realKey = `1f3d9_sk_${'2'.repeat(48)}`
+    stub.residents.set('agent-real-two', { resident_key: realKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-wrong-label-two', {
+      kind: 'resident', handle: 'agent-wrong-label-two', client_class: 'coding_persistent',
+      resident_key: realKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      keyPath, ['recover', 'generate', '--origin', stub.origin, '--handle', 'agent-wrong-label-two'], { env: home.env },
+    )
+    assert.notEqual(result.status, 0, 'must refuse, not silently mint codes for the wrong resident')
+    assert.match(result.stderr, /agent-wrong-label-two/u)
+    assert.match(result.stderr, /agent-real-two/u)
+    assertNoSecretLeaked(result, 'key recover generate mismatch')
+
+    assert.deepEqual(stub.residents.get('agent-real-two').recovery_codes, [], 'no codes were minted for agent-real-two')
+  } finally {
+    deleteSecret(stub.origin, 'agent-wrong-label-two', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key recover begin refuses a malformed --handle before ever contacting the recovery door (finding 2)', async () => {
+  const result = await runNode(keyPath, [
+    'recover', 'begin', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+    '--handle', 'AB', '--recovery-code-file', '-',
+  ], { env: NOT_A_REAL_ORIGIN_ENV, input: `1f3d9_rc_${'a'.repeat(64)}` })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /does not match the city's handle rule/u)
+})
+
+test(
+  'key recover begin explains why it cannot pre-verify a caller-supplied --handle, unlike rotate/recover generate ' +
+  '(finding 2)',
+  async () => {
+    const stub = await startStubCityServer()
+    const home = makeTempHome('key-recover-begin-explain-')
+    try {
+      const originalCode = `1f3d9_rc_${'3'.repeat(64)}`
+      stub.residents.set('agent-recoverable', {
+        resident_key: `1f3d9_sk_${'4'.repeat(48)}`, recovery_codes: [originalCode], client_class: 'coding_persistent',
+      })
+      const result = await runNode(keyPath, [
+        'recover', 'begin', '--origin', stub.origin, '--handle', 'agent-recoverable', '--recovery-code-file', '-',
+      ], { env: home.env, input: originalCode })
+      assert.match(
+        result.stderr,
+        /cannot verify in advance/u,
+        `explains why no pre-flight probe is possible here (stderr: ${result.stderr})`,
+      )
+      // The recovery itself still runs and still succeeds -- the explanation
+      // is informational, never a silent refusal of a well-formed --handle.
+      assert.equal(result.status, 0, result.stderr)
+    } finally {
+      deleteSecret(stub.origin, 'agent-recoverable', { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
 
 // --- Finding 8: the duplicate-identity guard enumerates the whole vault, --
 // not just the exact handle requested.

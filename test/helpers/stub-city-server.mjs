@@ -16,6 +16,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { validateModelLabel } from '../../scripts/identity-client.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const TLS_OPTIONS = {
@@ -88,13 +89,70 @@ function bearerKey(req) {
  * nothing about the ~20 other scenarios sharing this stub.
  */
 const REGISTER_CONFIRM_BARRIER_TIMEOUT_MS = 10_000
-export async function startStubCityServer({ registerConfirmBarrier } = {}) {
+
+/**
+ * `holdRecoveryGenerateUntilRotateConfirms` (optional): `{ handle }`. When
+ * set, this door runs a two-way rendezvous between `/api/recovery`
+ * `generate` and `/api/rotate` `confirm` for the SAME handle, so a test can
+ * force the exact overlap the recoverGenerate-vs-rotate finding depends on
+ * without hoping two real subprocesses happen to interleave:
+ *
+ *   1. A `generate` request for `handle` is computed and applied to
+ *      `residents` immediately (this door already has the new codes live
+ *      server-side the moment it decides to answer, exactly like the real
+ *      city), then signals its own arrival and parks its HTTP response --
+ *      not yet sent.
+ *   2. A `confirm` request for a rotation of the SAME `handle` waits for
+ *      that arrival signal (immediately, if `generate` already arrived)
+ *      before committing the new key to `residents` -- so `generate`'s
+ *      still-valid-old-key read is guaranteed to have already happened,
+ *      server-side, before the rotation it is racing against commits.
+ *   3. Only once `confirm` has actually committed does it release the
+ *      parked `generate` response -- reproducing the finding's own "a
+ *      delaying HTTPS proxy in front of it" scenario: the door processed
+ *      `generate` with the still-valid pre-rotation key, but the CLIENT
+ *      does not learn that until AFTER the concurrent rotation has already
+ *      confirmed and moved the live key.
+ *
+ * Either side of the rendezvous also releases, on its own, after
+ * RECOVERY_GENERATE_HOLD_TIMEOUT_MS if its counterpart never arrives (one
+ * racing subprocess failing before reaching the network at all), so a test
+ * bug here turns into a loud failing assertion rather than an indefinite CI
+ * hang. Exists for exactly one caller: identity-commands.test.mjs's own
+ * recoverGenerate/rotate race test.
+ */
+const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
+
+/**
+ * `corruptHandle` (optional): `{ rotateBegin, recoveryBegin, recoveryGenerate }`,
+ * each an optional replacement handle string. When set, the matching door
+ * response returns that string as `handle` instead of the real resident's
+ * handle -- simulating a compromised or misbehaving server answering with a
+ * DIFFERENT handle than the one the caller actually authenticated as, so a
+ * test can drive identity-client.mjs's real client code and assert it
+ * refuses to use that answer as a local vault label rather than trusting it
+ * verbatim (defense in depth; see register()'s own validation of its
+ * confirmed handle, which rotate()/recoverBegin()/recoverGenerate() now
+ * mirror). Exists for exactly the handle-validation tests in
+ * identity-client.test.mjs.
+ */
+export async function startStubCityServer({
+  registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle,
+} = {}) {
   const residents = new Map()
   const pendingRegistrations = new Map() // stage_token -> { handle, resident_key, recovery_codes, client_class }
   const pendingRotations = new Map() // stage_token -> { handle, resident_key }
   const pendingRecoveries = new Map() // stage_token -> { handle, resident_key }
   let confirmBarrierWaiters = []
   let confirmBarrierTimer = null
+  // Set only while holdRecoveryGenerateUntilRotateConfirms is configured --
+  // see that option's own doc comment for the two-way rendezvous these
+  // three implement together.
+  let recoveryGenerateArrivedRelease = null
+  const recoveryGenerateArrivedPromise = holdRecoveryGenerateUntilRotateConfirms
+    ? new Promise(resolveThis => { recoveryGenerateArrivedRelease = resolveThis })
+    : null
+  let heldRecoveryGenerateRelease = null // set only while a matching generate response is parked
 
   const server = createHttpsServer(TLS_OPTIONS, async (req, res) => {
     try {
@@ -112,6 +170,17 @@ export async function startStubCityServer({ registerConfirmBarrier } = {}) {
         if (body.action === 'stage') {
           if (residents.has(body.handle)) {
             return send(res, 409, { error: `handle "${body.handle}" is already taken`, reason: 'handle_taken' })
+          }
+          // Mirrors the city's own /api/register model-label rule (see
+          // scripts/identity-client.mjs's validateModelLabel, which mirrors
+          // src/input.ts's publicText) -- without this, the stub would
+          // silently accept a --model the real door refuses, which is
+          // exactly the divergence the round-3 finding this closes was
+          // about: a client-side --model check that has nothing real to
+          // disagree with can never be pinned by a test against this stub.
+          if (typeof body.model === 'string' && body.model) {
+            const modelError = validateModelLabel(body.model)
+            if (modelError) return send(res, 400, { error: modelError, reason: 'invalid_identity' })
           }
           const stageToken = token()
           const entry = {
@@ -176,12 +245,24 @@ export async function startStubCityServer({ registerConfirmBarrier } = {}) {
           const stageToken = token()
           pendingRotations.set(stageToken, { handle: found[0], resident_key: rootKey() })
           const pending = pendingRotations.get(stageToken)
-          return send(res, 200, { handle: pending.handle, resident_key: pending.resident_key, stage_token: stageToken })
+          const returnedHandle = corruptHandle?.rotateBegin ?? pending.handle
+          return send(res, 200, { handle: returnedHandle, resident_key: pending.resident_key, stage_token: stageToken })
         }
         if (body.action === 'confirm') {
           const pending = pendingRotations.get(body.stage_token)
           if (!pending || pending.resident_key !== body.resident_key) {
             return send(res, 403, { error: 'stage token or resident key mismatch' })
+          }
+          if (holdRecoveryGenerateUntilRotateConfirms && holdRecoveryGenerateUntilRotateConfirms.handle === pending.handle) {
+            // Wait for a matching recover-generate request to have arrived
+            // (and been processed, server-side, against the still-valid
+            // pre-rotation key) BEFORE this rotation commits below -- see
+            // holdRecoveryGenerateUntilRotateConfirms's own doc comment for
+            // why this ordering is what makes the overlap deterministic.
+            await Promise.race([
+              recoveryGenerateArrivedPromise,
+              new Promise(resolveThis => setTimeout(resolveThis, RECOVERY_GENERATE_HOLD_TIMEOUT_MS)),
+            ])
           }
           pendingRotations.delete(body.stage_token)
           const resident = residents.get(pending.handle)
@@ -189,6 +270,19 @@ export async function startStubCityServer({ registerConfirmBarrier } = {}) {
           // rotation confirms -- simulated here by clearing them, so a
           // test can assert the client never claims stale codes survived.
           residents.set(pending.handle, { ...resident, resident_key: pending.resident_key, recovery_codes: [] })
+          // Release a parked recover-generate response for this SAME
+          // handle now that the rotation it was meant to race against has
+          // actually landed -- see holdRecoveryGenerateUntilRotateConfirms's
+          // own doc comment above.
+          if (
+            holdRecoveryGenerateUntilRotateConfirms
+            && holdRecoveryGenerateUntilRotateConfirms.handle === pending.handle
+            && heldRecoveryGenerateRelease
+          ) {
+            const release = heldRecoveryGenerateRelease
+            heldRecoveryGenerateRelease = null
+            release()
+          }
           return send(res, 200, { handle: pending.handle })
         }
         return send(res, 400, { error: `unknown rotate action "${body.action}"` })
@@ -199,8 +293,27 @@ export async function startStubCityServer({ registerConfirmBarrier } = {}) {
           const found = [...residents.entries()].find(([, value]) => value.resident_key === body.resident_key)
           if (!found) return send(res, 403, { error: 'credential_rejected' })
           const codes = recoveryCodes()
+          // Applied to server-side state immediately, exactly like the real
+          // city -- only the HTTP response delivery is ever held below.
           residents.set(found[0], { ...found[1], recovery_codes: codes })
-          return send(res, 200, { handle: found[0], recovery_codes: codes })
+          const returnedHandle = corruptHandle?.recoveryGenerate ?? found[0]
+          const responseBody = { handle: returnedHandle, recovery_codes: codes }
+          if (holdRecoveryGenerateUntilRotateConfirms && holdRecoveryGenerateUntilRotateConfirms.handle === found[0]) {
+            if (recoveryGenerateArrivedRelease) {
+              recoveryGenerateArrivedRelease()
+              recoveryGenerateArrivedRelease = null
+            }
+            await new Promise(releaseThis => {
+              heldRecoveryGenerateRelease = releaseThis
+              setTimeout(() => {
+                if (heldRecoveryGenerateRelease === releaseThis) {
+                  heldRecoveryGenerateRelease = null
+                  releaseThis()
+                }
+              }, RECOVERY_GENERATE_HOLD_TIMEOUT_MS)
+            })
+          }
+          return send(res, 200, responseBody)
         }
         if (body.action === 'begin') {
           const found = [...residents.entries()].find(([, value]) => value.recovery_codes?.includes(body.recovery_code))
@@ -208,7 +321,8 @@ export async function startStubCityServer({ registerConfirmBarrier } = {}) {
           const stageToken = token()
           pendingRecoveries.set(stageToken, { handle: found[0], resident_key: rootKey() })
           const pending = pendingRecoveries.get(stageToken)
-          return send(res, 200, { handle: pending.handle, resident_key: pending.resident_key, stage_token: stageToken })
+          const returnedHandle = corruptHandle?.recoveryBegin ?? pending.handle
+          return send(res, 200, { handle: returnedHandle, resident_key: pending.resident_key, stage_token: stageToken })
         }
         if (body.action === 'confirm') {
           const pending = pendingRecoveries.get(body.stage_token)
