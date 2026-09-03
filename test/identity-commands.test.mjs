@@ -845,9 +845,14 @@ test('rotate refuses and cancels the stage when the rotate door returns a handle
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ action: 'confirm', stage_token: rotateStageToken, resident_key: originalKey }),
       })
-      assert.equal(confirmResponse.status, 403, 'a confirm against the cancelled stage_token must be refused')
+      // 404 (not 403) is the distinct answer the stub gives ONLY when the
+      // stage_token itself is unknown -- a 403 here would just as easily
+      // mean "real pending stage, wrong resident_key", which this probe
+      // (correct key, cancelled stage) can never trigger, so a 403 would
+      // prove nothing about the cancel having actually happened.
+      assert.equal(confirmResponse.status, 404, 'a confirm against the cancelled stage_token must be refused as unknown, not merely key-mismatched')
       const confirmed = await confirmResponse.json()
-      assert.match(confirmed.error, /stage token or resident key mismatch/u)
+      assert.match(confirmed.error, /no such stage_token/u)
     } finally {
       if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
       else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting
@@ -898,9 +903,13 @@ test(
             action: 'confirm', stage_token: recoveryStageToken, resident_key: `1f3d9_sk_${'7'.repeat(48)}`,
           }),
         })
-        assert.equal(confirmResponse.status, 403, 'a confirm against the cancelled stage_token must be refused')
+        // Same distinct-answer rationale as the rotate test above: 404
+        // means "no such stage" (the cancel actually happened), 403 would
+        // just as easily mean "real pending stage, wrong resident_key",
+        // which this probe (correct key, cancelled stage) can never hit.
+        assert.equal(confirmResponse.status, 404, 'a confirm against the cancelled stage_token must be refused as unknown, not merely key-mismatched')
         const confirmed = await confirmResponse.json()
-        assert.match(confirmed.error, /stage token or resident key mismatch/u)
+        assert.match(confirmed.error, /no such stage_token/u)
       } finally {
         if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
         else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting
@@ -971,6 +980,12 @@ test(
       // readSecret/storeSecret ever touch the vault with the unvalidated
       // stage response, not merely before confirm.
       assert.equal(stub.residents.size, 0, 'the city never confirmed a resident')
+      // Server-side proof the cancel actually happened, not just the
+      // client's own "staged registration was cancelled" stderr claim --
+      // same shape as the stub's pendingRotations/pendingRecoveries size
+      // assertions elsewhere in this file (round-3 register cancel-branch
+      // finding).
+      assert.equal(stub.pendingRegistrations.size, 0, 'the stub\'s own pending-registration map has no entry left')
       const corruptLabel = readSecret(stub.origin, 'AB', { homeDir: home.dir })
       assert.equal(corruptLabel.found, false, 'nothing was ever stored under the corrupted stage-response label')
       const realLabel = readSecret(stub.origin, 'agent-corrupt-stage', { homeDir: home.dir })
@@ -1455,6 +1470,78 @@ test('key recover generate refuses, before ever contacting the recovery door, wh
     assert.deepEqual(stub.residents.get('agent-real-two').recovery_codes, [], 'no codes were minted for agent-real-two')
   } finally {
     deleteSecret(stub.origin, 'agent-wrong-label-two', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+// A `me` read is never side-effect-free -- it wakes any due timers and
+// advances the resident's fee-credit last-read marker, the same as any
+// other `me` read. key.mjs and connect.mjs disclose that on every command
+// that performs one, but until now nothing pinned the disclosure text
+// itself: deleting the console.log lines in probeMatchesOrRefuse (key
+// rotate / key recover generate), status(), or connect.mjs's own probe
+// left `npm test` fully green. This test drives a matching-handle (i.e.
+// successful) run of each disclosing command against the stub and asserts
+// the actual wording survives.
+test('key rotate, key recover generate, key status, and connect.mjs all disclose that a `me` read wakes timers and advances the fee-credit last-read marker', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('me-read-disclosure-')
+  try {
+    const rotateKey = `1f3d9_sk_${'3'.repeat(48)}`
+    stub.residents.set('agent-disclosure-rotate', { resident_key: rotateKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-disclosure-rotate', {
+      kind: 'resident', handle: 'agent-disclosure-rotate', client_class: 'coding_persistent',
+      resident_key: rotateKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    const rotateResult = await runNode(keyPath, ['rotate', '--origin', stub.origin, '--handle', 'agent-disclosure-rotate'], { env: home.env })
+    assert.equal(rotateResult.status, 0, rotateResult.stderr)
+    assert.match(rotateResult.stdout, /wakes any due timers/u)
+    assert.match(rotateResult.stdout, /fee-credit last-read marker/u)
+    assertNoSecretLeaked(rotateResult, 'key rotate disclosure')
+
+    const generateKey = `1f3d9_sk_${'4'.repeat(48)}`
+    stub.residents.set('agent-disclosure-generate', { resident_key: generateKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-disclosure-generate', {
+      kind: 'resident', handle: 'agent-disclosure-generate', client_class: 'coding_persistent',
+      resident_key: generateKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    const generateResult = await runNode(
+      keyPath, ['recover', 'generate', '--origin', stub.origin, '--handle', 'agent-disclosure-generate'], { env: home.env },
+    )
+    assert.equal(generateResult.status, 0, generateResult.stderr)
+    assert.match(generateResult.stdout, /wakes any due timers/u)
+    assert.match(generateResult.stdout, /fee-credit last-read marker/u)
+    assertNoSecretLeaked(generateResult, 'key recover generate disclosure')
+
+    const statusKey = `1f3d9_sk_${'9'.repeat(48)}`
+    stub.residents.set('agent-disclosure-status', { resident_key: statusKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-disclosure-status', {
+      kind: 'resident', handle: 'agent-disclosure-status', client_class: 'coding_persistent',
+      resident_key: statusKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    const statusResult = await runNode(keyPath, ['status', '--origin', stub.origin, '--handle', 'agent-disclosure-status'], { env: home.env })
+    assert.equal(statusResult.status, 0, statusResult.stderr)
+    assert.match(statusResult.stdout, /wakes any due timers/u)
+    assert.match(statusResult.stdout, /fee-credit last-read marker/u)
+    assertNoSecretLeaked(statusResult, 'key status disclosure')
+
+    const connectKey = `1f3d9_sk_${'0'.repeat(48)}`
+    stub.residents.set('agent-disclosure-connect', { resident_key: connectKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-disclosure-connect', {
+      kind: 'resident', handle: 'agent-disclosure-connect', client_class: 'coding_persistent',
+      resident_key: connectKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    const connectResult = await runNode(connectPath, ['--origin', stub.origin, '--handle', 'agent-disclosure-connect'], { env: home.env })
+    assert.equal(connectResult.status, 0, connectResult.stderr)
+    assert.match(connectResult.stdout, /wakes any due timers/u)
+    assert.match(connectResult.stdout, /fee-credit last-read marker/u)
+    assertNoSecretLeaked(connectResult, 'connect.mjs disclosure')
+  } finally {
+    deleteSecret(stub.origin, 'agent-disclosure-rotate', { homeDir: home.dir })
+    deleteSecret(stub.origin, 'agent-disclosure-generate', { homeDir: home.dir })
+    deleteSecret(stub.origin, 'agent-disclosure-status', { homeDir: home.dir })
+    deleteSecret(stub.origin, 'agent-disclosure-connect', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
