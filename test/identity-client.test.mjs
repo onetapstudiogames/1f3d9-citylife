@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { writeFileSync, mkdirSync, utimesSync } from 'node:fs'
+import { writeFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -440,23 +440,32 @@ test('promoteReplacementKey refuses to swallow a write failure after the server 
     }
     throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
   }
-  const deps = { execFileSync, platform: 'darwin' }
+  // promoteReplacementKey now takes a per-(origin, handle) file lock (see
+  // Finding 2 test block below) before ever calling readSecret/storeSecret,
+  // so every call -- including this fully-mocked one -- needs a temp
+  // homeDir or that lock file would land under the real ~/.1f3d9.
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+  const deps = { execFileSync, platform: 'darwin', homeDir }
 
-  assert.throws(
-    () => promoteReplacementKey(origin, handle, stagingLabel, 'new-key', (previous) => ({
-      ...(previous?.client_class ? { client_class: previous.client_class } : {}),
-    }), deps),
-    (error) => {
-      assert.match(error.message, /old key.*no longer works/iu, 'names the old key as already dead')
-      assert.match(
-        error.message,
-        new RegExp(stagingLabel.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')),
-        'names the staging label where the confirmed replacement key still lives',
-      )
-      assert.doesNotMatch(error.message, /new-key|old-key/u, 'never includes the raw key values')
-      return true
-    },
-  )
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'new-key', (previous) => ({
+        ...(previous?.client_class ? { client_class: previous.client_class } : {}),
+      }), deps),
+      (error) => {
+        assert.match(error.message, /old key.*no longer works/iu, 'names the old key as already dead')
+        assert.match(
+          error.message,
+          new RegExp(stagingLabel.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')),
+          'names the staging label where the confirmed replacement key still lives',
+        )
+        assert.doesNotMatch(error.message, /new-key|old-key/u, 'never includes the raw key values')
+        return true
+      },
+    )
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
 })
 
 // --- Finding 2: register()'s overwrite guard is re-checked immediately ----
@@ -480,18 +489,26 @@ test('promoteReplacementKey with refuseIfPresent:true refuses to overwrite a liv
     }
     throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
   }
-  const deps = { execFileSync, platform: 'darwin' }
+  // See the temp-homeDir comment on the write-failure test above -- same
+  // reason: promoteReplacementKey's per-(origin, handle) lock file needs
+  // somewhere that is not the real ~/.1f3d9.
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+  const deps = { execFileSync, platform: 'darwin', homeDir }
 
-  assert.throws(
-    () => promoteReplacementKey(origin, handle, stagingLabel, 'new-confirmed-key', () => ({}), deps, { refuseIfPresent: true }),
-    (error) => {
-      assert.match(error.message, /now exists/u, 'names the race, not a generic write failure')
-      assert.match(error.message, new RegExp(stagingLabel.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')), 'points at the staging label')
-      assert.doesNotMatch(error.message, /won-the-race-key|new-confirmed-key/u, 'never includes a raw key value')
-      return true
-    },
-  )
-  assert.equal(storeCalled, false, 'the write is never even attempted once the live entry is found present')
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'new-confirmed-key', () => ({}), deps, { refuseIfPresent: true }),
+      (error) => {
+        assert.match(error.message, /now exists/u, 'names the race, not a generic write failure')
+        assert.match(error.message, new RegExp(stagingLabel.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')), 'points at the staging label')
+        assert.doesNotMatch(error.message, /won-the-race-key|new-confirmed-key/u, 'never includes a raw key value')
+        return true
+      },
+    )
+    assert.equal(storeCalled, false, 'the write is never even attempted once the live entry is found present')
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
 })
 
 test('promoteReplacementKey with refuseIfPresent:true still writes normally when nothing is there yet', () => {
@@ -507,10 +524,20 @@ test('promoteReplacementKey with refuseIfPresent:true still writes normally when
     }
     throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
   }
-  const deps = { execFileSync, platform: 'darwin' }
+  // A successful write here reaches storeSecret's darwin branch, which
+  // also calls updateVaultIndex -- on top of the per-(origin, handle) lock
+  // file every promoteReplacementKey call now takes (see the two tests
+  // above), both need a temp homeDir or they would touch the real
+  // ~/.1f3d9.
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+  const deps = { execFileSync, platform: 'darwin', homeDir }
 
-  const location = promoteReplacementKey(origin, handle, stagingLabel, 'brand-new-key', () => ({ client_class: 'coding_persistent' }), deps, { refuseIfPresent: true })
-  assert.match(location, /macOS Keychain/u)
+  try {
+    const location = promoteReplacementKey(origin, handle, stagingLabel, 'brand-new-key', () => ({ client_class: 'coding_persistent' }), deps, { refuseIfPresent: true })
+    assert.match(location, /macOS Keychain/u)
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
 })
 
 // --- Finding 4: the non-secret vault index is now serialized with a -------
