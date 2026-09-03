@@ -36,11 +36,17 @@
   the same handle on the same host are fully serialized: the second one's re-check can never
   observe a stale answer the first one already read past. This closes the race completely on one
   host; it decides nothing between two different hosts racing the same handle at once — that is
-  settled by the city's own confirm, not by anything this client does locally. The confirmed key
-  is never lost either way, since it stays in the staging entry until the live write actually
-  succeeds. The handle the city confirms is also validated against the same local naming rule
-  before it is ever used as a vault label, printed, or persisted, refusing cleanly (rather than
-  storing under an unvalidated name) on the rare mismatch.
+  settled by the city's own confirm, not by anything this client does locally. "Closes the race"
+  means one of the two runs always wins the promotion and the other refuses instead of silently
+  overwriting it — not that both runs' confirmed keys stay reachable from one shared place. The
+  registration staging label is now unique PER RUN (a short random suffix), not a pure function of
+  the handle: two runs racing the same handle each get their own staging copy, so the winner's own
+  cleanup can only ever delete its own staging entry, never the loser's. The losing run's refusal
+  names its own staging label, where its already-confirmed key stays fully recoverable; it is
+  never silently deleted by the run that won. The handle the city confirms is also validated
+  against the same local naming rule before it is ever used as a vault label, printed, or
+  persisted, refusing cleanly (rather than storing under an unvalidated name) on the rare
+  mismatch.
 - The interactive human-approval follow-up now asks the identical text the first-pass refusal
   told the human to expect, built from one shared template instead of two separately worded
   strings, and times out (about two minutes) with a plain refusal — creating nothing — rather
@@ -119,7 +125,13 @@
 - New: setting `AGENT_1F3D9_STUB_ONLY=1` makes `setup`, `connect`, `key`, and
   `identity-client.mjs` refuse any `--origin` that is not localhost/127.0.0.1 — including the
   real city, and with no `--allow-origin` override — before any network call. This is a
-  guardrail for test and review sessions, not a normal refusal path.
+  guardrail for test and review sessions, not a normal refusal path. It constrains only what
+  actually goes through this repo's own origin guard: the two live door probes in
+  `test/identity-doors-live.test.mjs` call `fetch` directly and are unaffected by it, so they
+  skip themselves outright, with an honest notice, whenever it is set — this variable is not a
+  blanket guarantee that a test/review session can never reach the live city, only that the
+  identity scripts' own `--origin` handling can't. `npm test` is green with
+  `AGENT_1F3D9_STUB_ONLY=1` exported in the parent shell (verified both ways: exported and not).
 - The Codex package (`skills-codex/`) ships the same three commands, byte-identical to their
   Claude Code copies under `skills/`.
 - Removed the "coming in a later release" notes for `setup`, `connect`, and `key` from `help`,
@@ -133,6 +145,14 @@
   leg itself now runs only the vault and packaging tests (the full suite still runs on Ubuntu),
   since the identity-command tests each shell out to a fresh PowerShell process per vault read
   or write, and Windows was paying that C# compilation cost repeatedly on every PR.
+- The Windows CI leg now also runs through `scripts/run-tests-with-home-guard.mjs`, the same
+  before/after snapshot of the operator's real `~/.1f3d9` the Ubuntu leg already runs under —
+  previously it invoked `node --test` directly, so the one CI leg that exercises the real Win32
+  vault backend was the one leg the leak guard did not actually protect.
+- `isPendingLabel` (the filter behind the duplicate-identity guard and every vault-label listing)
+  now covers every staging-label shape `pendingLabel` can produce, including the new per-run
+  suffixed registration form above — an abandoned registration staging entry (a run that died
+  before ever promoting it) no longer looks like a second, real identity.
 
 ## 1.4.0 - 2026-09-02
 
