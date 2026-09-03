@@ -38,7 +38,10 @@
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readdirSync, statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, relative } from 'node:path'
+import { join, relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { parseSecurityDumpKeychainServiceNames } from './identity-client.mjs'
 
 const VAULT_DIR_NAME = '.1f3d9'
 const VAULT_TARGET_PREFIX = '1f3d9:'
@@ -89,16 +92,53 @@ function snapshotDir(dir) {
 }
 
 /**
- * A deterministic, content-free (names only, never secret bytes) snapshot
- * of every platform vault entry whose name carries this plugin's own
- * `1f3d9:` target prefix -- the win32 Windows Credential Manager via
- * `cmdkey /list`, or the darwin login Keychain via a metadata-only
- * `security dump-keychain` scan, exactly as identity-client.mjs's own
- * listVaultLabels union already reads each of them (see that function's
- * doc comment). Any other platform, or either tool missing/failing, is
- * treated as "found nothing" -- the same fail-open posture the directory
- * snapshot above already has for a missing ~/.1f3d9, since there is
- * nothing more this guard can honestly claim to have seen.
+ * Classifies a raw platform-vault target name of the shape
+ * `1f3d9:<origin>:<label>` by its origin:
+ *   - 'loopback' for `https://localhost[:port]` or `https://127.0.0.1[:port]`
+ *     -- the ONLY origins a stub city server this repo's own tests ever
+ *     start can use (scripts/lib/origin-guard.mjs allows nothing else
+ *     unconditionally, and AGENT_1F3D9_STUB_ONLY=1 forbids anything else
+ *     outright), so an entry classified this way in the REAL platform vault
+ *     can only be test/stub residue, never a real resident.
+ *   - 'real' for `https://1f3d9.com` -- an operator's own, entirely
+ *     legitimate resident identity from actually running `setup` against
+ *     the live city. Never treated as drift or a leak.
+ *   - 'other' for anything else (a caller-confirmed `--allow-origin` value
+ *     this guard has no opinion about).
+ * Returns null for a name that does not even carry this plugin's own
+ * `1f3d9:` prefix.
+ */
+function classifyVaultTargetOrigin(name) {
+  if (!name.startsWith(VAULT_TARGET_PREFIX)) return null
+  const rest = name.slice(VAULT_TARGET_PREFIX.length)
+  if (/^https:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?:/u.test(rest)) return 'loopback'
+  if (/^https:\/\/1f3d9\.com:/u.test(rest)) return 'real'
+  return 'other'
+}
+
+/**
+ * Enumerates this plugin's own `1f3d9:`-prefixed platform-vault entries.
+ * Returns `{ ok: true, names }` on a successful (possibly empty)
+ * enumeration, and `{ ok: false, names: [] }` when the enumeration tool
+ * itself failed on this platform -- distinct from "found nothing", the same
+ * distinction identity-client.mjs's own listVaultLabels/
+ * KeychainEnumerationIncomplete already has to make for the exact same
+ * `security dump-keychain` and `cmdkey /list` calls. A bare
+ * `catch { return [] }` here cannot tell "nothing to see" from "could not
+ * look", and collapsing the two the way an earlier version of this function
+ * did is wrong in either direction it could fail: a tool failure only on
+ * the AFTER call would read as "nothing added" (hiding a real leak this
+ * whole guard exists to catch), and a tool failure only on the BEFORE call
+ * would report every entry the AFTER call legitimately found as spurious
+ * drift (failing a clean run). The caller below refuses to compare when
+ * either read failed, rather than guessing which of those two wrong answers
+ * to give.
+ *
+ * Darwin's parsing is shared with identity-client.mjs's own
+ * darwinKeychainServiceLabels via parseSecurityDumpKeychainServiceNames,
+ * rather than a second, independently-maintained copy of the same regex --
+ * a prior copy here did not run unescapeSecurityDumpString, so it decoded a
+ * non-ASCII label byte differently (mojibake) than the shared parser does.
  */
 function snapshotPlatformVaultNames() {
   if (process.platform === 'win32') {
@@ -110,9 +150,9 @@ function snapshotPlatformVaultNames() {
         const index = target.indexOf(VAULT_TARGET_PREFIX)
         if (index !== -1) names.push(target.slice(index))
       }
-      return names.sort()
+      return { ok: true, names: names.sort() }
     } catch {
-      return []
+      return { ok: false, names: [] }
     }
   }
   if (process.platform === 'darwin') {
@@ -122,18 +162,16 @@ function snapshotPlatformVaultNames() {
         maxBuffer: 64 * 1024 * 1024,
         timeout: 10_000,
       })
-      const names = []
-      const serviceRe = /"svce"<blob>=(?:"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]+)(?:\s+"(?:[^"\\]|\\.)*")?)/gsu
-      for (const match of output.matchAll(serviceRe)) {
-        const service = match[1] !== undefined ? match[1] : Buffer.from(match[2], 'hex').toString('utf8')
-        if (service.startsWith(VAULT_TARGET_PREFIX)) names.push(service)
-      }
-      return names.sort()
+      const names = parseSecurityDumpKeychainServiceNames(output).filter(name => name.startsWith(VAULT_TARGET_PREFIX))
+      return { ok: true, names: names.sort() }
     } catch {
-      return []
+      return { ok: false, names: [] }
     }
   }
-  return []
+  // Any other platform has no platform-vault tool this guard knows how to
+  // ask at all -- a genuine, successful "nothing to enumerate here", never
+  // a failure.
+  return { ok: true, names: [] }
 }
 
 function diffNameSets(before, after) {
@@ -177,42 +215,101 @@ function formatDiff(diff, before, after) {
   return lines.join('\n')
 }
 
-const vaultDir = join(homedir(), VAULT_DIR_NAME)
-const before = snapshotDir(vaultDir)
-const platformVaultBefore = snapshotPlatformVaultNames()
+/**
+ * Runs the whole guarded suite once and returns the exit code it should
+ * produce. Pulled out of top-level script code (rather than running
+ * immediately at import time) so test/run-tests-with-home-guard.test.mjs
+ * can import and unit-test the pure pieces above (classifyVaultTargetOrigin
+ * especially) without this file spawning a nested `node --test` merely by
+ * being imported -- see the isDirectRun guard at the bottom of this file.
+ */
+function runGuard(extraTestArgs = []) {
+  const vaultDir = join(homedir(), VAULT_DIR_NAME)
+  const before = snapshotDir(vaultDir)
+  const platformVaultBefore = snapshotPlatformVaultNames()
 
-const result = spawnSync(process.execPath, ['--test', ...process.argv.slice(2)], {
-  stdio: 'inherit',
-})
+  // Checked from the BEFORE snapshot alone, before the test suite even
+  // runs: a stub city server (the only kind this repo's own tests ever
+  // start) is loopback-only, so a loopback-origin `1f3d9:` entry already
+  // sitting in the REAL platform vault before this run started can only be
+  // residue some PAST run leaked in -- this run did not cause it, but it
+  // must not go unreported just because the diff below only compares
+  // before/after within the CURRENT run. Never trips on a real
+  // `1f3d9:https://1f3d9.com:<handle>` entry -- an operator's own resident
+  // identity is expected there and is never drift.
+  const preexistingLoopbackLeak = platformVaultBefore.ok
+    ? platformVaultBefore.names.filter(name => classifyVaultTargetOrigin(name) === 'loopback')
+    : []
 
-const after = snapshotDir(vaultDir)
-const diff = diffSnapshots(before, after)
-const platformVaultAfter = snapshotPlatformVaultNames()
-const platformVaultDiff = diffNameSets(platformVaultBefore, platformVaultAfter)
-const platformVaultDrifted = platformVaultDiff.added.length > 0 || platformVaultDiff.removed.length > 0
+  const result = spawnSync(process.execPath, ['--test', ...extraTestArgs], {
+    stdio: 'inherit',
+  })
 
-if (isDrift(diff) || platformVaultDrifted) {
-  if (isDrift(diff)) console.error(`\nidentity-vault-home-guard: ${formatDiff(diff, before, after)}`)
-  if (platformVaultDrifted) {
-    const lines = [
-      'identity-vault-home-guard: the real platform credential vault ' +
-      `(${process.platform === 'win32' ? 'Windows Credential Manager' : 'macOS Keychain'}) gained or lost a ` +
-      '1f3d9: entry during this test run -- names only, never values:',
-    ]
-    for (const name of platformVaultDiff.added) lines.push(`  + ${name}`)
-    for (const name of platformVaultDiff.removed) lines.push(`  - ${name}`)
-    lines.push(
-      'This is a real secret, not the non-secret vault-index.json the directory snapshot above already ' +
-      'covers -- a temp HOME does not isolate this platform vault. Find the call site (search test/*.test.mjs ' +
-      'for a vault function call missing homeDir) and fix it there.',
+  const after = snapshotDir(vaultDir)
+  const diff = diffSnapshots(before, after)
+  const platformVaultAfter = snapshotPlatformVaultNames()
+  const enumerationFailed = !platformVaultBefore.ok || !platformVaultAfter.ok
+  const platformVaultDiff = platformVaultBefore.ok && platformVaultAfter.ok
+    ? diffNameSets(platformVaultBefore.names, platformVaultAfter.names)
+    : { added: [], removed: [] }
+  const platformVaultDrifted = platformVaultDiff.added.length > 0 || platformVaultDiff.removed.length > 0
+
+  let exitCode
+  if (enumerationFailed) {
+    const tool = process.platform === 'win32' ? 'cmdkey /list' : 'security dump-keychain'
+    console.error(
+      '\nidentity-vault-home-guard: the platform vault could not be enumerated, this run proves nothing ' +
+      `about it (${tool} failed on the ${!platformVaultBefore.ok ? 'BEFORE' : 'AFTER'} read). A failed ` +
+      'enumeration is never silently treated as "found nothing" -- doing that could either hide a real leak ' +
+      'or report every pre-existing entry as spurious drift, depending on which call failed. Investigate why ' +
+      'the enumeration tool failed on this host, then re-run.',
     )
-    console.error(`\n${lines.join('\n')}`)
+    exitCode = 1
+  } else if (preexistingLoopbackLeak.length > 0) {
+    console.error(
+      '\nidentity-vault-home-guard: the REAL platform vault already held a loopback-origin `1f3d9:` entry ' +
+      "before this run even started -- a stub city server (the only kind this repo's own tests ever start) " +
+      'is always loopback-only, so this means some PAST test run leaked a real secret into the operator\'s ' +
+      'real vault. Never trips on a real `1f3d9:https://1f3d9.com:<handle>` entry -- an operator\'s own ' +
+      `resident identity is expected there and is never drift. Leaked entries:\n` +
+      preexistingLoopbackLeak.map(name => `  - ${name}`).join('\n'),
+    )
+    exitCode = 1
+  } else if (isDrift(diff) || platformVaultDrifted) {
+    if (isDrift(diff)) console.error(`\nidentity-vault-home-guard: ${formatDiff(diff, before, after)}`)
+    if (platformVaultDrifted) {
+      const lines = [
+        'identity-vault-home-guard: the real platform credential vault ' +
+        `(${process.platform === 'win32' ? 'Windows Credential Manager' : 'macOS Keychain'}) gained or lost a ` +
+        '1f3d9: entry during this test run -- names only, never values:',
+      ]
+      for (const name of platformVaultDiff.added) lines.push(`  + ${name}`)
+      for (const name of platformVaultDiff.removed) lines.push(`  - ${name}`)
+      lines.push(
+        'This is a real secret, not the non-secret vault-index.json the directory snapshot above already ' +
+        'covers -- a temp HOME does not isolate this platform vault. Find the call site (search test/*.test.mjs ' +
+        'for a vault function call missing homeDir) and fix it there.',
+      )
+      console.error(`\n${lines.join('\n')}`)
+    }
+    exitCode = 1
+  } else if (result.status !== 0) {
+    exitCode = result.status ?? 1
+  } else if (result.signal) {
+    exitCode = 1
+  } else {
+    exitCode = 0
   }
-  process.exitCode = 1
-} else if (result.status !== 0) {
-  process.exitCode = result.status ?? 1
-} else if (result.signal) {
-  process.exitCode = 1
-} else {
-  process.exitCode = 0
+  return exitCode
+}
+
+const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+if (isDirectRun) {
+  process.exitCode = runGuard(process.argv.slice(2))
+}
+
+// Exported for test/run-tests-with-home-guard.test.mjs; importing this
+// module never runs the guard itself -- only isDirectRun above does that.
+export {
+  classifyVaultTargetOrigin, snapshotPlatformVaultNames, snapshotDir, diffNameSets, diffSnapshots, isDrift, runGuard,
 }

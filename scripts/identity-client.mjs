@@ -1230,6 +1230,40 @@ function unescapeSecurityDumpString(raw) {
 class KeychainEnumerationIncomplete extends Error {}
 
 /**
+ * Parses raw `security dump-keychain` (metadata-only) output into every
+ * `"svce"` (service name) value it finds -- no origin filtering, no prefix
+ * stripping, just the correctly-decoded raw strings. Pulled out of
+ * darwinKeychainServiceLabels below so a caller that needs every `1f3d9:`
+ * entry across every origin (scripts/run-tests-with-home-guard.mjs, which
+ * has no single `origin` to filter by) can share this exact parsing instead
+ * of copying it -- a prior, now-fixed copy in that file did not run
+ * unescapeSecurityDumpString, so it mojibake'd any non-ASCII label byte for
+ * byte differently than this one. See unescapeSecurityDumpString's own doc
+ * comment for why that decoding step matters.
+ */
+function parseSecurityDumpKeychainServiceNames(output) {
+  if (typeof output !== 'string') return []
+  const names = []
+  // `security dump-keychain` prints a "svce" value two different ways: the
+  // plain quoted form (group 1) when the whole string is printable, and
+  // `0x<HEX>` -- optionally followed by a best-effort quoted/escaped
+  // rendering, which this never needs to parse -- when it is not (group 2).
+  // The earlier version of this regex only matched the plain form, so any
+  // entry needing the hex form was silently dropped from the enumeration
+  // rather than parsed; the hex bytes are authoritative here (raw UTF-8),
+  // so they are decoded directly rather than round-tripped through the
+  // escaped display text.
+  const serviceRe = /"svce"<blob>=(?:"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]+)(?:\s+"(?:[^"\\]|\\.)*")?)/gsu
+  for (const match of output.matchAll(serviceRe)) {
+    const service = match[1] !== undefined
+      ? unescapeSecurityDumpString(match[1])
+      : Buffer.from(match[2], 'hex').toString('utf8')
+    names.push(service)
+  }
+  return names
+}
+
+/**
  * Enumerates this plugin's own vault entries directly from the macOS
  * Keychain, rather than trusting only the non-secret vault-index.json that
  * lives under the same HOME a lost/reset profile can wipe (see the
@@ -1278,23 +1312,9 @@ function darwinKeychainServiceLabels(execImpl, origin) {
     }
     return []
   }
-  if (typeof output !== 'string') return []
   const prefix = vaultTarget(origin, '')
   const labels = []
-  // `security dump-keychain` prints a "svce" value two different ways: the
-  // plain quoted form (group 1) when the whole string is printable, and
-  // `0x<HEX>` -- optionally followed by a best-effort quoted/escaped
-  // rendering, which this never needs to parse -- when it is not (group 2).
-  // The earlier version of this regex only matched the plain form, so any
-  // entry needing the hex form was silently dropped from the enumeration
-  // rather than parsed; the hex bytes are authoritative here (raw UTF-8),
-  // so they are decoded directly rather than round-tripped through the
-  // escaped display text.
-  const serviceRe = /"svce"<blob>=(?:"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]+)(?:\s+"(?:[^"\\]|\\.)*")?)/gsu
-  for (const match of output.matchAll(serviceRe)) {
-    const service = match[1] !== undefined
-      ? unescapeSecurityDumpString(match[1])
-      : Buffer.from(match[2], 'hex').toString('utf8')
+  for (const service of parseSecurityDumpKeychainServiceNames(output)) {
     if (service.startsWith(prefix)) labels.push(service.slice(prefix.length))
   }
   return labels
@@ -2049,4 +2069,5 @@ if (isMainModule) {
 export {
   storeSecret, readSecret, deleteSecret, listVaultLabels, promoteReplacementKey, SecretReadFailure, shouldReveal,
   HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel, KeychainEnumerationIncomplete,
+  parseSecurityDumpKeychainServiceNames,
 }
