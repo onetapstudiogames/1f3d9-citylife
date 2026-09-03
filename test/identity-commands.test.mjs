@@ -25,6 +25,7 @@ function extractApprovalToken(stderr) {
 const setupPath = fileURLToPath(new URL('../scripts/setup.mjs', import.meta.url))
 const connectPath = fileURLToPath(new URL('../scripts/connect.mjs', import.meta.url))
 const keyPath = fileURLToPath(new URL('../scripts/key.mjs', import.meta.url))
+const identityClientPath = fileURLToPath(new URL('../scripts/identity-client.mjs', import.meta.url))
 
 const NO_SECRET_LITERAL = /1f3d9_(?:sk|rc)_[0-9a-f]+/u
 
@@ -33,23 +34,146 @@ function assertNoSecretLeaked(result, label) {
   assert.doesNotMatch(result.stderr ?? '', NO_SECRET_LITERAL, `${label}: stderr never carries a raw secret`)
 }
 
+// --- register() vault safety: never silently overwrite an existing entry -
+
+test('register refuses to overwrite an existing vault entry under the confirmed handle, and cleans up the staging copy', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('register-collision-')
+  try {
+    storeSecret(stub.origin, 'agent-collide', {
+      kind: 'resident', handle: 'agent-collide', client_class: 'coding_persistent',
+      resident_key: `1f3d9_sk_${'z'.repeat(48)}`, recovery_codes: [], origin: stub.origin,
+    }, { homeDir: home.dir })
+
+    const result = await runNode(identityClientPath, [
+      'register', '--origin', stub.origin, '--handle', 'agent-collide',
+      '--client-class', 'coding_persistent', '--human-approved',
+    ], { env: home.env })
+    assert.notEqual(result.status, 0, 'refuses over an existing vault entry')
+    assert.match(result.stderr, /refusing to register over the vault entry/u)
+    assert.match(result.stderr, /--replace-vault-entry/u)
+    assert.equal(stub.residents.size, 0, 'the city never confirmed a duplicate resident')
+    assertNoSecretLeaked(result, 'register vault collision')
+
+    const stillThere = readSecret(stub.origin, 'agent-collide', { homeDir: home.dir })
+    assert.equal(stillThere.value.resident_key, `1f3d9_sk_${'z'.repeat(48)}`, 'the original entry is untouched')
+
+    const staging = readSecret(stub.origin, 'agent-collide--pending-registration', { homeDir: home.dir })
+    assert.equal(staging.found, false, 'the staging copy was cleaned up, not left behind')
+  } finally {
+    deleteSecret(stub.origin, 'agent-collide')
+    deleteSecret(stub.origin, 'agent-collide--pending-registration')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('register --replace-vault-entry deliberately overwrites an existing entry', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('register-replace-')
+  try {
+    storeSecret(stub.origin, 'agent-replace', {
+      kind: 'resident', handle: 'agent-replace', client_class: 'coding_persistent',
+      resident_key: `1f3d9_sk_${'y'.repeat(48)}`, recovery_codes: [], origin: stub.origin,
+    }, { homeDir: home.dir })
+
+    const result = await runNode(identityClientPath, [
+      'register', '--origin', stub.origin, '--handle', 'agent-replace',
+      '--client-class', 'coding_persistent', '--human-approved', '--replace-vault-entry',
+    ], { env: home.env })
+    assert.equal(result.status, 0, result.stderr)
+    const now = readSecret(stub.origin, 'agent-replace', { homeDir: home.dir })
+    assert.notEqual(now.value.resident_key, `1f3d9_sk_${'y'.repeat(48)}`, 'the old key was deliberately replaced')
+    assertNoSecretLeaked(result, 'register --replace-vault-entry')
+  } finally {
+    deleteSecret(stub.origin, 'agent-replace')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('register refuses a handle that does not match the city\'s handle rule, before any network call', async () => {
+  const result = await runNode(identityClientPath, [
+    'register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+    '--handle', 'AB', '--client-class', 'coding_persistent', '--human-approved',
+  ])
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /does not match the city's handle rule/u)
+})
+
+test('setup.mjs refuses a handle that does not match the city\'s handle rule before ever asking for approval', async () => {
+  const result = await runNode(setupPath, [
+    '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+    '--handle', 'AB', '--client-class', 'coding_persistent',
+  ])
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /does not match the city's handle rule/u)
+  assert.doesNotMatch(result.stderr, /put this exact question to the human/u, 'never reaches the approval gate')
+})
+
+// --- The `--flag=value` equals form works identically to the space form ---
+
+test('setup.mjs accepts --human-approved=<token> in equals form, not just the space form', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-equals-token-')
+  try {
+    const firstPass = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-equals', '--client-class', 'coding_persistent'],
+      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+    const token = extractApprovalToken(firstPass.stderr)
+    assert.ok(token, 'the first pass prints a token')
+
+    // The equals form, exactly as a caller who read the printed command
+    // literally would paste it -- this used to be silently swallowed by
+    // parseArgs (flags['human-approved=<token>'] instead of
+    // flags['human-approved']), reaching the mint-a-new-nonce branch instead
+    // of ever comparing the supplied token.
+    const secondPass = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-equals', '--client-class', 'coding_persistent', `--human-approved=${token}`],
+      { env: home.env },
+    )
+    assert.equal(secondPass.status, 0, secondPass.stderr)
+    assert.equal(stub.residents.size, 1, 'the equals-form token actually registered')
+    assertNoSecretLeaked(secondPass, 'setup.mjs equals-form token')
+  } finally {
+    deleteSecret(stub.origin, 'agent-equals')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('connect.mjs and key.mjs accept --handle=<value> in equals form, not just the space form', async () => {
+  const connectResult = await runNode(connectPath, ['--origin=https://example.invalid', '--allow-origin=https://example.invalid', '--handle=agent-equals-connect'])
+  assert.match(connectResult.stdout, /agent-equals-connect/u, 'connect.mjs actually used the equals-form --handle, not a fallback')
+
+  const keyResult = await runNode(keyPath, ['status', '--origin=https://example.invalid', '--allow-origin=https://example.invalid', '--handle=agent-equals-key'])
+  assert.match(keyResult.stderr, /agent-equals-key/u, 'key.mjs actually used the equals-form --handle, not a fallback')
+})
+
 // --- Findings 1-4: the printed MCP connector commands are correct ---------
 
-test('connect.mjs prints a single-quoted, unexpanded Claude Code header targeting /mcp on one line (PowerShell-safe), and the real Codex flag', async () => {
+test('connect.mjs prints a single-quoted, unexpanded Claude Code header targeting /mcp on one line (PowerShell-safe), under a distinct server name, and the real Codex flag', async () => {
   const result = await runNode(connectPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'nobody'])
   const out = result.stdout
   const claudeLine = out.split(/\r?\n/u).find(line => line.trimStart().startsWith('claude mcp add'))
   assert.ok(claudeLine, 'the Claude Code command line is present')
   assert.match(
     claudeLine,
-    /^\s*claude mcp add --transport http 1f3d9 https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
+    /^\s*claude mcp add --transport http 1f3d9-key https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
     'the whole command fits on one line -- a POSIX `\\` continuation is a hard parse error in PowerShell',
   )
   assert.doesNotMatch(claudeLine, /\\\s*$/u, 'the line never ends with a line-continuation backslash')
   assert.doesNotMatch(out, /\/mcp\/connect/u, 'the bearer-header (Claude Code) line never names /mcp/connect')
   assert.doesNotMatch(out, /--header "Authorization: Bearer \$\{/u, 'header is never double-quoted (that is what let the shell expand it)')
-  assert.match(out, /codex mcp add 1f3d9 --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
+  assert.match(out, /codex mcp add 1f3d9-key --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
   assert.doesNotMatch(out, /--bearer_token_env_var/u, 'never the underscored flag spelling the real Codex CLI rejects')
+  // The bundled .mcp.json server is separately named "1f3d9" (hosted-chat
+  // browser sign-in) -- the printed commands above must never collide with
+  // it under the same server name.
+  assert.match(out, /bundles?[\s\S]{0,80}`?1f3d9`?/iu, 'names the distinction from the bundled `1f3d9` connector')
   assertNoSecretLeaked(result, 'connect.mjs')
 })
 
@@ -80,10 +204,10 @@ test('setup.mjs prints the same corrected MCP connector command shape, on one li
     assert.ok(claudeLine, 'the Claude Code command line is present')
     assert.match(
       claudeLine,
-      /^\s*claude mcp add --transport http 1f3d9 https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
+      /^\s*claude mcp add --transport http 1f3d9-key https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
     )
     assert.doesNotMatch(claudeLine, /\\\s*$/u, 'the line never ends with a line-continuation backslash')
-    assert.match(out, /codex mcp add 1f3d9 --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
+    assert.match(out, /codex mcp add 1f3d9-key --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
     assert.doesNotMatch(out, /--bearer_token_env_var/u)
     assertNoSecretLeaked(result, 'setup.mjs (repair branch)')
   } finally {
@@ -137,11 +261,11 @@ test('setup.mjs: human approval needs two real passes -- a bare or fabricated --
 
     // A fabricated token -- something an unattended loop might try to guess
     // or construct without ever having seen a real refusal -- is refused
-    // exactly like no token at all. This ALSO mints a fresh nonce (every
-    // refusal does, so each failed attempt gets its own honest next-step
-    // token rather than silently reusing a stale one) -- so the token this
-    // refusal itself prints, not firstPass's now-superseded one, is what the
-    // real second pass below must use.
+    // exactly like no token at all. Unlike the no-token case, this does NOT
+    // mint a fresh nonce: a value WAS supplied for the pending handle/class,
+    // just the wrong one, so the outstanding nonce from firstPass stays
+    // alive and this refusal prints that SAME token back -- one wrong paste
+    // must never destroy a still-valid, still-unused token.
     const fabricated = await runNode(
       setupPath,
       ['--origin', stub.origin, '--handle', 'agent-one', '--client-class', 'coding_persistent', '--human-approved', 'a'.repeat(32)],
@@ -150,7 +274,12 @@ test('setup.mjs: human approval needs two real passes -- a bare or fabricated --
     assert.notEqual(fabricated.status, 0, 'a fabricated token is refused')
     assert.equal(stub.residents.size, 0)
     const token = extractApprovalToken(fabricated.stderr)
-    assert.ok(token, 'this refusal too prints the exact second command, with a freshly derived token')
+    assert.ok(token, 'this refusal too prints the exact second command, with the still-pending token')
+    assert.equal(
+      token,
+      extractApprovalToken(firstPass.stderr),
+      'a fabricated/wrong token never re-mints and so never destroys the token firstPass already printed',
+    )
 
     const secondPass = await runNode(
       setupPath,

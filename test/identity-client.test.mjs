@@ -44,13 +44,13 @@ test('recover begin refuses a bare --recovery-code flag', () => {
 })
 
 test('register refuses an invalid client_class before any network call', () => {
-  const result = runCli(['register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'x', '--client-class', 'hosted_browser', '--human-approved'])
+  const result = runCli(['register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'test-agent', '--client-class', 'hosted_browser', '--human-approved'])
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /client-class must be coding_persistent or coding_ephemeral/u)
 })
 
 test('register refuses to proceed without human approval on a non-interactive stdin', () => {
-  const result = runCli(['register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'x', '--client-class', 'coding_persistent'], '')
+  const result = runCli(['register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'test-agent', '--client-class', 'coding_persistent'], '')
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /needs human approval/u)
 })
@@ -200,7 +200,7 @@ test('identity-client.mjs never follows a redirect from the (allowed) origin to 
     // comment in test/helpers/run-identity-cli.mjs describes.
     const result = await runNode(identityClientPath, [
       'register', '--origin', redirecting.origin,
-      '--handle', 'x', '--client-class', 'coding_persistent', '--human-approved',
+      '--handle', 'test-agent', '--client-class', 'coding_persistent', '--human-approved',
     ])
     assert.notEqual(result.status, 0, 'register refuses rather than following the redirect')
     assert.equal(attackerHit, false, 'the redirect target never received any request at all')
