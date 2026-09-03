@@ -125,7 +125,7 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
 
 /**
  * `corruptHandle` (optional):
- * `{ rotateBegin, rotateConfirm, recoveryBegin, recoveryConfirm, recoveryGenerate }`,
+ * `{ registerStage, rotateBegin, rotateConfirm, recoveryBegin, recoveryConfirm, recoveryGenerate }`,
  * each an optional replacement handle string. When set, the matching door
  * response returns that string as `handle` instead of the real resident's
  * handle -- simulating a compromised or misbehaving server answering with a
@@ -155,6 +155,12 @@ export async function startStubCityServer({
   const pendingRegistrations = new Map() // stage_token -> { handle, resident_key, recovery_codes, client_class }
   const pendingRotations = new Map() // stage_token -> { handle, resident_key }
   const pendingRecoveries = new Map() // stage_token -> { handle, resident_key }
+  // Every rotate/recovery-begin stage_token ever issued, kept even after
+  // the pending entry above is deleted (by 'cancel' or 'confirm') -- so a
+  // test can find the exact token a run actually used and try a confirm
+  // against it AFTER the run finishes, proving the stage is genuinely gone
+  // server-side rather than only checking the pending Map's size.
+  const issuedStageTokens = { rotate: [], recovery: [] }
   let confirmBarrierWaiters = []
   let confirmBarrierTimer = null
   // Set only while holdRecoveryGenerateUntilRotateConfirms is configured --
@@ -195,6 +201,17 @@ export async function startStubCityServer({
             if (modelError) return send(res, 400, { error: modelError, reason: 'invalid_identity' })
           }
           const stageToken = token()
+          // pendingRegistrations always keeps the REAL requested handle --
+          // confirm below uses this to create the actual resident under
+          // it, regardless of what the response line right below tells the
+          // caller. Only the RESPONSE's own `handle` field is corrupted
+          // (corruptHandle.registerStage), the same way rotateBegin/
+          // recoveryBegin corrupt only their own response above -- this
+          // simulates a server answering stage with a different, malformed
+          // handle than the one it actually staged, so a test can drive
+          // register()'s real client code and assert it refuses to use
+          // that answer as a local vault label before ever reading or
+          // writing the vault with it (round-3 finding 7).
           const entry = {
             handle: body.handle,
             resident_key: rootKey(),
@@ -202,7 +219,8 @@ export async function startStubCityServer({
             client_class: body.client_class,
           }
           pendingRegistrations.set(stageToken, entry)
-          return send(res, 200, { ...entry, stage_token: stageToken })
+          const responseHandle = corruptHandle?.registerStage ?? entry.handle
+          return send(res, 200, { ...entry, handle: responseHandle, stage_token: stageToken })
         }
         if (body.action === 'confirm') {
           const pending = pendingRegistrations.get(body.stage_token)
@@ -256,6 +274,7 @@ export async function startStubCityServer({
           if (!found) return send(res, 403, { error: 'credential_rejected' })
           const stageToken = token()
           pendingRotations.set(stageToken, { handle: found[0], resident_key: rootKey() })
+          issuedStageTokens.rotate.push(stageToken)
           const pending = pendingRotations.get(stageToken)
           const returnedHandle = corruptHandle?.rotateBegin ?? pending.handle
           return send(res, 200, { handle: returnedHandle, resident_key: pending.resident_key, stage_token: stageToken })
@@ -297,6 +316,16 @@ export async function startStubCityServer({
           }
           return send(res, 200, { handle: corruptHandle?.rotateConfirm ?? pending.handle })
         }
+        if (body.action === 'cancel') {
+          // cancelStage (identity-client.mjs) is best-effort and never
+          // inspects this response, so any 200 with a JSON body is enough
+          // -- what matters for a test to actually pin is that the pending
+          // stage is genuinely gone afterward: a later confirm against the
+          // same stage_token must be refused, the same way it would be
+          // once the real city's own stage naturally expires.
+          pendingRotations.delete(body.stage_token)
+          return send(res, 200, { ok: true })
+        }
         return send(res, 400, { error: `unknown rotate action "${body.action}"` })
       }
 
@@ -332,6 +361,7 @@ export async function startStubCityServer({
           if (!found) return send(res, 403, { error: 'credential_rejected' })
           const stageToken = token()
           pendingRecoveries.set(stageToken, { handle: found[0], resident_key: rootKey() })
+          issuedStageTokens.recovery.push(stageToken)
           const pending = pendingRecoveries.get(stageToken)
           const returnedHandle = corruptHandle?.recoveryBegin ?? pending.handle
           return send(res, 200, { handle: returnedHandle, resident_key: pending.resident_key, stage_token: stageToken })
@@ -345,6 +375,11 @@ export async function startStubCityServer({
           const resident = residents.get(pending.handle)
           residents.set(pending.handle, { ...resident, resident_key: pending.resident_key, recovery_codes: [] })
           return send(res, 200, { handle: corruptHandle?.recoveryConfirm ?? pending.handle })
+        }
+        if (body.action === 'cancel') {
+          // Same rationale as /api/rotate's own 'cancel' branch above.
+          pendingRecoveries.delete(body.stage_token)
+          return send(res, 200, { ok: true })
         }
         return send(res, 400, { error: `unknown recovery action "${body.action}"` })
       }
@@ -374,6 +409,16 @@ export async function startStubCityServer({
   return {
     origin: `https://localhost:${port}`,
     residents,
+    // Exposed so a test can prove a stage is genuinely gone SERVER-SIDE
+    // after a 'cancel' (or a confirm) -- not just that the client printed
+    // a claim that it cancelled. This runs in the same process as the
+    // test (an in-process HTTPS server, not a subprocess), so reading
+    // these Maps directly is honest inspection of the door's own state,
+    // the same way `residents` already is.
+    pendingRotations,
+    pendingRecoveries,
+    pendingRegistrations,
+    issuedStageTokens,
     close: () => new Promise(resolvePromise => server.close(resolvePromise)),
   }
 }

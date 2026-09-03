@@ -827,6 +827,31 @@ test('rotate refuses and cancels the stage when the rotate door returns a handle
 
     // The old key is still the live one server-side -- confirm never ran.
     assert.equal(stub.residents.get('agent-corrupt-one').resident_key, originalKey)
+
+    // The client's own "cancelled before confirming" claim, proven true
+    // SERVER-SIDE, not just asserted as a string: the pending stage this
+    // run created is genuinely gone (round-3 finding, stub's own 'cancel'
+    // branch), so a later confirm against that exact stage_token is
+    // refused the same way it would be after the real city's stage
+    // naturally expires -- not just "the client said so".
+    assert.equal(stub.pendingRotations.size, 0, 'the stub\'s own pending-rotation map has no entry left')
+    assert.equal(stub.issuedStageTokens.rotate.length, 1, 'exactly one rotate stage was ever created by this run')
+    const [rotateStageToken] = stub.issuedStageTokens.rotate
+    const previousTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+    try {
+      const confirmResponse = await fetch(`${stub.origin}/api/rotate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', stage_token: rotateStageToken, resident_key: originalKey }),
+      })
+      assert.equal(confirmResponse.status, 403, 'a confirm against the cancelled stage_token must be refused')
+      const confirmed = await confirmResponse.json()
+      assert.match(confirmed.error, /stage token or resident key mismatch/u)
+    } finally {
+      if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
+      else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting
+    }
   } finally {
     home.cleanup()
     await stub.close()
@@ -856,6 +881,30 @@ test(
 
       // The recovery code is still unused server-side -- confirm never ran.
       assert.deepEqual(stub.residents.get('agent-corrupt-two').recovery_codes, [originalCode])
+
+      // Same server-side proof as the rotate test above: the pending
+      // recovery stage this run created is genuinely gone, not just
+      // claimed gone by the client's own stderr text.
+      assert.equal(stub.pendingRecoveries.size, 0, 'the stub\'s own pending-recovery map has no entry left')
+      assert.equal(stub.issuedStageTokens.recovery.length, 1, 'exactly one recovery stage was ever created by this run')
+      const [recoveryStageToken] = stub.issuedStageTokens.recovery
+      const previousTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+      try {
+        const confirmResponse = await fetch(`${stub.origin}/api/recovery`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            action: 'confirm', stage_token: recoveryStageToken, resident_key: `1f3d9_sk_${'7'.repeat(48)}`,
+          }),
+        })
+        assert.equal(confirmResponse.status, 403, 'a confirm against the cancelled stage_token must be refused')
+        const confirmed = await confirmResponse.json()
+        assert.match(confirmed.error, /stage token or resident key mismatch/u)
+      } finally {
+        if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
+        else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting
+      }
     } finally {
       home.cleanup()
       await stub.close()
@@ -885,6 +934,47 @@ test(
       // Nothing was stored under the corrupted "AB" label.
       const badLabel = readSecret(stub.origin, 'AB', { homeDir: home.dir })
       assert.equal(badLabel.found, false)
+    } finally {
+      home.cleanup()
+      await stub.close()
+    }
+  },
+)
+
+// --- round-3 finding 7: register() must validate the STAGE response's ----
+// staged.handle -- with HANDLE_RE and the reserved "--pending-" rule --
+// right after the stage call, before ever using it as a vault label. Only
+// the CONFIRM response's handle was validated (see finalHandle's own check
+// above); a malformed or hostile staged.handle would otherwise reach
+// readSecret/pendingLabel/storeSecret unvalidated.
+
+test(
+  'register refuses to touch the vault, and cancels the stage, when the register door\'s STAGE response ' +
+  '(not the confirm response) returns a handle failing HANDLE_RE (finding 7)',
+  async () => {
+    const stub = await startStubCityServer({ corruptHandle: { registerStage: 'AB' } })
+    const home = makeTempHome('register-corrupt-stage-handle-')
+    try {
+      const result = await runNode(identityClientPath, [
+        'register', '--origin', stub.origin, '--handle', 'agent-corrupt-stage',
+        '--client-class', 'coding_persistent', '--human-approved',
+      ], { env: home.env })
+
+      assert.notEqual(result.status, 0, 'must refuse a stage-response handle the local naming rule rejects')
+      assert.match(result.stderr, /does not match the local handle rule/u)
+      assert.match(result.stderr, /staged registration was cancelled/u)
+      assertNoSecretLeaked(result, 'register corrupt stage handle')
+
+      // The city never confirmed anything server-side, and nothing was
+      // ever stored locally under either the real requested handle or the
+      // corrupted "AB" label -- the refusal must land BEFORE
+      // readSecret/storeSecret ever touch the vault with the unvalidated
+      // stage response, not merely before confirm.
+      assert.equal(stub.residents.size, 0, 'the city never confirmed a resident')
+      const corruptLabel = readSecret(stub.origin, 'AB', { homeDir: home.dir })
+      assert.equal(corruptLabel.found, false, 'nothing was ever stored under the corrupted stage-response label')
+      const realLabel = readSecret(stub.origin, 'agent-corrupt-stage', { homeDir: home.dir })
+      assert.equal(realLabel.found, false, 'nothing was ever stored under the originally requested handle either')
     } finally {
       home.cleanup()
       await stub.close()
