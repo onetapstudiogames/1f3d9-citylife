@@ -1,3 +1,5 @@
+import { assertAllowedOrigin } from './origin-guard.mjs'
+
 // A single, unauthenticated GET /api/official read, used only by setup.mjs's
 // human-approval gate: before spending the single-use approval nonce (pass
 // 2 -- see setup.mjs's own header comment on what that token is and is
@@ -16,12 +18,25 @@
 // as `{ ok: false }` rather than treated as "doors enabled" -- the caller
 // must only ever refuse on an EXPLICIT `doorsEnabled === false`, never on a
 // failed or inconclusive read (see setup.mjs's own call site).
+//
+// Runs its OWN assertAllowedOrigin check (not just trusting a caller to
+// have already run one) -- the same discipline probeMe (identity-probe.mjs)
+// applies to GET /api/me, so this stays a second, self-contained direct-
+// fetch site rather than one whose safety depends entirely on setup.mjs
+// happening to validate `origin` first. `allowOrigin` mirrors probeMe's own
+// parameter of the same name.
 
 const DEFAULT_TIMEOUT_MS = 10_000
 
-export async function readCodingDoorsEnabled(origin, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export async function readCodingDoorsEnabled(origin, { timeoutMs = DEFAULT_TIMEOUT_MS, allowOrigin } = {}) {
+  let safeOrigin
   try {
-    const response = await fetch(`${origin}/api/official`, {
+    safeOrigin = assertAllowedOrigin(origin, { allowOrigin })
+  } catch (error) {
+    return { ok: false, error: error.message }
+  }
+  try {
+    const response = await fetch(`${safeOrigin}/api/official`, {
       method: 'GET',
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(timeoutMs),
