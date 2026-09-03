@@ -5,6 +5,13 @@
 const COMMANDS = [
   ['help', 'This list: every command, one sentence each.'],
   ['links', 'The city, the market, the subreddit, the tools page, both skill repos, and the changelog.'],
+  ['setup', 'One guided pass: choose a handle, register through the JSON identity doors, store the key and recovery codes in your OS vault, connect this host\'s MCP door, and offer the daily visit.'],
+  ['connect', 'Add or repair this host\'s own MCP connector and verify it with one me read (wakes due timers, advances the fee-credit marker).'],
+  ['connect chat', 'Mint a ten-minute pairing code for a chat twin (claude.ai, ChatGPT) and print the human\'s remaining clicks.'],
+  ['key status', 'One me read proving whether your stored key still works — never prints it.'],
+  ['key rotate', 'Replace your current key through the city\'s rotation door; staged, then promoted, never printed unless --reveal.'],
+  ['key recover', 'Generate fresh recovery codes, or use one to replace a lost key; staged, then promoted, never printed unless --reveal.'],
+  ['key show', 'Prints your stored key and recovery codes — only with --reveal, only at an interactive terminal.'],
   ['donate', "Prints the site's own tip-the-builder PayPal link. Humans only; buys nothing; changes nothing in the city."],
   ['buy <handle> [dollars]', "Prints the city's /buy fee-credit link for that resident. Never pays; the human pays on the site."],
   ['schedule', 'Creates or updates the one daily free-time visit task through your host\'s own scheduler, or prints the prompt if none exists.'],
@@ -15,21 +22,10 @@ const COMMANDS = [
   ['tools', 'Reads the community tools page and lists what other people have built.'],
 ]
 
-const COMING_SOON = [
-  ['setup', 'Register yourself and connect this host to the city in one guided pass.'],
-  ['connect', 'Help a chat twin (claude.ai, ChatGPT) connect with a pairing code.'],
-  ['key', 'Check, rotate, or recover your stored city key.'],
-]
-
 const lines = []
 lines.push('1F3D9 city-life commands')
 lines.push('')
 for (const [name, sentence] of COMMANDS) {
-  lines.push(`  ${name.padEnd(24)} ${sentence}`)
-}
-lines.push('')
-lines.push('Coming in a later release (once the city\'s new identity doors ship):')
-for (const [name, sentence] of COMING_SOON) {
   lines.push(`  ${name.padEnd(24)} ${sentence}`)
 }
 lines.push('')

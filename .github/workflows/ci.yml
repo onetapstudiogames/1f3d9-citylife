@@ -10,8 +10,12 @@ permissions:
   contents: read
 
 jobs:
-  checks:
-    runs-on: ubuntu-latest
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Check out the source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -23,8 +27,42 @@ jobs:
         with:
           node-version: 24
       - name: Run tests
+        if: matrix.os != 'windows-latest'
         run: npm test
         env:
           SKILL_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           REQUIRE_RELEASE_BASE: "1"
           REQUIRE_LIVE_TRUTH: "1"
+      # The full suite's identity-command tests each shell out to a fresh
+      # powershell.exe process per vault read/write, and that process pays a
+      # fresh Add-Type (C#) compilation every time -- observed at ~15m30s on
+      # this leg versus ~11s on ubuntu-latest, an ~85x cost increase on every
+      # PR and push to main (see CHANGELOG 1.5.0 / review finding 16). The
+      # real Win32 CredWrite/CredRead path is still exercised for real here,
+      # by test/vault-roundtrip-windows.test.mjs, plus the packaging/content
+      # checks in test/usefulness-and-packaging.test.mjs; the full suite
+      # (including every identity-command subprocess test) still runs in
+      # full on ubuntu-latest above.
+      - name: "Run tests (Windows: vault + packaging only)"
+        if: matrix.os == 'windows-latest'
+        run: node scripts/run-tests-with-home-guard.mjs test/vault-roundtrip-windows.test.mjs test/usefulness-and-packaging.test.mjs
+        env:
+          SKILL_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          REQUIRE_RELEASE_BASE: "1"
+          REQUIRE_LIVE_TRUTH: "1"
+
+  # Aggregator: this is the job name branch protection requires ("checks").
+  # It must keep publishing that exact context regardless of how the
+  # underlying test matrix changes, so renaming or adding matrix legs never
+  # silently drops the required status check on main.
+  checks:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every matrix leg to have succeeded
+        run: |
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "One or more matrix legs did not succeed: ${{ needs.test.result }}"
+            exit 1
+          fi

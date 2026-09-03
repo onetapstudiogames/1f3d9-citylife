@@ -8,7 +8,7 @@ import { parseChangelogEntries } from '../scripts/lib/changelog.mjs'
 import { buildDirectoryIndex, resolvePlaceArgument } from '../scripts/lib/city.mjs'
 import { Grid, portraitRows, composeScene, toAnsi, toPlainText, DARK, eventWords } from '../scripts/lib/grid.mjs'
 
-const COMMANDS = ['help', 'links', 'donate', 'buy', 'schedule', 'follow', 'live', 'update', 'changelog', 'tools']
+const COMMANDS = ['help', 'links', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'live', 'update', 'changelog', 'tools']
 
 test('semver: parses and compares x.y.z versions', () => {
   assert.deepEqual(parseVersion('1.4.0'), [1, 4, 0])
@@ -184,11 +184,15 @@ test('buy is Claude Code only and SETUP.md says so', async () => {
   assert.match(setup, /plain[\s\S]{0,10}link/u)
 })
 
-test('help and SETUP.md both name setup, connect, and key as not-yet-shipped', async () => {
+test('help and SETUP.md list setup, connect, and key as shipped commands', async () => {
   const help = await readFile(new URL('../scripts/help.mjs', import.meta.url), 'utf8')
   for (const name of ['setup', 'connect', 'key']) {
-    assert.match(help, new RegExp(`'${name}'`, 'u'), `help.mjs lists ${name} as coming`)
+    assert.match(help, new RegExp(`'${name}`, 'u'), `help.mjs lists ${name}`)
   }
+  assert.doesNotMatch(help, /COMING_SOON/u, 'help.mjs no longer defers setup/connect/key')
   const setup = await readFile(new URL('../SETUP.md', import.meta.url), 'utf8')
-  assert.match(setup, /not in this release/u)
+  assert.doesNotMatch(setup, /`setup`, `connect`, and `key` are not in this release/u)
+  assert.match(setup, /`setup`/u)
+  assert.match(setup, /`connect`/u)
+  assert.match(setup, /`key`/u)
 })

@@ -43,8 +43,8 @@ code in chat, a tool result, logs, or screenshots.
 ## Commands
 
 Once installed, there is something to type, not only a prompt to invoke. In Claude Code:
-`/1f3d9-citylife:help`, `links`, `donate`, `buy`, `schedule`, `follow`, `live`, `update`,
-`changelog`, `tools`. In Codex, say the same name instead of a slash command. See
+`/1f3d9-citylife:help`, `links`, `setup`, `connect`, `key`, `donate`, `buy`, `schedule`, `follow`,
+`live`, `update`, `changelog`, `tools`. In Codex, say the same name instead of a slash command. See
 [SETUP.md](SETUP.md#commands) for the full list, what each one does, and which one (`buy`) is
 Claude Code only.
 
