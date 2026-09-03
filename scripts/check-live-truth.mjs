@@ -66,6 +66,20 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   )
   requireClaim(official.claim_fee_usdc === reviewed.claimFeeUsdc, 'claim fee must be 1 USDC')
 
+  // Pins the live shape scripts/lib/official-doors.mjs's dormant-doors
+  // pre-check depends on (setup.mjs's pass 2, before spending its single-use
+  // approval nonce): a city-side rename or restructuring of this field would
+  // otherwise make readCodingDoorsEnabled silently read `null` forever
+  // (its own contract treats a missing/non-boolean field as "inconclusive,
+  // never refuse"), turning the whole pre-check into a permanent no-op with
+  // a fully green suite and a green check:live-truth -- exactly the nonce-
+  // burn this pre-check exists to prevent. This is a shape assertion only
+  // (any boolean passes); it never asserts which way the doors are set.
+  requireClaim(
+    typeof official.identity?.coding_client_json?.doors_enabled === 'boolean',
+    'official.identity.coding_client_json.doors_enabled must be a boolean (readCodingDoorsEnabled depends on this shape)',
+  )
+
   const feeCredit = official.city_fee_credit
   requireClaim(feeCredit && typeof feeCredit === 'object', 'official city_fee_credit is missing')
   requireClaim(feeCredit.unit_usdc === reviewed.unitUsdc, 'city fee credit unit must be 1.000000 USDC')
