@@ -378,7 +378,11 @@ function vaultIndexEntriesToMap(entries) {
     if (typeof entry === 'string') {
       map.set(entry, { staging: undefined })
     } else if (entry && typeof entry === 'object' && typeof entry.label === 'string') {
-      map.set(entry.label, { staging: entry.staging === true })
+      // A malformed or absent `staging` field must stay unknown, not be
+      // read as a definite "not staging" -- only a real boolean this
+      // version itself wrote is trustworthy either way (see
+      // vaultIndexEntriesToMap's own comment above and isStagingLabel).
+      map.set(entry.label, { staging: typeof entry.staging === 'boolean' ? entry.staging : undefined })
     }
   }
   return map
@@ -506,7 +510,16 @@ function updateVaultIndex(origin, label, homeDir, mutate) {
       const before = new Map(labels)
       mutate(labels, label)
       if (labelMapsEqual(labels, before)) return
-      index[origin] = [...labels].map(([entryLabel, meta]) => ({ label: entryLabel, staging: meta.staging === true }))
+      // Preserve unknown-ness on rewrite: a label whose staging status this
+      // version never learned (a legacy bare-string entry this run did not
+      // itself touch with a boolean) must be written back as the same bare
+      // string, not upgraded to `staging: false` -- doing so would assert a
+      // fact this version never actually observed. Only a label this
+      // version itself set `{ staging }` for (via storeSecret's own boolean
+      // above) gets the object form.
+      index[origin] = [...labels].map(([entryLabel, meta]) =>
+        meta.staging === undefined ? entryLabel : { label: entryLabel, staging: meta.staging === true },
+      )
       writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 })
     })
   } catch {
@@ -676,6 +689,11 @@ function storeSecret(origin, label, payload, deps = {}) {
     }
     throw secretFreeStorageError('local credentials file', filePath)
   }
+  // Recorded in the same non-secret vault index the win32/darwin backends
+  // use, so listVaultLabels below can tell a staging entry from a real
+  // resident without ever opening or parsing a credentials bundle -- see
+  // the "Non-secret vault index" comment above.
+  updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.set(thisLabel, { staging }))
   return `local file ${filePath} (mode ${observedMode.toString(8).padStart(3, '0')})`
 }
 
@@ -1016,6 +1034,7 @@ function deleteSecret(origin, label, deps = {}) {
   } catch {
     // Best effort, same as above.
   }
+  updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.delete(thisLabel))
 }
 
 /**
@@ -1101,24 +1120,17 @@ function listVaultLabels(origin, deps = {}) {
   const labels = entries
     .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
     .map(name => name.slice(prefix.length, -'.json'.length))
-  // The file backend can decode the bundle directly, so it is preferred
-  // over the label-text guess here too -- reading the stored `kind` is no
-  // more expensive than the readdir/JSON.parse this already does, and it
-  // is the same distinction storeSecret's index entry encodes for the
-  // win32/darwin backends above.
-  return labels.filter(label => {
-    try {
-      const raw = (deps.readFileSync ?? readFileSync)(credentialsFilePath(origin, label, deps.homeDir), 'utf8')
-      const parsed = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object' && typeof parsed.kind === 'string') {
-        return parsed.kind !== 'staging'
-      }
-    } catch {
-      // Unreadable or undecodable -- fall back to the suffix heuristic below,
-      // same as an entry listVaultLabels cannot otherwise account for.
-    }
-    return !isPendingLabel(label)
-  })
+  // Same non-secret vault index the win32/darwin backends read above --
+  // storeSecret/deleteSecret now maintain it for the file backend too, so
+  // this enumeration stays label-only and never opens or parses a
+  // credentials bundle just to answer "does this exist", matching the
+  // "Non-secret vault index" comment's promise. A label this version never
+  // indexed (a v1.5.0-era bundle predating this marker, or an index entry
+  // lost to a crash) has no entry here and falls back to the
+  // isPendingLabel suffix guess via isStagingLabel, same as win32/darwin.
+  const index = readVaultIndex(deps.homeDir)
+  const indexMap = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
+  return labels.filter(label => !isStagingLabel(label, indexMap))
 }
 
 // --- HTTP -----------------------------------------------------------------
@@ -1597,5 +1609,5 @@ if (isMainModule) {
 // uses this import path itself, so importing this module never runs main().
 export {
   storeSecret, readSecret, deleteSecret, listVaultLabels, promoteReplacementKey, SecretReadFailure, shouldReveal,
-  HANDLE_RE,
+  HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE,
 }

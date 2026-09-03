@@ -12,6 +12,13 @@ export interface StoreSecretDeps {
    * and the plain-file fallback live.
    */
   homeDir?: string
+  /**
+   * Injected file reader used by readSecret's plain-file backend (readFileSync
+   * by default). Not used by listVaultLabels, which reads only the non-secret
+   * vault index -- see the "Non-secret vault index" comment in
+   * identity-client.mjs.
+   */
+  readFileSync?: (path: string, encoding: string) => string
 }
 
 export declare function storeSecret(
