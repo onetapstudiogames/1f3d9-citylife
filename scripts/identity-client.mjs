@@ -374,15 +374,49 @@ function withFileLock(lockPath, fn) {
   }
 }
 
-/** Best effort: the index is a heuristic, so a write failure here is never fatal. */
+function setsEqual(a, b) {
+  if (a.size !== b.size) return false
+  for (const value of a) if (!b.has(value)) return false
+  return true
+}
+
+/**
+ * Best effort: the index is a heuristic, so a write failure here is never
+ * fatal. Also a no-op, on purpose, when `mutate` would not actually change
+ * anything -- most commonly deleteSecret's own cleanup of a label this
+ * particular homeDir's index never held in the first place (a mismatched
+ * homeDir between the storeSecret and deleteSecret call that wrote/read
+ * it, or simply deleting something already gone). Without this check,
+ * every such call would still create ~/.1f3d9 and (re)write
+ * vault-index.json purely to record the same empty state it already had --
+ * which is exactly how a caller that forgets to pass the SAME `homeDir` a
+ * test used elsewhere quietly starts writing into the operator's real
+ * home. This is a defense-in-depth backstop, not a substitute for passing
+ * `homeDir` correctly at every call site -- see
+ * test/*.test.mjs and scripts/run-tests-with-home-guard.mjs.
+ *
+ * A cheap, unlocked peek decides first whether anything would change at
+ * all; only when it would does this go on to create the directory, take
+ * the lock, and re-check under it (a concurrent writer could have changed
+ * things between the peek and the lock) before actually writing.
+ */
 function updateVaultIndex(origin, label, homeDir, mutate) {
   try {
     const path = vaultIndexPath(homeDir)
+
+    const peekIndex = readVaultIndex(homeDir)
+    const peekLabels = new Set(Array.isArray(peekIndex[origin]) ? peekIndex[origin] : [])
+    const probeLabels = new Set(peekLabels)
+    mutate(probeLabels, label)
+    if (setsEqual(probeLabels, peekLabels)) return
+
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     withFileLock(`${path}.lock`, () => {
       const index = readVaultIndex(homeDir)
       const labels = new Set(Array.isArray(index[origin]) ? index[origin] : [])
+      const before = new Set(labels)
       mutate(labels, label)
+      if (setsEqual(labels, before)) return
       index[origin] = [...labels]
       writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 })
     })
@@ -693,12 +727,42 @@ $bytes = New-Object byte[] $cred.CredentialBlobSize
 }
 
 /**
- * Shared by rotate()/recoverBegin() after their server-side confirm has
- * already succeeded (so the replacement resident_key is already the live
- * one on the server -- only where it lives in the local vault is still being
- * settled here). Reads back the live entry to carry forward fields the
- * replacement key alone does not carry (via `mergeFields`), then overwrites
- * that live entry and deletes the staging copy.
+ * Lock path for promoteReplacementKey's critical section below, scoped to
+ * one (origin, handle) pair -- deliberately not to the caller (register,
+ * rotate, recoverBegin) or to the specific staging label, since what this
+ * must serialize against is any OTHER promotion racing for the same live
+ * vault entry on this host, whichever command started it. Lives in the
+ * same ~/.1f3d9 directory as vault-index.json and reuses the exact same
+ * withFileLock mechanism (short-retry, stale-aware) defined above.
+ */
+function promoteLockPath(origin, handle, homeDir) {
+  const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
+  const safeHandle = handle.replace(/[^a-z0-9._-]/giu, '_')
+  return join(homeDir ?? homedir(), '.1f3d9', `promote-lock__${safeOrigin}__${safeHandle}.lock`)
+}
+
+/**
+ * Shared by register()/rotate()/recoverBegin() after their server-side
+ * confirm has already succeeded (so the replacement resident_key is
+ * already the live one on the server -- only where it lives in the local
+ * vault is still being settled here). Reads back the live entry to carry
+ * forward fields the replacement key alone does not carry (via
+ * `mergeFields`), then overwrites that live entry and deletes the staging
+ * copy.
+ *
+ * The read, the refuseIfPresent re-check, and the write all run inside one
+ * withFileLock critical section keyed by (origin, handle) (see
+ * promoteLockPath above): two promotions for the SAME handle on THIS host
+ * -- two concurrent `register` invocations racing the same requested
+ * handle is the case that matters in practice -- are serialized end to
+ * end, so the second one's read can never observe the stale "not found"
+ * the first one already read past. This closes the same-HOST race
+ * completely; it closes nothing across hosts (two different machines
+ * racing the same handle are decided by the city's own confirm, not by
+ * anything this client does locally -- see register()'s own comment).
+ * `refuseIfPresent` below is what actually decides who wins on a single
+ * host once that ordering is fixed; the lock is what makes the ordering
+ * trustworthy to decide from in the first place.
  *
  * If the read-back reports the live entry exists but cannot be decoded
  * (SecretReadFailure), this refuses to promote: the live entry is left
@@ -723,58 +787,81 @@ $bytes = New-Object byte[] $cred.CredentialBlobSize
  * entry for the SAME already-owned handle) register() must never silently
  * overwrite a DIFFERENT registration that came to exist for this handle
  * after register()'s own pre-flight check ran and before this, its last
- * chance to check again immediately before the write. Same "staging copy
- * kept, caller-worded message" shape as the SecretReadFailure case above.
+ * chance to check again immediately before the write -- now made safe to
+ * trust by the lock above, rather than merely narrowing the window the way
+ * an unlocked re-check would. Same "staging copy kept, caller-worded
+ * message" shape as the SecretReadFailure case above.
  */
 function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeFields, deps = {}, { refuseIfPresent = false } = {}) {
-  let previous
-  try {
-    previous = readSecret(origin, handle, deps)
-  } catch (error) {
+  const lockPath = promoteLockPath(origin, handle, deps.homeDir)
+  mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 })
+  const result = withFileLock(lockPath, () => {
+    let previous
+    try {
+      previous = readSecret(origin, handle, deps)
+    } catch (error) {
+      throw new Error(
+        `refusing to overwrite the existing vault entry for "${handle}": ${error.message}. ` +
+        'The already-confirmed replacement key was NOT lost -- it is still stored under the ' +
+        `staging label "${stagingLabel}". Resolve the unreadable entry, read the replacement key back ` +
+        `from "${stagingLabel}", then store it under "${handle}" yourself.`,
+      )
+    }
+    if (refuseIfPresent && previous.found) {
+      // With the lock above held for this entire read-check-write section,
+      // this re-check is no longer merely narrowing a TOCTOU window -- it
+      // is the actual, trustworthy last word on whether this handle is
+      // free on THIS host: no other promoteReplacementKey call for the
+      // same (origin, handle) can be reading or writing concurrently while
+      // this one holds the lock. `previous` above was read inside that
+      // same locked section, immediately before the write below.
+      throw new Error(
+        `refusing to overwrite the vault entry for "${handle}" that now exists: it was not there when this ` +
+        'registration started, so a concurrent run on this host must have won the race for this handle. The ' +
+        `confirmed resident key from THIS registration was NOT lost -- it is still stored under the staging ` +
+        `label "${stagingLabel}" and nowhere else. Work out which of the two entries is the one you actually ` +
+        `want (for example \`key status --handle ${handle}\`), then store the key from "${stagingLabel}" ` +
+        `under "${handle}" yourself if it turns out to be the one that should have won.`,
+      )
+    }
+    let location
+    try {
+      location = storeSecret(origin, handle, {
+        kind: 'resident',
+        handle,
+        ...mergeFields(previous.found ? previous.value : null),
+        resident_key: residentKey,
+        origin,
+        stored_at: new Date().toISOString(),
+      }, deps)
+    } catch (error) {
+      throw new Error(
+        `the rotation/recovery already CONFIRMED, so the old key for "${handle}" no longer works: ${error.message}. ` +
+        `The replacement key is stored under "${stagingLabel}" and nowhere else -- read it back from ` +
+        `"${stagingLabel}", then store it under "${handle}" yourself before doing anything else.`,
+      )
+    }
+    deleteSecret(origin, stagingLabel, deps)
+    return location
+  })
+  if (result === undefined) {
+    // withFileLock returns undefined, without ever running the critical
+    // section above, only when it could not acquire the lock within its
+    // own wait budget -- meaning another promoteReplacementKey call for
+    // this exact (origin, handle) is apparently still running on this
+    // host. Silently returning undefined here (as a caller-visible
+    // "location") would be worse than the race this lock exists to close:
+    // it would report success without ever having read, checked, or
+    // written anything.
     throw new Error(
-      `refusing to overwrite the existing vault entry for "${handle}": ${error.message}. ` +
-      'The already-confirmed replacement key was NOT lost -- it is still stored under the ' +
-      `staging label "${stagingLabel}". Resolve the unreadable entry, read the replacement key back ` +
-      `from "${stagingLabel}", then store it under "${handle}" yourself.`,
+      `could not acquire the per-handle vault lock for "${handle}" on this host within ` +
+      `${VAULT_INDEX_LOCK_MAX_WAIT_MS}ms: another registration, rotation, or recovery for the same handle ` +
+      'appears to still be running concurrently on this host. The already-confirmed replacement key was NOT ' +
+      `lost -- it is still stored under the staging label "${stagingLabel}" and nowhere else. Retry once the ` +
+      `other run finishes, or read the key back from "${stagingLabel}" and store it under "${handle}" yourself.`,
     )
   }
-  if (refuseIfPresent && previous.found) {
-    // The re-check that closes the TOCTOU window the caller's own earlier
-    // check cannot close on its own: that check can only ever prove
-    // non-existence AT THE MOMENT it ran, before the network round trips
-    // (stage, confirm) that follow it -- a concurrent run can create a live
-    // entry for this exact handle in the time those take. `previous` above
-    // was just read, immediately before the write below, inside this same
-    // function call, so this is the last possible check before the write
-    // that would otherwise destroy whatever now exists.
-    throw new Error(
-      `refusing to overwrite the vault entry for "${handle}" that now exists: it was not there when this ` +
-      'registration started, so a concurrent run must have won the race for this handle. The confirmed ' +
-      `resident key from THIS registration was NOT lost -- it is still stored under the staging label ` +
-      `"${stagingLabel}" and nowhere else. Work out which of the two entries is the one you actually want ` +
-      `(for example \`key status --handle ${handle}\`), then store the key from "${stagingLabel}" under ` +
-      `"${handle}" yourself if it turns out to be the one that should have won.`,
-    )
-  }
-  let location
-  try {
-    location = storeSecret(origin, handle, {
-      kind: 'resident',
-      handle,
-      ...mergeFields(previous.found ? previous.value : null),
-      resident_key: residentKey,
-      origin,
-      stored_at: new Date().toISOString(),
-    }, deps)
-  } catch (error) {
-    throw new Error(
-      `the rotation/recovery already CONFIRMED, so the old key for "${handle}" no longer works: ${error.message}. ` +
-      `The replacement key is stored under "${stagingLabel}" and nowhere else -- read it back from ` +
-      `"${stagingLabel}", then store it under "${handle}" yourself before doing anything else.`,
-    )
-  }
-  deleteSecret(origin, stagingLabel, deps)
-  return location
+  return result
 }
 
 /** Removes a stored secret bundle. Best effort: a missing entry is not an error. */
