@@ -58,7 +58,9 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
-import { readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE } from './identity-client.mjs'
+import {
+  readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE,
+} from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 function parseArgs(argv) {
@@ -305,6 +307,20 @@ if (!HANDLE_RE.test(handle)) {
   process.exit()
 }
 
+// Same reservation identity-client.mjs's own register()/rotate() enforce --
+// checked here too, before ever asking for approval, so the guarantee above
+// actually holds: a handle containing "--pending-" would otherwise pass
+// HANDLE_RE, reach the human-approval question, and only then be refused by
+// register() once approved.
+if (RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
+  console.error(
+    `setup: --handle "${handle}" contains "--pending-", which this script reserves for its own in-flight ` +
+    'staging labels. Choose a handle that does not contain that sequence, then re-run.',
+  )
+  process.exitCode = 1
+  process.exit()
+}
+
 // Before ever attempting to register, check whether this host's vault
 // already has a WORKING key for the exact handle requested. A lost or
 // truncated setup-state.json must never turn a resident that already exists
@@ -360,7 +376,10 @@ if (!newIdentity) {
       `label (${otherLabels.join(', ')}). A lost or never-written setup-state.json must never turn an ` +
       'existing resident into a second, permanent, unrecoverable one. If one of those is really this ' +
       'agent\'s own entry under a stale or normalized label, pass --handle <that label> instead. Only ' +
-      'pass --new-identity if a genuinely new resident, distinct from all of those, is really intended.',
+      'pass --new-identity if a genuinely new resident, distinct from all of those, is really intended. ' +
+      '(On Windows, a label shaped like "<handle>--pending-<kind>" listed above could be either a ' +
+      'genuine abandoned staging copy or a real resident whose non-secret vault-index entry was lost -- ' +
+      'listVaultLabels cannot always tell the two apart from a Credential Manager scrape alone.)',
     )
     process.exitCode = 1
     process.exit()
