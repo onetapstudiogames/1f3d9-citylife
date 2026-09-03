@@ -96,6 +96,41 @@ const HANDLE_RE = /^[a-z0-9][a-z0-9-]{2,31}$/u
 // what the city itself would otherwise accept.
 const RESERVED_HANDLE_SUBSTRING_RE = /--pending-/u
 
+// Mirrors the city's own /api/register model-label validation (see
+// src/identity-api.ts's optionalPublicTextField, which calls src/input.ts's
+// publicText({ maximumCharacters: 120, allowEmpty: true }) -- the same
+// UNSAFE_PUBLIC_TEXT character class that function tests against): the same
+// 120-code-point ceiling (counted the same way, by code point via
+// Array.from, not UTF-16 code unit, so a surrogate pair counts once), and
+// the same rejection of ASCII/Unicode control characters and bidi-override
+// marks. Checked locally, before ever spending setup.mjs's two-pass
+// human-approval round trip on a --model the door was always going to
+// refuse -- a --model the city was always going to reject would otherwise
+// burn that round trip for nothing (a fresh --human-approved token would be
+// required to try again). This is NOT a byte-for-byte port of publicText:
+// the server additionally rejects malformed/mojibake UTF-8 sequences and
+// credential-shaped text (src/input.ts's containsMalformedPublicText and
+// containsCredentialLikeInput); those stay checks of last resort that only
+// the server itself runs, and the city's own refusal remains authoritative
+// regardless of what this local check lets through.
+const MODEL_MAX_CODE_POINTS = 120
+const UNSAFE_MODEL_TEXT_RE =
+  /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uD800-\uDFFF\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/u
+
+/** Returns an error message string if `model` fails the city's own rule, or null if it is fine. */
+function validateModelLabel(model) {
+  if (!model) return null
+  if (Array.from(model).length > MODEL_MAX_CODE_POINTS) {
+    return `--model must be at most ${MODEL_MAX_CODE_POINTS} characters (counted by code point), matching ` +
+      `the city's own /api/register limit`
+  }
+  if (UNSAFE_MODEL_TEXT_RE.test(model)) {
+    return `--model must not contain control characters or bidi-override marks, matching the city's own ` +
+      '/api/register rule'
+  }
+  return null
+}
+
 // The one legal (letter-first) environment variable name used everywhere a
 // resident key is read from the host's own secret store -- by the printed
 // `claude mcp add` / `codex mcp add` commands (scripts/connect.mjs,
@@ -319,31 +354,120 @@ function isPendingLabel(label) {
   return /--pending-(?:rotation|recovery|registration(?:-[0-9a-f]+)?)$/u.test(label)
 }
 
+/**
+ * Matches ONLY the registration form of a staging label -- the one kind
+ * pendingLabel() gives a per-run random hex suffix, deliberately unlike the
+ * fixed `--pending-rotation`/`--pending-recovery` forms (see pendingLabel's
+ * own doc comment for why). Unlike isPendingLabel above, this is never a
+ * fallback heuristic layered under a metadata marker -- the suffix shape is
+ * exclusive to pendingLabel('registration'), and RESERVED_HANDLE_SUBSTRING_RE
+ * already stops any real handle from ever containing "--pending-" going
+ * forward, so a label matching this is authoritatively a registration
+ * staging entry, never a real resident's own chosen handle. Used by
+ * listVaultLabels below to surface exactly these labels (never rotation or
+ * recovery ones) back to setup.mjs's duplicate-identity guard -- see that
+ * property's own doc comment for why only the registration kind matters
+ * there.
+ */
+const REGISTRATION_STAGING_LABEL_RE = /^(.+)--pending-registration-[0-9a-f]+$/u
+
+/**
+ * Splits every label a vault enumeration found (BEFORE any staging filter)
+ * into `kept` (never any kind of staging label -- exactly what
+ * listVaultLabels has always returned) and `registrationStaging` (only the
+ * REGISTRATION-kind staging labels among the ones `kept` excludes; rotation
+ * and recovery staging labels are excluded from `kept` exactly as before,
+ * but never collected here).
+ *
+ * The registration kind gets this separate surfacing because it alone can
+ * strand an already-permanent resident: a register whose vault promotion
+ * fails (promoteReplacementKey.mjs -- a lock timeout, a CredWrite failure,
+ * an unreadable live entry) leaves the confirmed resident_key ONLY under
+ * this staging label while the resident it names is already permanent
+ * server-side (the city's own /api/register confirm already succeeded).
+ * setup.mjs's duplicate-identity guard must see that and refuse, rather
+ * than silently registering a second, permanent, unrecoverable resident
+ * under whatever different handle a later, state-lost run happens to
+ * choose. Rotation/recovery staging labels carry no equivalent risk: their
+ * live entry sits under the same handle the guard already checks against
+ * (rotate/recoverBegin never mint a fresh, not-yet-owned handle the way
+ * register does), so an abandoned one there is already covered.
+ *
+ * The suffix test alone is authoritative only where the index has nothing
+ * to say: it consults `indexMap` FIRST, with the same precedence
+ * isStagingLabel uses -- a label the index positively marks `staging:
+ * false` is real resident metadata, not a guess about what the label text
+ * looks like, and is routed to `kept` even when its shape matches
+ * REGISTRATION_STAGING_LABEL_RE (HANDLE_RE permits handles up to 32
+ * characters, long enough to collide with this suffix by coincidence, e.g.
+ * "abc--pending-registration-a"). Only when the index is silent about a
+ * label (no entry, or an entry with no boolean `staging`) does the suffix
+ * shape decide -- see isStagingLabel's own doc comment for why.
+ */
+function splitStagingLabels(labels, indexMap) {
+  const kept = []
+  const registrationStaging = []
+  for (const label of labels) {
+    const meta = indexMap.get(label)
+    const known = meta && typeof meta.staging === 'boolean'
+    if (REGISTRATION_STAGING_LABEL_RE.test(label) && (!known || meta.staging === true)) {
+      registrationStaging.push(label)
+      continue
+    }
+    if (!isStagingLabel(label, indexMap)) kept.push(label)
+  }
+  return { kept, registrationStaging }
+}
+
+/**
+ * Attaches `registrationStaging` to `kept` as a non-enumerable property --
+ * alongside it, not mixed into the array itself, so every existing caller
+ * of listVaultLabels (which only ever iterates/filters/maps the array of
+ * kept labels) sees no change at all, while setup.mjs's guard can read
+ * `allLabels.registrationStagingLabels` explicitly. Non-enumerable so
+ * `[...labels]`, `JSON.stringify(labels)`, and a `for...of` never surface it
+ * as if it were a label itself.
+ */
+function withRegistrationStagingLabels(kept, registrationStaging) {
+  Object.defineProperty(kept, 'registrationStagingLabels', {
+    value: registrationStaging, enumerable: false, writable: false, configurable: true,
+  })
+  return kept
+}
+
 // --- Non-secret vault index (macOS and Windows) -----------------------------
 //
-// macOS Keychain has no reliable, non-interactive way for this script to
-// enumerate every entry it owns: `security dump-keychain` prints every
-// stored secret in the user's whole login keychain, not just this plugin's
-// entries, so using it here to answer "does ANY entry already exist for
-// this origin" would mean reading (and having to filter through) secrets
-// this script has no business touching at all. Windows has a different
-// problem with the same shape: `cmdkey /list` is this script's only
-// non-interactive way to enumerate entries, but its output is localized --
-// on a non-English Windows install the literal "Target:" label this script
-// parses for never appears, so scraping it alone silently returns nothing,
-// language-dependently. Instead, storeSecret and deleteSecret below keep a
-// small non-secret index file -- ~/.1f3d9/vault-index.json, labels plus a
-// `staging` marker, never a key or recovery code -- that setup.mjs's
-// duplicate-identity guard reads through listVaultLabels. It is a
-// heuristic, not a source of truth: it can go stale if an entry is removed
-// by some other tool (Keychain Access.app, Windows Credential Manager's own
-// UI, `security`/`cmdkey` by hand), and listVaultLabels below treats that as
-// fine to err toward, since the whole point is only ever to make setup ask
-// for --new-identity one time too many, never to silently register a real
-// duplicate resident. On win32, listVaultLabels unions this index with
-// whatever `cmdkey /list` scraping does find, rather than depending on the
-// index alone -- the index is best-effort too (a write failure here is
-// never fatal), so neither source alone is trusted as complete. The
+// Neither macOS nor Windows has a fully reliable, non-interactive way for
+// this script to enumerate every vault entry it owns. On macOS, `security
+// dump-keychain` (metadata only -- deliberately never `-d`, which would
+// also decrypt and print every stored PASSWORD, not just service/account
+// names) lists every entry in the user's whole login keychain, not just
+// this plugin's -- so it has to be filtered to this plugin's own
+// `1f3d9:<origin>:` service prefix before it means anything, and it can
+// still fail outright (no `security` on PATH, a locked keychain). Windows
+// has a different problem with the same shape: `cmdkey /list` is this
+// script's only non-interactive way to enumerate entries, but its output is
+// localized -- on a non-English Windows install the literal "Target:" label
+// this script parses for never appears, so scraping it alone silently
+// returns nothing, language-dependently. Instead, storeSecret and
+// deleteSecret below keep a small non-secret index file --
+// ~/.1f3d9/vault-index.json, labels plus a `staging` marker, never a key or
+// recovery code -- that setup.mjs's duplicate-identity guard reads through
+// listVaultLabels. It is a heuristic, not a source of truth: it can go
+// stale if an entry is removed by some other tool (Keychain Access.app,
+// Windows Credential Manager's own UI, `security`/`cmdkey` by hand) --
+// listVaultLabels below treats that as fine to err toward -- but it can
+// also go MISSING ENTIRELY while the vault entries themselves are intact
+// (a reset HOME, a moved profile, a corrupted or deleted file), and on
+// macOS the index lived under that same HOME, so trusting it alone in that
+// exact scenario would make the duplicate-identity guard fail open right
+// where it matters most. listVaultLabels below therefore unions the index
+// with a real enumeration on every platform it can manage one for: on
+// win32, whatever `cmdkey /list` scraping finds; on darwin, whatever the
+// filtered `security dump-keychain` scan above finds. Neither source alone
+// is ever trusted as complete -- the whole point is only ever to make setup
+// ask for --new-identity one time too many, never to silently register a
+// real duplicate resident. The
 // `staging` marker on each entry is what listVaultLabels prefers over
 // isPendingLabel's label-text guess (see its own doc comment) -- it comes
 // from the bundle's own `kind` field, recorded here at write time so
@@ -1057,17 +1181,171 @@ function isStagingLabel(label, indexMap) {
 }
 
 /**
+ * Un-escapes one `security dump-keychain` attribute-value string: octal
+ * BYTE escapes (`\NNN`, three digits) and a handful of backslash-escaped
+ * literal characters (`\"`, `\\`). `security` emits `\NNN` per raw UTF-8
+ * BYTE of the underlying string, not per UTF-16 code unit -- a non-ASCII
+ * character like "é" (U+00E9, UTF-8 bytes 0xC3 0xA9) prints as two
+ * consecutive escapes, `\303\251`. Decoding each escape independently with
+ * `String.fromCharCode` (treating the octal value as a whole code point)
+ * would turn that into "Ã©" -- mojibake, not "é" -- because it builds two
+ * separate UTF-16 characters from what is actually one multi-byte UTF-8
+ * sequence. This instead collects every byte (decoded octal escapes AND
+ * the raw UTF-8 bytes of any literal/other-escaped text in between) into
+ * one buffer and decodes the WHOLE thing as UTF-8 once at the end, so a
+ * multi-byte character split across consecutive `\NNN` triplets round-trips
+ * correctly. Any other `\X` sequence is left as `X` -- this plugin's own
+ * service names are plain ASCII (see vaultTarget), so nothing beyond this
+ * ever needs to round-trip through here in practice; a stray unrecognized
+ * escape from some OTHER application's entry merely fails to match
+ * darwinKeychainServiceLabels's own prefix test below, not a parse error.
+ */
+function unescapeSecurityDumpString(raw) {
+  const chunks = []
+  const escapeRe = /\\(\d{3}|.)/gsu
+  let lastIndex = 0
+  let match
+  while ((match = escapeRe.exec(raw)) !== null) {
+    if (match.index > lastIndex) chunks.push(Buffer.from(raw.slice(lastIndex, match.index), 'utf8'))
+    const escaped = match[1]
+    chunks.push(
+      /^\d{3}$/u.test(escaped)
+        ? Buffer.from([Number.parseInt(escaped, 8) & 0xff])
+        : Buffer.from(escaped, 'utf8'),
+    )
+    lastIndex = escapeRe.lastIndex
+  }
+  if (lastIndex < raw.length) chunks.push(Buffer.from(raw.slice(lastIndex), 'utf8'))
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+/**
+ * Thrown by darwinKeychainServiceLabels (and surfaced through
+ * listVaultLabels) when `security dump-keychain` truncated its output
+ * (ENOBUFS) or was killed for running too long (ETIMEDOUT/timeout kill)
+ * instead of actually finding nothing -- the enumeration is INCOMPLETE,
+ * never "empty", and a caller like setup.mjs's duplicate-identity guard
+ * must refuse rather than read that as "no other entry exists".
+ */
+class KeychainEnumerationIncomplete extends Error {}
+
+/**
+ * Parses raw `security dump-keychain` (metadata-only) output into every
+ * `"svce"` (service name) value it finds -- no origin filtering, no prefix
+ * stripping, just the correctly-decoded raw strings. Pulled out of
+ * darwinKeychainServiceLabels below so a caller that needs every `1f3d9:`
+ * entry across every origin (scripts/run-tests-with-home-guard.mjs, which
+ * has no single `origin` to filter by) can share this exact parsing instead
+ * of copying it -- a prior, now-fixed copy in that file did not run
+ * unescapeSecurityDumpString, so it mojibake'd any non-ASCII label byte for
+ * byte differently than this one. See unescapeSecurityDumpString's own doc
+ * comment for why that decoding step matters.
+ */
+function parseSecurityDumpKeychainServiceNames(output) {
+  if (typeof output !== 'string') return []
+  const names = []
+  // `security dump-keychain` prints a "svce" value two different ways: the
+  // plain quoted form (group 1) when the whole string is printable, and
+  // `0x<HEX>` -- optionally followed by a best-effort quoted/escaped
+  // rendering, which this never needs to parse -- when it is not (group 2).
+  // The earlier version of this regex only matched the plain form, so any
+  // entry needing the hex form was silently dropped from the enumeration
+  // rather than parsed; the hex bytes are authoritative here (raw UTF-8),
+  // so they are decoded directly rather than round-tripped through the
+  // escaped display text.
+  const serviceRe = /"svce"<blob>=(?:"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]+)(?:\s+"(?:[^"\\]|\\.)*")?)/gsu
+  for (const match of output.matchAll(serviceRe)) {
+    const service = match[1] !== undefined
+      ? unescapeSecurityDumpString(match[1])
+      : Buffer.from(match[2], 'hex').toString('utf8')
+    names.push(service)
+  }
+  return names
+}
+
+/**
+ * Enumerates this plugin's own vault entries directly from the macOS
+ * Keychain, rather than trusting only the non-secret vault-index.json that
+ * lives under the same HOME a lost/reset profile can wipe (see the
+ * "Non-secret vault index" comment above for the failure this closes).
+ * Uses `security dump-keychain` -- METADATA ONLY, never the `-d` flag,
+ * which would also decrypt and print the stored secret bytes -- and reads
+ * only the `"svce"<blob>` (service name) attribute of each entry, filtered
+ * to this plugin's own `1f3d9:<origin>:` service prefix; every other
+ * attribute (including the account name and every timestamp) is ignored.
+ *
+ * Passes an explicit 64 MiB `maxBuffer` and a 10s `timeout` -- Node's
+ * execFileSync default maxBuffer is 1 MiB, which a normal developer
+ * keychain (a few thousand Safari/wifi/certificate/app-token items) can
+ * exceed, throwing ENOBUFS. A bare `catch { return [] }` here cannot tell
+ * that truncation apart from "no `security` binary on PATH", so it used to
+ * silently answer "found nothing" on a keychain that is actually full of
+ * entries -- re-opening exactly the fail-open this union was added to
+ * close. ENOBUFS and a timeout kill (ETIMEDOUT, or `killed: true` with no
+ * `code`) now throw KeychainEnumerationIncomplete instead, so the caller
+ * can refuse rather than trust an incomplete read; every OTHER failure (no
+ * such binary, a locked keychain, an unexpected output format) is still
+ * treated as "found nothing", the same fail-open posture listVaultLabels
+ * already documents for a missing setup-state.json or an empty cmdkey
+ * scrape -- this enumeration is UNIONED with the vault index below, never
+ * a replacement for it, so a caller is still protected by whichever source
+ * actually has the answer.
+ */
+function darwinKeychainServiceLabels(execImpl, origin) {
+  let output
+  try {
+    output = execImpl('security', ['dump-keychain'], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 10_000,
+    })
+  } catch (error) {
+    if (error?.code === 'ENOBUFS') {
+      throw new KeychainEnumerationIncomplete(
+        'security dump-keychain output exceeded the 64 MiB read limit -- the Keychain scan is incomplete, not empty',
+      )
+    }
+    if (error?.code === 'ETIMEDOUT' || (error?.killed === true && !error?.code)) {
+      throw new KeychainEnumerationIncomplete(
+        'security dump-keychain did not finish within 10s -- the Keychain scan is incomplete, not empty',
+      )
+    }
+    return []
+  }
+  const prefix = vaultTarget(origin, '')
+  const labels = []
+  for (const service of parseSecurityDumpKeychainServiceNames(output)) {
+    if (service.startsWith(prefix)) labels.push(service.slice(prefix.length))
+  }
+  return labels
+}
+
+/**
  * Lists every label this host's vault currently holds for `origin`,
  * excluding staging labels -- never the exact-handle lookup readSecret
  * already does, but a genuine enumeration of "does anything else already
  * exist here", so setup.mjs's duplicate-identity guard can refuse a fresh
  * registration under a different handle instead of silently creating a
  * second, permanent, unrecoverable resident next to one that already
- * exists. Never throws: an enumeration failure (no `cmdkey` on PATH, an
- * unreadable directory, a missing index) is treated as "found nothing", the
- * same fail-open behavior that guard already accepts for a missing
+ * exists. An enumeration failure (no `cmdkey`/`security` on PATH, an
+ * unreadable directory, a missing index) is treated as "found nothing",
+ * the same fail-open behavior that guard already accepts for a missing
  * setup-state.json -- the guard exists to catch the common case (state
- * lost, vault intact), not to be a perfect audit.
+ * lost, vault intact), not to be a perfect audit. The one exception: on
+ * darwin, a truncated or timed-out `security dump-keychain` scan (see
+ * KeychainEnumerationIncomplete) is NOT "found nothing" -- this throws
+ * KeychainEnumerationIncomplete rather than silently answering an
+ * incomplete read as an empty one, and the caller must refuse rather than
+ * treat that as "no other entry exists".
+ *
+ * The returned array also carries a non-enumerable `registrationStagingLabels`
+ * property (see splitStagingLabels/withRegistrationStagingLabels above) --
+ * the REGISTRATION-kind staging labels this call filtered out of the array
+ * itself, never rotation or recovery ones. setup.mjs's duplicate-identity
+ * guard reads that property (not the array) to refuse when an abandoned
+ * registration staging entry means a resident may already be permanent
+ * server-side; every other caller keeps seeing exactly the label array it
+ * always has, with no staging label of any kind mixed in.
  */
 function listVaultLabels(origin, deps = {}) {
   const execImpl = deps.execFileSync ?? execFileSync
@@ -1101,12 +1379,20 @@ function listVaultLabels(origin, deps = {}) {
     const vaultIndex = readVaultIndex(deps.homeDir)
     const indexMap = vaultIndexEntriesToMap(Array.isArray(vaultIndex[origin]) ? vaultIndex[origin] : [])
     const labels = new Set([...fromCmdkey, ...indexMap.keys()])
-    return [...labels].filter(label => !isStagingLabel(label, indexMap))
+    const { kept, registrationStaging } = splitStagingLabels(labels, indexMap)
+    return withRegistrationStagingLabels(kept, registrationStaging)
   }
   if (os === 'darwin') {
+    // Union the non-secret index with a real Keychain scan (see
+    // darwinKeychainServiceLabels's own doc comment) -- never the index
+    // alone, for the same reason win32 above never trusts a bare cmdkey
+    // scrape alone: either source can independently go stale or missing.
+    const fromKeychain = darwinKeychainServiceLabels(execImpl, origin)
     const index = readVaultIndex(deps.homeDir)
     const indexMap = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
-    return [...indexMap.keys()].filter(label => !isStagingLabel(label, indexMap))
+    const labels = new Set([...fromKeychain, ...indexMap.keys()])
+    const { kept, registrationStaging } = splitStagingLabels(labels, indexMap)
+    return withRegistrationStagingLabels(kept, registrationStaging)
   }
   const dir = join(deps.homeDir ?? homedir(), '.1f3d9', 'credentials')
   const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
@@ -1115,7 +1401,7 @@ function listVaultLabels(origin, deps = {}) {
   try {
     entries = readdirSync(dir)
   } catch {
-    return []
+    return withRegistrationStagingLabels([], [])
   }
   const labels = entries
     .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
@@ -1130,7 +1416,8 @@ function listVaultLabels(origin, deps = {}) {
   // isPendingLabel suffix guess via isStagingLabel, same as win32/darwin.
   const index = readVaultIndex(deps.homeDir)
   const indexMap = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
-  return labels.filter(label => !isStagingLabel(label, indexMap))
+  const { kept, registrationStaging } = splitStagingLabels(labels, indexMap)
+  return withRegistrationStagingLabels(kept, registrationStaging)
 }
 
 // --- HTTP -----------------------------------------------------------------
@@ -1249,6 +1536,10 @@ async function register(flags) {
     throw new Error('--client-class must be coding_persistent or coding_ephemeral')
   }
   const model = typeof flags.model === 'string' ? flags.model : ''
+  const modelError = validateModelLabel(model)
+  if (modelError) {
+    throw new Error(`${modelError}; nothing was created -- fix --model before asking a human to approve the handle`)
+  }
   const replaceVaultEntry = flags['replace-vault-entry'] === true
 
   let humanApproved = flags['human-approved'] === true
@@ -1274,6 +1565,26 @@ async function register(flags) {
   // here on ITS answer is the identity of record, never the spelling this
   // call was invoked with (see the module comment on HANDLE_RE above).
   const stagedHandle = typeof staged.handle === 'string' ? staged.handle : handle
+
+  // Validated HERE, before stagedHandle is ever used as a vault label by
+  // the readSecret/pendingLabel/storeSecret calls below -- not only on
+  // confirmed.handle after confirm succeeds, further down. rotate(),
+  // recoverBegin(), and recoverGenerate() already validate every
+  // server-returned handle before using it as a local label (round-3
+  // finding 4); this stage response was the one place in this file that
+  // still trusted a server answer verbatim before ever touching the vault
+  // with it. A malformed or hostile staged.handle must be refused, and the
+  // stage cancelled, before any local read or write happens on its
+  // strength -- not discovered only after confirm already ran.
+  if (!HANDLE_RE.test(stagedHandle) || RESERVED_HANDLE_SUBSTRING_RE.test(stagedHandle)) {
+    await cancelStage(origin, '/api/register', staged.stage_token)
+    throw new Error(
+      `refusing to use the handle ${JSON.stringify(stagedHandle)} the city returned for this registration's ` +
+      `stage as a vault label: it does not match the local handle rule ${HANDLE_RE.source}, or contains the ` +
+      'reserved "--pending-" sequence this script uses for its own in-flight staging labels. The staged ' +
+      'registration was cancelled before ever being confirmed or written to the vault; nothing was created.',
+    )
+  }
 
   // Same discipline rotate()/recoverBegin() already apply, extended to
   // register() itself: never overwrite whatever the vault already holds
@@ -1356,13 +1667,14 @@ async function register(flags) {
     // this function that cancels the stage before refusing.
     await cancelStage(origin, '/api/register', staged.stage_token)
     throw new Error(
-      `refusing to store or print the handle "${finalHandle}" the city confirmed for this registration: it ` +
+      `refusing to store or print the handle ${JSON.stringify(finalHandle)} the city confirmed for this registration: it ` +
       `does not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" ` +
       'sequence this script uses for its own in-flight staging labels. The resident was already created ' +
       'server-side under that exact spelling, and its confirmed resident key and recovery codes were NOT ' +
-      `lost -- they are still stored under the staging label "${stagingLabel}" and nowhere else. Read them ` +
-      `back from "${stagingLabel}" and store them under a label of your choosing yourself; this script will ` +
-      'not do so automatically for a handle that fails its own naming rule.',
+      `lost -- they are still stored under the staging label "${stagingLabel}" and nowhere else. This ` +
+      'script will not store them automatically for a handle that fails its own naming rule; `key show ' +
+      `--handle ${stagingLabel} --reveal\` reads them back by hand, and \`key adopt\` has no use here since ` +
+      'it also refuses a handle that fails this same rule -- whatever label you choose must satisfy it too.',
     )
   }
 
@@ -1397,6 +1709,27 @@ async function rotate(flags) {
   }
 
   const staged = await postJson(origin, '/api/rotate', { action: 'begin', resident_key: residentKey })
+
+  // Defense in depth, matching register()'s validation of the city's own
+  // confirmed handle (see its own comment there): rotate() uses the
+  // server's own `handle` verbatim as a vault label, unlike register(),
+  // where the caller names the handle itself -- so a wrong or hostile
+  // response could otherwise destroy a different resident's stored key.
+  // Nothing has been confirmed server-side yet at this point -- only
+  // "begin" has staged a replacement key -- so this can still cancel
+  // cleanly rather than merely refuse to store.
+  if (
+    typeof staged.handle !== 'string' || !HANDLE_RE.test(staged.handle)
+    || RESERVED_HANDLE_SUBSTRING_RE.test(staged.handle)
+  ) {
+    await cancelStage(origin, '/api/rotate', staged.stage_token)
+    throw new Error(
+      `refusing to stage a replacement key under the handle the city returned (${JSON.stringify(staged.handle)}): it does ` +
+      `not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" sequence ` +
+      'this script uses for its own in-flight staging labels. The rotation was cancelled before confirming; ' +
+      'the old key is unaffected.',
+    )
+  }
 
   // Stage the replacement under a DISTINCT vault target first -- never
   // overwrite the live entry before confirm succeeds. If confirm below
@@ -1443,8 +1776,31 @@ async function rotate(flags) {
     recovery_codes_invalidated_at: new Date().toISOString(),
   }))
 
+  // The replacement key was written under staged.handle -- the label this
+  // script validated (HANDLE_RE, reserved-substring check above) BEFORE
+  // ever confirming, and the only spelling this call trusted as a vault
+  // target. The confirm response's own `handle` field is server-supplied
+  // and was never validated: printing it instead of staged.handle would
+  // let a server that stages one handle and confirms a different one make
+  // this command's success output name a resident that was never touched,
+  // while the write itself silently landed elsewhere. If the two disagree,
+  // refuse to report success under either spelling -- the write already
+  // happened under staged.handle regardless, so this is purely about not
+  // mis-describing what happened to the caller (and to a skill instructed
+  // to relay this output verbatim).
+  if (typeof confirmed.handle === 'string' && confirmed.handle !== staged.handle) {
+    throw new Error(
+      `the city staged this rotation under the handle ${JSON.stringify(staged.handle)} but its confirm ` +
+      `response named a different handle, ${JSON.stringify(confirmed.handle)}. The replacement resident ` +
+      `key WAS stored -- under ${JSON.stringify(staged.handle)}, at "${location}" -- because that is the ` +
+      "label this script validated and staged before confirming; the confirm response's spelling is not " +
+      `trusted for storage or display. Run \`key status --handle ${staged.handle}\` to verify the live ` +
+      'entry before relying on this rotation.',
+    )
+  }
+
   revealOrHide(flags, 'Replacement resident key', [staged.resident_key])
-  console.log(`handle: ${confirmed.handle}`)
+  console.log(`handle: ${staged.handle}`)
   console.log(`stored: ${location}`)
   console.log(
     'your recovery codes were invalidated by this rotation (the city invalidates every recovery code on ' +
@@ -1468,33 +1824,96 @@ async function recoverGenerate(flags) {
   }
   const generated = await postJson(origin, '/api/recovery', { action: 'generate', resident_key: residentKey })
 
+  // Defense in depth, matching register()'s validation of the city's own
+  // confirmed handle (see its own comment there): the city already minted
+  // these codes server-side by this point, so this cannot prevent that --
+  // it only refuses to use a handle this script's naming rule rejects as a
+  // LOCAL vault label, the same discipline rotate()/recoverBegin() now
+  // apply to their own server-returned handle.
+  if (
+    typeof generated.handle !== 'string' || !HANDLE_RE.test(generated.handle)
+    || RESERVED_HANDLE_SUBSTRING_RE.test(generated.handle)
+  ) {
+    throw new Error(
+      `refusing to store the fresh recovery codes the city already generated under the handle it returned ` +
+      `(${JSON.stringify(generated.handle)}): it does not match the local handle rule ${HANDLE_RE.source}, or contains ` +
+      'the reserved "--pending-" sequence this script uses for its own in-flight staging labels. The codes ' +
+      'are already live server-side and were printed above if --reveal was passed; nothing was stored locally.',
+    )
+  }
+
   // Write the fresh codes into the LIVE `handle` entry, not a sibling
   // `${handle}-recovery` label: a caller resuming later (rotate, recover
   // begin, key show) reads back the vault entry for `handle` and only that
   // entry, so a set stored anywhere else is invisible to them and the live
   // entry keeps claiming whatever (possibly invalidated) codes it already
-  // had. If the live entry cannot be read back, this refuses to guess at
-  // its other fields (client_class) rather than silently dropping them --
-  // the city already holds the new codes as the only valid set regardless.
-  let previous
-  try {
-    previous = readSecret(origin, generated.handle)
-  } catch (error) {
+  // had.
+  //
+  // The read, the concurrent-change check, and the write below all run
+  // inside the SAME withFileLock critical section promoteReplacementKey
+  // uses, keyed by (origin, handle) -- see promoteLockPath's own doc
+  // comment. Without this, a concurrent `key rotate`/`key recover begin` for
+  // the SAME handle can confirm a brand new resident_key between this
+  // call's network round trip above and an unlocked read-then-write below,
+  // and this call would then silently overwrite that brand new live entry
+  // with the STALE resident_key it resolved from --resident-key-file /
+  // AGENT_1F3D9_SECRET before ever reaching the network -- reverting the
+  // vault to an already-revoked key while also storing recovery codes the
+  // city invalidated the moment that other rotation/recovery confirmed,
+  // with both commands exiting 0 and neither saying so. Re-reading the live
+  // entry INSIDE the lock, immediately before the write, and refusing
+  // rather than overwriting when it no longer matches what this call
+  // authenticated with, is what closes that window.
+  const lockPath = promoteLockPath(origin, generated.handle)
+  mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 })
+  const location = withFileLock(lockPath, () => {
+    let previous
+    try {
+      previous = readSecret(origin, generated.handle)
+    } catch (error) {
+      throw new Error(
+        `the city already generated new recovery codes for "${generated.handle}", but the existing vault ` +
+        `entry could not be read back to merge them in: ${error.message}. Resolve the unreadable entry, ` +
+        'then re-run this command; it is safe to run again.',
+      )
+    }
+    if (previous.found && previous.value?.resident_key !== residentKey) {
+      // The live entry changed since this call authenticated with
+      // `residentKey` above -- some other rotation or recovery for this
+      // SAME handle confirmed on this host while this call's network round
+      // trip to /api/recovery was in flight. Overwriting now would silently
+      // revert the vault to the resident_key THIS call read before that
+      // happened -- which the city has, by now, very likely already
+      // revoked -- while still claiming the fresh recovery codes as valid.
+      // Refuse instead: the codes are already live server-side regardless
+      // of what this call does locally.
+      throw new Error(
+        `refusing to store the fresh recovery codes for "${generated.handle}": the vault entry for this ` +
+        'handle changed while this command was talking to the city, meaning another rotation or recovery ' +
+        'for the same handle confirmed concurrently. The resident key this command authenticated with is ' +
+        `very likely already revoked. Run \`key status --handle ${generated.handle}\` to see the CURRENT ` +
+        'live key, then re-run `recover generate` (or `key recover generate`) with that key if you still ' +
+        'need fresh codes.',
+      )
+    }
+    return storeSecret(origin, generated.handle, {
+      kind: 'resident',
+      handle: generated.handle,
+      ...(previous.found && previous.value?.client_class ? { client_class: previous.value.client_class } : {}),
+      resident_key: residentKey,
+      recovery_codes: generated.recovery_codes,
+      origin,
+      stored_at: new Date().toISOString(),
+    })
+  })
+  if (location === undefined) {
     throw new Error(
-      `the city already generated new recovery codes for "${generated.handle}", but the existing vault ` +
-      `entry could not be read back to merge them in: ${error.message}. Resolve the unreadable entry, ` +
-      'then re-run this command; it is safe to run again.',
+      `could not acquire the per-handle vault lock for "${generated.handle}" on this host within ` +
+      `${VAULT_INDEX_LOCK_MAX_WAIT_MS}ms: another registration, rotation, or recovery for the same handle ` +
+      'appears to still be running concurrently on this host. The fresh recovery codes are already live ' +
+      'server-side regardless of what this command does locally -- retry once the other run finishes.',
     )
   }
-  const location = storeSecret(origin, generated.handle, {
-    kind: 'resident',
-    handle: generated.handle,
-    ...(previous.found && previous.value?.client_class ? { client_class: previous.value.client_class } : {}),
-    resident_key: residentKey,
-    recovery_codes: generated.recovery_codes,
-    origin,
-    stored_at: new Date().toISOString(),
-  })
   // Best-effort cleanup of the sibling-label location a prior version of
   // this command used to write to, so a stale duplicate never lingers.
   deleteSecret(origin, `${generated.handle}-recovery`)
@@ -1511,6 +1930,24 @@ async function recoverBegin(flags) {
   }
 
   const staged = await postJson(origin, '/api/recovery', { action: 'begin', recovery_code: recoveryCode })
+
+  // Same handle-validation discipline as rotate() above, and for the same
+  // reason: recoverBegin() also uses the server's own `handle` verbatim as
+  // a vault label. Nothing has been confirmed server-side yet -- only
+  // "begin" has staged a replacement key -- so this can still cancel
+  // cleanly.
+  if (
+    typeof staged.handle !== 'string' || !HANDLE_RE.test(staged.handle)
+    || RESERVED_HANDLE_SUBSTRING_RE.test(staged.handle)
+  ) {
+    await cancelStage(origin, '/api/recovery', staged.stage_token)
+    throw new Error(
+      `refusing to stage a replacement key under the handle the city returned (${JSON.stringify(staged.handle)}): it does ` +
+      `not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" sequence ` +
+      'this script uses for its own in-flight staging labels. The recovery was cancelled before confirming; ' +
+      'the old key is unaffected.',
+    )
+  }
 
   // Same staging discipline as rotate() above, and for the same reason: the
   // old key still works until confirm below actually succeeds, so the live
@@ -1547,8 +1984,25 @@ async function recoverBegin(flags) {
     recovery_codes_invalidated_at: new Date().toISOString(),
   }))
 
+  // Same discipline as rotate() above, and for the same reason: the
+  // replacement key was written under staged.handle -- the validated,
+  // pre-confirm spelling -- never the confirm response's own unvalidated
+  // `handle` field. If the two disagree, refuse to report success under
+  // either spelling rather than naming a resident that was never touched;
+  // the write already happened under staged.handle regardless.
+  if (typeof confirmed.handle === 'string' && confirmed.handle !== staged.handle) {
+    throw new Error(
+      `the city staged this recovery under the handle ${JSON.stringify(staged.handle)} but its confirm ` +
+      `response named a different handle, ${JSON.stringify(confirmed.handle)}. The replacement resident ` +
+      `key WAS stored -- under ${JSON.stringify(staged.handle)}, at "${location}" -- because that is the ` +
+      "label this script validated and staged before confirming; the confirm response's spelling is not " +
+      `trusted for storage or display. Run \`key status --handle ${staged.handle}\` to verify the live ` +
+      'entry before relying on this recovery.',
+    )
+  }
+
   revealOrHide(flags, 'Replacement resident key', [staged.resident_key])
-  console.log(`handle: ${confirmed.handle}`)
+  console.log(`handle: ${staged.handle}`)
   console.log(`stored: ${location}`)
   console.log(
     'every remaining recovery code was invalidated by this recovery (the city invalidates every sibling ' +
@@ -1575,9 +2029,14 @@ async function pair(flags) {
   // single-use, expires in ten minutes, and never substitutes for the key.
   // Printing it is the entire point of this command, so it is not gated
   // behind --reveal the way the resident key and recovery codes are above.
+  // minted.pairing_code and minted.expires_at are server-supplied and
+  // never validated against any local format rule (unlike a handle) --
+  // JSON.stringify neutralizes an embedded newline (or other control
+  // character) that could otherwise inject a fabricated extra line into
+  // output a human or a skill is instructed to relay verbatim.
   console.log('Pairing code (shown once, give it to the human completing hosted-chat sign-in):')
-  console.log(minted.pairing_code)
-  console.log(`expires_at: ${minted.expires_at}`)
+  console.log(JSON.stringify(minted.pairing_code))
+  console.log(`expires_at: ${JSON.stringify(minted.expires_at)}`)
 }
 
 async function main() {
@@ -1609,5 +2068,6 @@ if (isMainModule) {
 // uses this import path itself, so importing this module never runs main().
 export {
   storeSecret, readSecret, deleteSecret, listVaultLabels, promoteReplacementKey, SecretReadFailure, shouldReveal,
-  HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE,
+  HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel, KeychainEnumerationIncomplete,
+  parseSecurityDumpKeychainServiceNames,
 }

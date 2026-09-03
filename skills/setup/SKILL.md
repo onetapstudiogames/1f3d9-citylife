@@ -21,10 +21,13 @@ order and never skip the human-approval step.
    is unconditional — whether or not this is an interactive terminal, the first run always refuses
    and prints two things: the exact question to put to the human, and the exact second command to
    run afterward, with `--human-approved <token>` appended. That token is derived from this exact
-   origin, handle, client class, and a nonce this run wrote to disk: it proves this exact
-   registration was refused once, with the question printed, before a second call could proceed —
-   it does NOT prove a human ever saw or answered that question, and nothing stops this same agent
-   from running both passes itself in one unattended session. At an interactive terminal, the
+   origin, handle, client class, and a nonce this run wrote to disk: it proves only that a nonce
+   record for this exact origin, handle, and client class exists on this host — normally written by
+   a first pass that also printed the question, though anything able to write this script's own
+   setup-state.json can create one directly — so it never proves the question was printed, never
+   proves a human saw or answered it, and stands only as this agent's own recorded word that a
+   human said yes out of band; nothing stops this same agent from running both passes itself in one
+   unattended session. At an interactive terminal, the
    SECOND run (the one carrying that token) additionally asks this exact same question directly, as
    one more confirmation on top of the token — never as a substitute for it. The token is still
    only this agent's own recorded declaration that the human said yes (decision row 74) — never
@@ -38,7 +41,13 @@ order and never skip the human-approval step.
    unless you pass `--reveal` at an interactive terminal — never do that on the human's behalf.
    If the human declines at that interactive follow-up question instead, the script says plainly
    that nothing was created; start over from step 3 with a fresh first pass when there is really a
-   clear yes to put to them.
+   clear yes to put to them. Before spending that single-use token, this second pass also reads
+   `GET /api/official`, and refuses without spending the token if the coding-client identity doors
+   are off there — rerun the exact same second command, unedited, once they are back on. Separately,
+   `setup` refuses outright, before ever registering under any handle, while this host's vault
+   already holds an unresolved registration staging label for this origin (a past run whose vault
+   promotion failed after the city already confirmed it server-side) — naming that exact label; see
+   `key adopt --handle <handle> --from-label <that label>` to resolve it before retrying.
 5. The script prints exact `claude mcp add` / `codex mcp add` commands, under the server name
    `1f3d9-key`, that read the key from a named secret into an environment variable, never the
    literal key — deliberately a different name than the `1f3d9` connector this plugin already

@@ -9,6 +9,7 @@ import test from 'node:test'
 
 import {
   deleteSecret,
+  KeychainEnumerationIncomplete,
   listVaultLabels,
   promoteReplacementKey,
   readSecret,
@@ -633,6 +634,57 @@ test('storeSecret/listVaultLabels: an abandoned (stale) vault-index lock is brok
 
 const posixFileBackendForStagingTests = process.platform !== 'win32'
 
+// A single-entry sample in the captured shape of real `security
+// dump-keychain` output (metadata only -- this repo never runs `-d`, so this
+// sample never includes one either). Real output additionally carries a
+// leading "keychain: ..." / "version: ..." / "class: \"genp\"" preamble and
+// many more attribute lines per entry (acct, cdat, crtr, ...); only "svce"
+// matters to darwinKeychainServiceLabels, so this sample keeps just enough
+// shape around it to exercise the parser honestly, per entry.
+function darwinKeychainDumpEntry(service, account) {
+  return [
+    'keychain: "/Users/agent/Library/Keychains/login.keychain-db"',
+    'version: 512',
+    'class: "genp"',
+    'attributes:',
+    `    0x00000007 <blob>="${account}"`,
+    '    "acct"<blob>="' + account + '"',
+    '    "cdat"<timedate>=0x32303236303930333030303030305A00  "20260903000000Z\\000"',
+    '    "crtr"<uint32>=<NULL>',
+    '    "svce"<blob>="' + service + '"',
+    '    "type"<uint32>=<NULL>',
+    '',
+  ].join('\n')
+}
+
+function darwinKeychainDumpSample(origin, label) {
+  return darwinKeychainDumpEntry(`1f3d9:${origin}:${label}`, label)
+}
+
+// Same shape as darwinKeychainDumpEntry, but writes the "svce" attribute in
+// the OTHER form real `security dump-keychain` output uses: `0x<HEX>`
+// (raw bytes, uppercase, no separator) followed by a best-effort quoted
+// display string -- the form it emits whenever the value is not cleanly
+// printable. `escapedDisplay` only needs to be plausible text after the
+// hex; darwinKeychainServiceLabels decodes the hex, never that display
+// string, so its exact escaping does not matter to the parser under test.
+function darwinKeychainDumpEntryHex(service, account, escapedDisplay) {
+  const hex = Buffer.from(service, 'utf8').toString('hex').toUpperCase()
+  return [
+    'keychain: "/Users/agent/Library/Keychains/login.keychain-db"',
+    'version: 512',
+    'class: "genp"',
+    'attributes:',
+    `    0x00000007 <blob>="${account}"`,
+    '    "acct"<blob>="' + account + '"',
+    '    "cdat"<timedate>=0x32303236303930333030303030305A00  "20260903000000Z\\000"',
+    '    "crtr"<uint32>=<NULL>',
+    `    "svce"<blob>=0x${hex}  "${escapedDisplay}"`,
+    '    "type"<uint32>=<NULL>',
+    '',
+  ].join('\n')
+}
+
 for (const backendPlatform of ['win32', 'darwin', 'linux']) {
   const skip = backendPlatform === 'linux' && !posixFileBackendForStagingTests
     ? 'temp-file backend depends on POSIX permission bits; run on Linux/macOS or in this repo\'s CI'
@@ -662,6 +714,52 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
       await rm(homeDir, { recursive: true, force: true })
     }
   })
+
+  // Round-5 finding 2: splitStagingLabels must consult the index BEFORE the
+  // REGISTRATION_STAGING_LABEL_RE suffix test, matching isStagingLabel's own
+  // precedence -- a label the index positively marks `staging: false` is
+  // real resident metadata even when its shape also matches the suffix
+  // pendingLabel('registration') mints (HANDLE_RE permits handles up to 32
+  // characters, long enough to collide by coincidence).
+  test(
+    `listVaultLabels (${backendPlatform}): a real resident whose handle matches the registration-staging ` +
+    'suffix shape is still listed, and never surfaced as registrationStagingLabels',
+    { skip },
+    async () => {
+      const origin = 'https://example.invalid'
+      const homeDir = await mkdtemp(join(tmpdir(), `identity-client-staging-${backendPlatform}-`))
+      const deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+      // Matches BOTH HANDLE_RE (max 32 chars) and REGISTRATION_STAGING_LABEL_RE
+      // (`--pending-registration-<hex>`), the exact coincidence the finding
+      // describes.
+      const handle = 'abc--pending-registration-a'
+      try {
+        storeSecret(origin, handle, {
+          kind: 'resident',
+          handle,
+          client_class: 'coding_persistent',
+          resident_key: `1f3d9_sk_${'c'.repeat(48)}`,
+          origin,
+        }, deps)
+
+        const labels = listVaultLabels(origin, deps)
+        assert.deepEqual(
+          labels,
+          [handle],
+          'a real resident is never dropped just because its handle also matches the registration-staging suffix shape',
+        )
+        assert.deepEqual(
+          labels.registrationStagingLabels,
+          [],
+          'the index\'s staging:false marker wins over the suffix shape -- this is never surfaced as an ' +
+          'abandoned registration staging label',
+        )
+      } finally {
+        deleteSecret(origin, handle, deps)
+        await rm(homeDir, { recursive: true, force: true })
+      }
+    },
+  )
 
   test(`listVaultLabels (${backendPlatform}): a genuine staging entry is never listed`, { skip }, async () => {
     const origin = 'https://example.invalid'
@@ -702,13 +800,14 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
   test(
     `listVaultLabels (${backendPlatform}): a v1.5.0 bundle discoverable with no index entry at all still falls back to the suffix guess`,
     // Meaningful only where a label can be discovered by something other
-    // than the index itself: the file backend discovers labels by
-    // reading the credentials directory, and win32 additionally unions a
-    // real cmdkey scrape. On darwin, listVaultLabels has no such
-    // alternate source -- an unindexed label is not discoverable at all,
-    // so this scenario collapses into "nothing enumerated" for a reason
-    // unrelated to the staging marker and is not worth asserting here.
-    { skip: skip || backendPlatform === 'darwin' },
+    // than the index itself: the file backend discovers labels by reading
+    // the credentials directory, win32 additionally unions a real cmdkey
+    // scrape, and darwin additionally unions a real (metadata-only)
+    // `security dump-keychain` scan (see the MEDIUM finding this also
+    // covers: on darwin, a resident findable only in the Keychain itself
+    // must not be dropped just because the index never recorded it, or
+    // never survived a reset HOME).
+    { skip },
     async () => {
       const homeDir = await mkdtemp(join(tmpdir(), `identity-client-legacy-staging-${backendPlatform}-`))
       try {
@@ -726,6 +825,15 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
             `${JSON.stringify({ kind: 'resident', handle: 'agent-abandoned', origin })}\n`,
           )
           deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+        } else if (backendPlatform === 'darwin') {
+          // darwin: discoverable only via the (metadata-only) Keychain
+          // scan -- a captured-shape sample of real `security dump-keychain`
+          // output (see darwinKeychainDumpSample below), never `-d`.
+          deps = {
+            platform: backendPlatform,
+            homeDir,
+            execFileSync: () => darwinKeychainDumpSample(origin, label),
+          }
         } else {
           // win32: discoverable only via the cmdkey scrape (see the LOW
           // finding this also covers: a real resident found only that way
@@ -784,3 +892,167 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
     },
   )
 }
+
+// --- darwin: `security dump-keychain` parser, pinned on a captured sample -
+// The real darwin branch cannot run on this host (this repo's CI and every
+// dev machine this was written on is not macOS), so the fixture below is a
+// hand-built sample in the CAPTURED SHAPE of real `security dump-keychain`
+// output (metadata only -- no `-d` was ever run to produce it, and this
+// script itself never passes `-d`) rather than a live capture. It exercises
+// darwinKeychainServiceLabels indirectly through listVaultLabels's public
+// surface (deps.execFileSync), the same way the win32 cmdkey-scrape tests
+// above exercise cmdkey parsing, so this pins the parser without exporting
+// an internal.
+test(
+  'listVaultLabels (darwin): the security dump-keychain scan reads only this plugin\'s own service prefix, ' +
+  'ignores every other entry in the keychain, unescapes octal byte escapes (including multi-byte UTF-8 ' +
+  'characters split across consecutive escapes) in the service name, and decodes the 0x<HEX> form ' +
+  '`security` uses for values it cannot print as plain quoted text',
+  async () => {
+    const origin = 'https://example.invalid'
+    const otherOrigin = 'https://other.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-scan-'))
+    try {
+      // Six entries in one dump: (1) this plugin, this origin -- must be
+      // found; (2) this plugin, a DIFFERENT origin -- must be excluded, the
+      // service prefix match is origin-scoped, not just "1f3d9:"-scoped;
+      // (3) a wholly unrelated application's entry -- must be excluded, and
+      // must not throw or otherwise disrupt parsing the entries around it;
+      // (4) this plugin, this origin, with an octal-escaped byte in the
+      // label (the shape `security`'s own output uses for a non-printable
+      // or otherwise escaped character) -- must be unescaped back to the
+      // real label, not left as the literal six characters `\140`; (5) this
+      // plugin, this origin, with a label containing "é" (U+00E9), which
+      // `security` emits as the TWO consecutive per-byte octal escapes
+      // `\303\251` (its UTF-8 bytes 0xC3 0xA9) -- decoding each escape as
+      // its own UTF-16 code unit would mangle this into "Ã©"; decoding the
+      // two bytes together as one UTF-8 sequence must recover "é"; (6) this
+      // plugin, this origin, emitted in the `0x<HEX>  "..."` form `security`
+      // uses instead of a plain quoted string for a value needing escaping
+      // -- the plain-form-only regex used to simply never match this line,
+      // silently dropping the entry from the enumeration.
+      const output = [
+        darwinKeychainDumpEntry(`1f3d9:${origin}:agent-found`, 'agent-found'),
+        darwinKeychainDumpEntry(`1f3d9:${otherOrigin}:agent-other-origin`, 'agent-other-origin'),
+        darwinKeychainDumpEntry('com.example.totallyUnrelatedApp', 'someone-elses-account'),
+        darwinKeychainDumpEntry(`1f3d9:${origin}:agent\\140escaped`, 'agent`escaped'),
+        darwinKeychainDumpEntry(`1f3d9:${origin}:agent-caf\\303\\251`, 'agent-cafe'),
+        darwinKeychainDumpEntryHex(`1f3d9:${origin}:agent-hexform`, 'agent-hexform', `1f3d9:${origin}:agent-hexform`),
+      ].join('\n')
+      const deps = { platform: 'darwin', homeDir, execFileSync: () => output }
+
+      assert.deepEqual(
+        listVaultLabels(origin, deps).sort(),
+        ['agent-found', 'agent`escaped', 'agent-café', 'agent-hexform'].sort(),
+        'only this origin\'s own service-prefixed entries are returned, with octal escapes and the hex form decoded',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test('listVaultLabels (darwin): a failing security binary is treated as "found nothing", not an error', async () => {
+  const origin = 'https://example.invalid'
+  const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-fail-'))
+  try {
+    const deps = {
+      platform: 'darwin',
+      homeDir,
+      execFileSync: () => {
+        throw new Error('security: command not found')
+      },
+    }
+    assert.deepEqual(listVaultLabels(origin, deps), [])
+  } finally {
+    await rm(homeDir, { recursive: true, force: true })
+  }
+})
+
+// --- round-3 finding 2: a truncated/timed-out Keychain scan must refuse, -
+// not silently answer "found nothing" -- see KeychainEnumerationIncomplete's
+// own doc comment in identity-client.mjs and the ENOBUFS repro in the
+// finding write-up (execFileSync's default 1 MiB maxBuffer throws ENOBUFS
+// on a keychain dump bigger than that).
+
+test(
+  'listVaultLabels (darwin): an ENOBUFS from a truncated security dump-keychain scan throws ' +
+  'KeychainEnumerationIncomplete instead of returning "found nothing"',
+  async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-enobufs-'))
+    try {
+      const deps = {
+        platform: 'darwin',
+        homeDir,
+        execFileSync: () => {
+          const error = new Error('spawnSync security ENOBUFS')
+          error.code = 'ENOBUFS'
+          throw error
+        },
+      }
+      assert.throws(
+        () => listVaultLabels(origin, deps),
+        KeychainEnumerationIncomplete,
+        'a truncated scan must throw, never silently return []',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'listVaultLabels (darwin): an ETIMEDOUT from a hung security dump-keychain scan also throws ' +
+  'KeychainEnumerationIncomplete',
+  async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-timeout-'))
+    try {
+      const deps = {
+        platform: 'darwin',
+        homeDir,
+        execFileSync: () => {
+          const error = new Error('spawnSync security ETIMEDOUT')
+          error.code = 'ETIMEDOUT'
+          throw error
+        },
+      }
+      assert.throws(
+        () => listVaultLabels(origin, deps),
+        KeychainEnumerationIncomplete,
+        'a timed-out scan must throw, never silently return []',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'listVaultLabels (darwin): a timeout kill with no error.code (killed: true) also throws ' +
+  'KeychainEnumerationIncomplete',
+  async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-killed-'))
+    try {
+      const deps = {
+        platform: 'darwin',
+        homeDir,
+        execFileSync: () => {
+          const error = new Error('spawnSync security ETIMEDOUT')
+          error.killed = true
+          error.signal = 'SIGTERM'
+          throw error
+        },
+      }
+      assert.throws(
+        () => listVaultLabels(origin, deps),
+        KeychainEnumerationIncomplete,
+        'a killed-by-timeout scan (no error.code) must throw, never silently return []',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)

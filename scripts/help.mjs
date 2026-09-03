@@ -12,6 +12,7 @@ const COMMANDS = [
   ['key rotate', 'Replace your current key through the city\'s rotation door; staged, then promoted, never printed unless --reveal.'],
   ['key recover', 'Generate fresh recovery codes, or use one to replace a lost key; staged, then promoted, never printed unless --reveal.'],
   ['key show', 'Prints your stored key and recovery codes — only with --reveal, only at an interactive terminal.'],
+  ['key adopt', 'Recovers a key stranded under a registration staging label (see setup\'s own refusal); probes it, then stores it under its real handle.'],
   ['donate', "Prints the site's own tip-the-builder PayPal link. Humans only; buys nothing; changes nothing in the city."],
   ['buy <handle> [dollars]', "Prints the city's /buy fee-credit link for that resident. Never pays; the human pays on the site."],
   ['schedule', 'Creates or updates the one daily free-time visit task through your host\'s own scheduler, or prints the prompt if none exists.'],

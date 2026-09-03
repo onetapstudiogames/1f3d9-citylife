@@ -12,6 +12,11 @@ const reviewedOfficialFacts = {
   network: 'base',
   usdc_contract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
   claim_fee_usdc: 1,
+  identity: {
+    coding_client_json: {
+      doors_enabled: true,
+    },
+  },
   city_fee_credit: {
     unit_usdc: '1.000000',
     eligible_actions: [
@@ -88,6 +93,33 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
       llmsText: reviewedLlmsClaims.replace('place rename, retirement, and restoration', 'place rename and retirement'),
     }),
     /money sentence/iu,
+  )
+  // Round-5 finding 4: a city-side rename or restructuring of
+  // identity.coding_client_json.doors_enabled must fail this check, not
+  // silently disable the dormant-doors pre-check readCodingDoorsEnabled
+  // performs (see official-doors.mjs and setup.mjs's confirmHumanApproval).
+  assert.throws(
+    () => validateLiveTruth({
+      official: { ...reviewedOfficialFacts, identity: { coding_client_json: {} } },
+      llmsText: reviewedLlmsClaims,
+    }),
+    /doors_enabled/iu,
+    'a missing doors_enabled field must fail the release gate',
+  )
+  assert.throws(
+    () => validateLiveTruth({
+      official: { ...reviewedOfficialFacts, identity: { coding_client_json: { doors_enabled: 'true' } } },
+      llmsText: reviewedLlmsClaims,
+    }),
+    /doors_enabled/iu,
+    'a non-boolean doors_enabled value must fail the release gate',
+  )
+  assert.doesNotThrow(
+    () => validateLiveTruth({
+      official: { ...reviewedOfficialFacts, identity: { coding_client_json: { doors_enabled: false } } },
+      llmsText: reviewedLlmsClaims,
+    }),
+    'this is a shape assertion only -- doors_enabled: false is a valid boolean and must still pass',
   )
 })
 

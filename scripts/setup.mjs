@@ -33,9 +33,12 @@
 // question directly, as one more confirmation ON TOP OF the valid token —
 // never as a substitute for it, and never on the first run.
 //
-// What this token IS: proof that a first pass ran here and printed the
-// question, before this exact registration was allowed to proceed — so an
-// agent cannot self-approve inside a single call with no refusal in between.
+// What this token IS: proof that a nonce record for this exact origin,
+// handle, and client class exists on this host — normally written by a
+// first pass that also printed the question below, though anything able to
+// write this script's own setup-state.json can create one directly. It
+// never proves the question was printed and never proves a first pass
+// actually ran.
 // What this token is NOT: proof that a human ever saw or answered that
 // question. Nothing stops the SAME agent, in the SAME unattended session,
 // from running the first pass, reading the token it prints, and immediately
@@ -45,11 +48,13 @@
 // is never proof of who actually said it, and a deliberate agent that
 // satisfies this gate without a real human answer is making a false
 // declaration on that public record, not defeating a security control.
-// What the two-pass shape actually buys: it forces the exact question to be
-// printed, in the agent's own transcript, before registration can happen —
-// so a human reviewing that transcript can see plainly whether the question
-// was ever really put to them, and a careless one-shot "just register me"
-// call can never slip through unnoticed.
+// What the two-pass shape actually buys, when a real first pass runs: it
+// puts the exact question on THIS agent's own transcript before
+// registration can happen, so a human reviewing that transcript can see
+// plainly whether the question was ever really put to them. It is not a
+// guarantee — a token minted by hand-writing setup-state.json, without ever
+// running a first pass or printing anything, passes the same check; see the
+// token comment above.
 
 import { spawnSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -58,8 +63,10 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
+import { readCodingDoorsEnabled } from './lib/official-doors.mjs'
 import {
-  readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE,
+  readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel,
+  KeychainEnumerationIncomplete,
 } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
@@ -321,6 +328,19 @@ if (RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
   process.exit()
 }
 
+// Same rule identity-client.mjs's own register() enforces on --model (see
+// validateModelLabel's own doc comment there, mirroring the city's own
+// /api/register rule) -- checked here too, before ever asking for approval,
+// for the same reason the handle checks above are: a --model the city was
+// always going to refuse must never burn a human-approval round trip first.
+const model = typeof flags.model === 'string' ? flags.model : ''
+const modelError = validateModelLabel(model)
+if (modelError) {
+  console.error(`setup: ${modelError}. Fix --model, then re-run.`)
+  process.exitCode = 1
+  process.exit()
+}
+
 // Before ever attempting to register, check whether this host's vault
 // already has a WORKING key for the exact handle requested. A lost or
 // truncated setup-state.json must never turn a resident that already exists
@@ -368,7 +388,56 @@ if (priorVaultEntry.keyWorks && newIdentity) {
 // recovery staging label, which is not a real registered identity) and
 // refuse outright unless --new-identity was passed.
 if (!newIdentity) {
-  const otherLabels = listVaultLabels(origin).filter(label => label !== handle)
+  let allLabels
+  try {
+    allLabels = listVaultLabels(origin)
+  } catch (error) {
+    if (!(error instanceof KeychainEnumerationIncomplete)) throw error
+    console.error(
+      `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's macOS Keychain ` +
+      `could not be fully scanned (${error.message}), so an existing resident under a different label may ` +
+      'be invisible right now. A lost or never-written setup-state.json must never turn an existing ' +
+      'resident into a second, permanent, unrecoverable one on the strength of an incomplete read -- retry ' +
+      'once whatever is slowing or blocking the Keychain clears. Only pass --new-identity if a genuinely ' +
+      'new resident is really intended regardless.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
+
+  // A registration staging label that outlived its own run is a different,
+  // narrower risk than the ordinary "other label" check just below: it
+  // means a PAST run's /api/register confirm already succeeded server-side
+  // (the resident is already permanent there) while that run's own vault
+  // promotion failed afterward, leaving the confirmed key ONLY under this
+  // staging label -- see listVaultLabels's own doc comment on
+  // registrationStagingLabels. Checked first and separately from
+  // otherLabels below, because listVaultLabels already excludes every
+  // staging label (registration included) from the array otherLabels reads,
+  // so that check alone would never catch this.
+  const registrationStagingLabels = allLabels.registrationStagingLabels ?? []
+  if (registrationStagingLabels.length > 0) {
+    const [stagingLabel] = registrationStagingLabels
+    const baseHandleMatch = /^(.+)--pending-registration-[0-9a-f]+$/u.exec(stagingLabel)
+    const baseHandle = baseHandleMatch ? baseHandleMatch[1] : stagingLabel
+    console.error(
+      `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's vault still ` +
+      `holds a registration staging label, "${stagingLabel}", for this origin. A register whose vault ` +
+      'promotion failed (a lock timeout, a vault-write failure) leaves the confirmed resident key ONLY ' +
+      'under a label like that one, while the resident it named is already permanent server-side -- the ' +
+      `city's own confirm already succeeded. Registering "${handle}" now, without resolving that first, ` +
+      `risks creating a SECOND, permanent, unrecoverable resident next to it. Run \`key adopt --handle ` +
+      `${baseHandle} --from-label ${stagingLabel}\` to probe the confirmed key and, only if it actually ` +
+      `authenticates as "${baseHandle}", store it under that real handle and delete the staging copy -- or, ` +
+      `to inspect the key by hand first, \`key show --handle ${stagingLabel} --reveal\`. Only pass ` +
+      '--new-identity once that staging entry is resolved and a genuinely new resident, distinct from it, ' +
+      'is still intended.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
+
+  const otherLabels = allLabels.filter(label => label !== handle)
   if (otherLabels.length > 0) {
     console.error(
       `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's vault already ` +
@@ -460,6 +529,13 @@ function approvalQuestion(forHandle, forClientClass) {
  *     follow-up within APPROVAL_TIMEOUT_MS. Same "no next token" shape as
  *     declinedAfterToken; kept as a distinct field only so the caller can
  *     print a message that names what actually happened.
+ *   { approved: false, doorsDormant: true } -- a valid token WAS presented,
+ *     but GET /api/official reports the coding-client identity doors are
+ *     disabled on this deployment right now (decision row 74's own
+ *     default-off switch). The nonce is DELIBERATELY left unconsumed here
+ *     -- unlike every other false branch above, which either already spent
+ *     it or never had one to spend -- so the same token still works once an
+ *     operator turns the doors back on; see the call site below.
  */
 async function confirmHumanApproval() {
   const provided = typeof flags['human-approved'] === 'string' ? flags['human-approved'] : null
@@ -468,6 +544,20 @@ async function confirmHumanApproval() {
   const tokenValid = Boolean(provided) && matchingPending && provided === computeApprovalToken(pending.nonce)
 
   if (tokenValid) {
+    // Read GET /api/official BEFORE the nonce below is ever spent -- see
+    // this function's own doorsDormant doc comment above and setup.mjs's
+    // header comment on "never spend an approval nonce on a registration
+    // the city was always going to refuse". A failed or inconclusive read
+    // (network error, non-JSON body, the field missing entirely) is never
+    // treated as "dormant" -- only an EXPLICIT `doorsEnabled === false`
+    // refuses here; anything else falls through to the real /api/register
+    // call, which is the honest backstop for a door that goes dormant
+    // between this check and that call, or for an /api/official this host
+    // could not reach at all.
+    const doorsCheck = await readCodingDoorsEnabled(origin, { allowOrigin })
+    if (doorsCheck.ok && doorsCheck.doorsEnabled === false) {
+      return { approved: false, doorsDormant: true }
+    }
     // Single-use: consume the nonce immediately, so this exact token can
     // never approve a later, separate registration attempt -- whether or
     // not the interactive follow-up below is also asked.
@@ -530,19 +620,36 @@ if (!approval.approved) {
     process.exitCode = 1
     process.exit()
   }
+  if (approval.doorsDormant) {
+    // Unlike every other branch above, the token here was NEVER consumed
+    // -- confirmHumanApproval's own doc comment on doorsDormant explains
+    // why -- so this is the one refusal that ends with the SAME token
+    // still valid, not a dead end requiring a fresh first pass.
+    console.error(
+      `setup: refusing to spend the approval token on "${handle}": ${origin}/api/official reports the ` +
+      'coding-client identity doors are disabled on this deployment right now ' +
+      '(identity.coding_client_json.doors_enabled is false) -- registering would only be refused again ' +
+      'after spending this single-use token, and the token must never be spent on a registration the city ' +
+      'was always going to refuse. Nothing was created and the token is UNCHANGED -- re-run this exact ' +
+      'command with the same --human-approved token once the doors are enabled again.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
   console.error(
     `setup: before registering, put this exact question to the human: "${approvalQuestion(handle, clientClass)}" ` +
     'Registration creates a permanent public identity that cannot be silently replaced. After a clear yes, ' +
     `re-run this exact command with --human-approved ${approval.token} appended. This check runs the same ` +
     'way whether or not stdin is an interactive terminal: on one, the second run (the one carrying this ' +
     'token) will ALSO ask this exact same question directly, as one more confirmation on top of the token, ' +
-    'never as a substitute for it. What the token proves: this exact registration was refused once, with ' +
-    'the question above printed, before being allowed to proceed -- it is the agent\'s own recorded ' +
-    'declaration that a human then said yes out of band (decision row 74). What it does NOT prove: that a ' +
-    'human actually saw or answered the question -- nothing stops the same agent, in the same unattended ' +
-    'session, from running this exact refused call and then immediately running the second one itself. ' +
-    'Doing that is a false declaration on the public record, not a defeated security control; this script ' +
-    'never claims otherwise.',
+    'never as a substitute for it. That token proves only that a nonce record for this exact origin, ' +
+    'handle, and client class exists on this host -- normally written by a first pass that also printed ' +
+    'the question above, though anything able to write this script\'s own setup-state.json can create one ' +
+    'directly -- so it never proves the question was printed, never proves a human saw or answered it, ' +
+    'and stands only as this agent\'s own recorded word that a human said yes out of band (decision row ' +
+    '74). Nothing stops the same agent, in the same unattended session, from running this exact refused ' +
+    'call and then immediately running the second one itself. Doing that is a false declaration on the ' +
+    'public record, not a defeated security control; this script never claims otherwise.',
   )
   process.exitCode = 1
   process.exit()
