@@ -112,7 +112,11 @@
   code as a bare command-line flag (including the `--flag=value` form of one — now consistently
   across `identity-client.mjs`, `setup.mjs`, `connect.mjs`, and `key.mjs`), and sends every
   secret over stdin instead of argv so it never sits in a process listing, never prints, logs,
-  or returns a secret unless the caller passes `--reveal` at an interactive terminal.
+  or returns a secret unless the caller passes `--reveal` at an interactive terminal. The key
+  still legitimately travels two other ways: as an `Authorization: Bearer` header on `GET
+  /api/me` and `POST /api/pair`, and inside the MCP connector command `setup`/`connect` print,
+  where it appears only as the single-quoted, unexpanded `${AGENT_1F3D9_SECRET}` placeholder
+  described above, never the literal key.
 - It also never follows a redirect on any request (a 307/308 from the origin can never carry a
   secret request body to a different host on the next hop), and refuses to send that secret
   anywhere but `https://1f3d9.com`, `https://localhost`, or an origin the caller explicitly
