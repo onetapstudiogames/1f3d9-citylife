@@ -6,13 +6,21 @@
 // and the honest two-pass human-approval gate.
 
 import assert from 'node:assert/strict'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 import { deleteSecret, readSecret, storeSecret } from '../scripts/identity-client.mjs'
 import { startStubCityServer } from './helpers/stub-city-server.mjs'
 import { makeTempHome, runNode } from './helpers/run-identity-cli.mjs'
+
+/** Extracts the token setup.mjs's refusal prints for the required second pass. */
+function extractApprovalToken(stderr) {
+  return /--human-approved ([0-9a-f]{32})/u.exec(stderr)?.[1] ?? null
+}
 
 const setupPath = fileURLToPath(new URL('../scripts/setup.mjs', import.meta.url))
 const connectPath = fileURLToPath(new URL('../scripts/connect.mjs', import.meta.url))
@@ -27,20 +35,33 @@ function assertNoSecretLeaked(result, label) {
 
 // --- Findings 1-4: the printed MCP connector commands are correct ---------
 
-test('connect.mjs prints a single-quoted, unexpanded Claude Code header targeting /mcp, and the real Codex flag', async () => {
-  const result = await runNode(connectPath, ['--origin', 'https://example.invalid', '--handle', 'nobody'])
+test('connect.mjs prints a single-quoted, unexpanded Claude Code header targeting /mcp on one line (PowerShell-safe), and the real Codex flag', async () => {
+  const result = await runNode(connectPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'nobody'])
   const out = result.stdout
-  assert.match(out, /claude mcp add --transport http 1f3d9 https:\/\/example\.invalid\/mcp \\/u, 'targets /mcp, not /mcp/connect')
-  assert.doesNotMatch(out, /\/mcp\/connect\s*\\/u, 'the bearer-header (Claude Code) line never names /mcp/connect')
-  assert.match(out, /--header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'/u, 'header value is single-quoted and unexpanded')
+  const claudeLine = out.split(/\r?\n/u).find(line => line.trimStart().startsWith('claude mcp add'))
+  assert.ok(claudeLine, 'the Claude Code command line is present')
+  assert.match(
+    claudeLine,
+    /^\s*claude mcp add --transport http 1f3d9 https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
+    'the whole command fits on one line -- a POSIX `\\` continuation is a hard parse error in PowerShell',
+  )
+  assert.doesNotMatch(claudeLine, /\\\s*$/u, 'the line never ends with a line-continuation backslash')
+  assert.doesNotMatch(out, /\/mcp\/connect/u, 'the bearer-header (Claude Code) line never names /mcp/connect')
   assert.doesNotMatch(out, /--header "Authorization: Bearer \$\{/u, 'header is never double-quoted (that is what let the shell expand it)')
   assert.match(out, /codex mcp add 1f3d9 --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
   assert.doesNotMatch(out, /--bearer_token_env_var/u, 'never the underscored flag spelling the real Codex CLI rejects')
-  assert.match(out, /AGENT_1F3D9_SECRET/u)
   assertNoSecretLeaked(result, 'connect.mjs')
 })
 
-test('setup.mjs prints the same corrected MCP connector command shape in its own connect step', async () => {
+test('connect.mjs refuses a disallowed http origin before printing any MCP command, and exits non-zero (finding 2)', async () => {
+  const result = await runNode(connectPath, ['--origin', 'http://attacker.example', '--handle', 'victim-agent'])
+  assert.notEqual(result.status, 0)
+  assert.doesNotMatch(result.stdout, /mcp add/u, 'no connector command line was ever printed')
+  assert.match(result.stderr, /only https is allowed/iu)
+  assertNoSecretLeaked(result, 'connect.mjs disallowed origin')
+})
+
+test('setup.mjs prints the same corrected MCP connector command shape, on one line, in its own connect step', async () => {
   // Reached via the "no existing identity, no handle/client-class given"
   // refusal path, which still prints nothing about the connector — so drive
   // this through the repair branch instead by seeding setup-state directly,
@@ -53,10 +74,15 @@ test('setup.mjs prints the same corrected MCP connector command shape in its own
       `${stateDir}/setup-state.json`,
       JSON.stringify({ 'https://example.invalid': { handle: 'nobody', client_class: 'coding_persistent' } }),
     )
-    const result = await runNode(setupPath, ['--origin', 'https://example.invalid'], { env: home.env })
+    const result = await runNode(setupPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid'], { env: home.env })
     const out = result.stdout
-    assert.match(out, /claude mcp add --transport http 1f3d9 https:\/\/example\.invalid\/mcp \\/u)
-    assert.match(out, /--header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'/u)
+    const claudeLine = out.split(/\r?\n/u).find(line => line.trimStart().startsWith('claude mcp add'))
+    assert.ok(claudeLine, 'the Claude Code command line is present')
+    assert.match(
+      claudeLine,
+      /^\s*claude mcp add --transport http 1f3d9 https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
+    )
+    assert.doesNotMatch(claudeLine, /\\\s*$/u, 'the line never ends with a line-continuation backslash')
     assert.match(out, /codex mcp add 1f3d9 --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
     assert.doesNotMatch(out, /--bearer_token_env_var/u)
     assertNoSecretLeaked(result, 'setup.mjs (repair branch)')
@@ -65,38 +91,97 @@ test('setup.mjs prints the same corrected MCP connector command shape in its own
   }
 })
 
+test('setup.mjs refuses a disallowed http origin before printing anything at all, and exits non-zero (finding 2)', async () => {
+  const result = await runNode(setupPath, ['--origin', 'http://attacker.example', '--handle', 'victim-agent', '--client-class', 'coding_persistent'])
+  assert.notEqual(result.status, 0)
+  assert.equal(result.stdout.trim(), '', 'nothing at all was printed to stdout')
+  assert.match(result.stderr, /only https is allowed/iu)
+  assertNoSecretLeaked(result, 'setup.mjs disallowed origin')
+})
+
+test('key.mjs refuses a disallowed http origin before running any command, and exits non-zero (finding 2)', async () => {
+  const result = await runNode(keyPath, ['status', '--origin', 'http://attacker.example', '--handle', 'victim-agent'])
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /only https is allowed/iu)
+  assertNoSecretLeaked(result, 'key.mjs disallowed origin')
+})
+
 // --- End-to-end against a stub city server ---------------------------------
 
-test('setup.mjs: honest two-pass human approval refuses on a non-interactive first run, then registers on the second', async () => {
+test('setup.mjs: human approval needs two real passes -- a bare or fabricated --human-approved cannot self-approve in one call, only a token minted by a genuine first pass can', async () => {
   const stub = await startStubCityServer()
   const home = makeTempHome('setup-approve-')
   try {
+    // A bare --human-approved (no token at all) is exactly what the SKILL
+    // used to instruct in one shot -- it must still refuse.
+    const bareAttempt = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-one', '--client-class', 'coding_persistent', '--human-approved'],
+      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+    assert.notEqual(bareAttempt.status, 0, 'a bare --human-approved with no token still cannot self-approve in one call')
+    assert.equal(stub.residents.size, 0)
+
     const firstPass = await runNode(
       setupPath,
       ['--origin', stub.origin, '--handle', 'agent-one', '--client-class', 'coding_persistent'],
       { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
     )
-    assert.notEqual(firstPass.status, 0, 'refuses without --human-approved on a non-interactive run')
+    assert.notEqual(firstPass.status, 0, 'refuses without a valid token on a non-interactive run')
     assert.match(firstPass.stderr, /put this exact question to the human/u)
     assert.match(firstPass.stderr, /"agent-one"/u)
     assert.match(firstPass.stderr, /register it now/iu)
     assert.match(firstPass.stderr, /decision row 74/u)
+    assert.ok(extractApprovalToken(firstPass.stderr), 'the refused first pass prints the exact second command, with a derived token')
     assert.equal(stub.residents.size, 0, 'nothing was registered by the refused first pass')
+
+    // A fabricated token -- something an unattended loop might try to guess
+    // or construct without ever having seen a real refusal -- is refused
+    // exactly like no token at all. This ALSO mints a fresh nonce (every
+    // refusal does, so each failed attempt gets its own honest next-step
+    // token rather than silently reusing a stale one) -- so the token this
+    // refusal itself prints, not firstPass's now-superseded one, is what the
+    // real second pass below must use.
+    const fabricated = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-one', '--client-class', 'coding_persistent', '--human-approved', 'a'.repeat(32)],
+      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+    assert.notEqual(fabricated.status, 0, 'a fabricated token is refused')
+    assert.equal(stub.residents.size, 0)
+    const token = extractApprovalToken(fabricated.stderr)
+    assert.ok(token, 'this refusal too prints the exact second command, with a freshly derived token')
 
     const secondPass = await runNode(
       setupPath,
-      ['--origin', stub.origin, '--handle', 'agent-one', '--client-class', 'coding_persistent', '--human-approved'],
+      ['--origin', stub.origin, '--handle', 'agent-one', '--client-class', 'coding_persistent', '--human-approved', token],
       { env: home.env },
     )
     assert.equal(secondPass.status, 0, secondPass.stderr)
-    assert.equal(stub.residents.size, 1, 'the second, approved pass actually registered')
+    assert.equal(stub.residents.size, 1, 'the second pass, carrying the token the most recent refusal minted, actually registered')
     assert.ok(stub.residents.has('agent-one'))
+    assertNoSecretLeaked(bareAttempt, 'setup.mjs bare --human-approved attempt')
     assertNoSecretLeaked(firstPass, 'setup.mjs first pass')
+    assertNoSecretLeaked(fabricated, 'setup.mjs fabricated-token attempt')
     assertNoSecretLeaked(secondPass, 'setup.mjs second pass')
 
     const stored = readSecret(stub.origin, 'agent-one', { homeDir: home.dir })
     assert.equal(stored.found, true)
     assert.equal(stored.value.resident_key, stub.residents.get('agent-one').resident_key)
+
+    // The token is single-use: replaying it after a successful registration
+    // must never register a second resident. (By now setup-state.json names
+    // "agent-one" for this origin, so this reaches the repair path, which
+    // never registers regardless -- proving the single-use property would
+    // need a second handle's worth of state; the repair-path assertion
+    // below already proves no second resident appears either way.)
+    const replay = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-one', '--client-class', 'coding_persistent', '--human-approved', token],
+      { env: home.env },
+    )
+    assert.equal(replay.status, 0, replay.stderr)
+    assert.equal(stub.residents.size, 1, 'replaying the token never creates a second resident')
 
     // Re-running with no flags at all reads the state file and repairs,
     // never registering a second identity.
@@ -112,6 +197,48 @@ test('setup.mjs: honest two-pass human approval refuses on a non-interactive fir
     // the same way test/vault-roundtrip-windows.test.mjs does for its own
     // fixture entries.
     deleteSecret(stub.origin, 'agent-one')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('setup.mjs: the approval token is genuinely single-use -- once consumed by a successful pass, it approves nothing else afterward, even for a fresh registration attempt', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-token-reuse-')
+  try {
+    const firstPass = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-token-reuse', '--client-class', 'coding_persistent'],
+      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+    const token = extractApprovalToken(firstPass.stderr)
+    assert.ok(token)
+
+    const secondPass = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-token-reuse', '--client-class', 'coding_persistent', '--human-approved', token],
+      { env: home.env },
+    )
+    assert.equal(secondPass.status, 0, secondPass.stderr)
+    assert.equal(stub.residents.size, 1)
+
+    // The successful pass above already consumed pending_approval (set it
+    // to null in setup-state.json). Simulate the "state lost, vault intact"
+    // stranding shape for a SECOND, distinct handle -- the only way to reach
+    // a fresh registration attempt at all, since a repair run ignores
+    // --handle entirely once setup-state.json names one for this origin --
+    // and confirm the already-spent token still cannot approve it.
+    writeFileSync(`${home.dir}/.1f3d9/setup-state.json`, JSON.stringify({}))
+    const replay = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-token-reuse-2', '--client-class', 'coding_persistent', '--human-approved', token, '--new-identity'],
+      { env: home.env },
+    )
+    assert.notEqual(replay.status, 0, 'the already-consumed token cannot approve a later registration')
+    assert.equal(stub.residents.size, 1, 'no second resident was registered by replaying a spent token')
+  } finally {
+    deleteSecret(stub.origin, 'agent-token-reuse')
+    deleteSecret(stub.origin, 'agent-token-reuse-2')
     home.cleanup()
     await stub.close()
   }
@@ -172,9 +299,19 @@ test('setup.mjs: --new-identity bypasses adoption and attempts a real registrati
       stored_at: new Date().toISOString(),
     }, { homeDir: home.dir })
 
+    // Two real passes are still required even with --new-identity.
+    const firstPass = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-two-b', '--client-class', 'coding_persistent', '--new-identity'],
+      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+    assert.notEqual(firstPass.status, 0)
+    const token = extractApprovalToken(firstPass.stderr)
+    assert.ok(token, 'the refused first pass prints a token for the second run')
+
     const forced = await runNode(
       setupPath,
-      ['--origin', stub.origin, '--handle', 'agent-two-b', '--client-class', 'coding_persistent', '--human-approved', '--new-identity'],
+      ['--origin', stub.origin, '--handle', 'agent-two-b', '--client-class', 'coding_persistent', '--human-approved', token, '--new-identity'],
       { env: home.env },
     )
     assert.notEqual(forced.status, 0, '--new-identity still cannot create a real duplicate; the city itself refuses it')
@@ -195,7 +332,7 @@ test('setup.mjs refuses to guess on a corrupt setup-state.json rather than silen
 
     const result = await runNode(
       setupPath,
-      ['--origin', 'https://example.invalid', '--handle', 'agent-three', '--client-class', 'coding_persistent', '--human-approved'],
+      ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'agent-three', '--client-class', 'coding_persistent', '--human-approved'],
       { env: home.env },
     )
     assert.notEqual(result.status, 0)
@@ -306,9 +443,18 @@ test('setup.mjs refuses --reveal outright when stdout is not a TTY, instead of s
   const stub = await startStubCityServer()
   const home = makeTempHome('setup-reveal-refuse-')
   try {
+    const firstPass = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-seven', '--client-class', 'coding_persistent', '--reveal'],
+      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+    assert.notEqual(firstPass.status, 0)
+    const token = extractApprovalToken(firstPass.stderr)
+    assert.ok(token, 'the refused first pass prints a token for the second run')
+
     const result = await runNode(
       setupPath,
-      ['--origin', stub.origin, '--handle', 'agent-seven', '--client-class', 'coding_persistent', '--human-approved', '--reveal'],
+      ['--origin', stub.origin, '--handle', 'agent-seven', '--client-class', 'coding_persistent', '--human-approved', token, '--reveal'],
       { env: home.env },
     )
     assert.notEqual(result.status, 0)
@@ -317,5 +463,252 @@ test('setup.mjs refuses --reveal outright when stdout is not a TTY, instead of s
   } finally {
     home.cleanup()
     await stub.close()
+  }
+})
+
+// --- Finding 4: SecretReadFailure is caught everywhere, never an --------
+// uncaught crash with a raw Node stack trace.
+
+test('key/connect/setup refuse cleanly on a corrupt vault entry, never an uncaught stack trace', async () => {
+  const origin = 'https://example.invalid'
+  const handle = `corrupt-handle-${Date.now().toString(36)}`
+  const STACK_TRACE_LINE = /^\s*at\s+\S+/mu
+
+  if (process.platform === 'win32') {
+    // Seed a genuinely undecodable Windows Credential Manager entry the
+    // same way the finding's own reproduction did: cmdkey can write an
+    // arbitrary password string that CredRead reads back as raw bytes this
+    // script's JSON.parse(Buffer.from(...)) cannot decode.
+    const target = `1f3d9:${origin}:${handle}`
+    execFileSync('cmdkey', [`/generic:${target}`, `/user:${handle}`, '/pass:not-valid-base64-json{{{'], { stdio: 'ignore' })
+    try {
+      for (const [label, scriptPath, args] of [
+        ['key status', keyPath, ['status', '--origin', origin, '--allow-origin', origin, '--handle', handle]],
+        ['key show', keyPath, ['show', '--origin', origin, '--allow-origin', origin, '--handle', handle]],
+        ['connect', connectPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle]],
+        ['setup', setupPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle, '--client-class', 'coding_persistent']],
+      ]) {
+        const result = await runNode(scriptPath, args)
+        assert.notEqual(result.status, 0, `${label}: exits non-zero on a corrupt vault entry`)
+        assert.doesNotMatch(result.stderr, STACK_TRACE_LINE, `${label}: no raw stack trace`)
+        assert.match(result.stderr, /could not be decoded/iu, `${label}: caller-words explanation`)
+      }
+    } finally {
+      execFileSync('cmdkey', [`/delete:${target}`], { stdio: 'ignore' })
+    }
+    return
+  }
+
+  // POSIX file backend: write a corrupt file directly at the deterministic
+  // path storeSecret/readSecret compute, inside a throwaway HOME.
+  const home = makeTempHome('corrupt-vault-')
+  try {
+    const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
+    const safeLabel = handle.replace(/[^a-z0-9._-]/giu, '_')
+    const dir = `${home.dir}/.1f3d9/credentials`
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(`${dir}/${safeOrigin}__${safeLabel}.json`, 'not valid json{{{')
+
+    for (const [label, scriptPath, args] of [
+      ['key status', keyPath, ['status', '--origin', origin, '--allow-origin', origin, '--handle', handle]],
+      ['key show', keyPath, ['show', '--origin', origin, '--allow-origin', origin, '--handle', handle]],
+      ['connect', connectPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle]],
+      ['setup', setupPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle, '--client-class', 'coding_persistent']],
+    ]) {
+      const result = await runNode(scriptPath, args, { env: home.env })
+      assert.notEqual(result.status, 0, `${label}: exits non-zero on a corrupt vault entry`)
+      assert.doesNotMatch(result.stderr, STACK_TRACE_LINE, `${label}: no raw stack trace`)
+      assert.match(result.stderr, /could not be parsed as JSON/iu, `${label}: caller-words explanation`)
+    }
+  } finally {
+    home.cleanup()
+  }
+})
+
+// --- Finding 5: an adopted/checked vault entry must actually authenticate -
+// as the handle it is labelled under, not just any working key.
+
+test('setup.mjs refuses to adopt a vault entry whose stored key authenticates as a different resident', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-mismatch-')
+  try {
+    // The city knows "agent-beta"; the vault entry LABELLED "agent-alpha"
+    // actually holds agent-beta's key (a stale label, a hand-copied entry,
+    // or a handle the city normalized at registration).
+    stub.residents.set('agent-beta', { resident_key: `1f3d9_sk_${'9'.repeat(48)}`, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-alpha', {
+      kind: 'resident',
+      handle: 'agent-alpha',
+      client_class: 'coding_persistent',
+      resident_key: stub.residents.get('agent-beta').resident_key,
+      recovery_codes: [],
+      origin: stub.origin,
+      stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-alpha', '--client-class', 'coding_persistent'],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0, 'refuses instead of adopting a mismatched entry')
+    assert.match(result.stderr, /agent-alpha/u)
+    assert.match(result.stderr, /agent-beta/u)
+    assert.equal(stub.residents.size, 1, 'no new resident was registered, and the true resident is untouched')
+    assertNoSecretLeaked(result, 'setup.mjs mismatch refusal')
+  } finally {
+    deleteSecret(stub.origin, 'agent-alpha')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key status reports a mismatch instead of claiming success when the stored key authenticates as a different handle', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-mismatch-')
+  try {
+    stub.residents.set('agent-delta', { resident_key: `1f3d9_sk_${'8'.repeat(48)}`, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-gamma', {
+      kind: 'resident',
+      handle: 'agent-gamma',
+      client_class: 'coding_persistent',
+      resident_key: stub.residents.get('agent-delta').resident_key,
+      recovery_codes: [],
+      origin: stub.origin,
+      stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(keyPath, ['status', '--origin', stub.origin, '--handle', 'agent-gamma'], { env: home.env })
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /agent-gamma/u)
+    assert.match(result.stdout, /agent-delta/u)
+    assert.doesNotMatch(result.stdout, /works \(one me read succeeded\)/u, 'never claims plain success on a mismatch')
+    assertNoSecretLeaked(result, 'key status mismatch')
+  } finally {
+    deleteSecret(stub.origin, 'agent-gamma')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('connect.mjs reports a mismatch instead of claiming OK when the stored key authenticates as a different handle', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('connect-mismatch-')
+  try {
+    stub.residents.set('agent-zeta', { resident_key: `1f3d9_sk_${'6'.repeat(48)}`, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'agent-epsilon', {
+      kind: 'resident',
+      handle: 'agent-epsilon',
+      client_class: 'coding_persistent',
+      resident_key: stub.residents.get('agent-zeta').resident_key,
+      recovery_codes: [],
+      origin: stub.origin,
+      stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(connectPath, ['--origin', stub.origin, '--handle', 'agent-epsilon'], { env: home.env })
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /MISMATCH/u)
+    assert.match(result.stdout, /agent-epsilon/u)
+    assert.match(result.stdout, /agent-zeta/u)
+    assert.doesNotMatch(result.stdout, /one me read: OK/u, 'never claims OK on a mismatch')
+    assertNoSecretLeaked(result, 'connect.mjs mismatch')
+  } finally {
+    deleteSecret(stub.origin, 'agent-epsilon')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+// --- Finding 8: the duplicate-identity guard enumerates the whole vault, --
+// not just the exact handle requested.
+
+test('setup.mjs refuses to register under a new handle when this origin already has a vault entry under a different label, without --new-identity', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-other-label-')
+  try {
+    storeSecret(stub.origin, 'agent-old', {
+      kind: 'resident',
+      handle: 'agent-old',
+      client_class: 'coding_persistent',
+      resident_key: `1f3d9_sk_${'7'.repeat(48)}`,
+      recovery_codes: [],
+      origin: stub.origin,
+      stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-new', '--client-class', 'coding_persistent'],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0, 'refuses without --new-identity when another entry exists for this origin')
+    assert.match(result.stderr, /--new-identity/u)
+    assert.match(result.stderr, /agent-old/u)
+    assert.equal(stub.residents.size, 0, 'nothing was registered')
+    assertNoSecretLeaked(result, 'setup.mjs other-label refusal')
+  } finally {
+    deleteSecret(stub.origin, 'agent-old')
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+// --- Finding 9: the test env overlay never leaks the real developer's own -
+// AGENT_1F3D9_SECRET / IDENTITY_ORIGIN into a driven child process.
+
+test('runNode does not leak the parent process\'s AGENT_1F3D9_SECRET or IDENTITY_ORIGIN into the child', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'run-identity-cli-env-'))
+  try {
+    const probeScript = join(dir, 'env-probe.mjs')
+    writeFileSync(
+      probeScript,
+      "process.stdout.write(JSON.stringify({ secret: process.env.AGENT_1F3D9_SECRET ?? null, origin: process.env.IDENTITY_ORIGIN ?? null }))\n",
+    )
+    const previousSecret = process.env.AGENT_1F3D9_SECRET
+    const previousOrigin = process.env.IDENTITY_ORIGIN
+    process.env.AGENT_1F3D9_SECRET = `1f3d9_sk_${'z'.repeat(48)}`
+    process.env.IDENTITY_ORIGIN = 'https://leaked.invalid'
+    try {
+      const result = await runNode(probeScript, [])
+      const seen = JSON.parse(result.stdout)
+      assert.equal(seen.secret, null, 'the real AGENT_1F3D9_SECRET from this test-runner process never reaches the child')
+      assert.equal(seen.origin, null, 'the real IDENTITY_ORIGIN from this test-runner process never reaches the child')
+    } finally {
+      if (previousSecret === undefined) delete process.env.AGENT_1F3D9_SECRET
+      else process.env.AGENT_1F3D9_SECRET = previousSecret
+      if (previousOrigin === undefined) delete process.env.IDENTITY_ORIGIN
+      else process.env.IDENTITY_ORIGIN = previousOrigin
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// --- Finding 12: `key show --reveal` never prints the literal word --------
+// "undefined" when a stored bundle carries no resident_key field.
+
+test('key show refuses to print "undefined" when a stored bundle has no resident_key field', async () => {
+  const origin = 'https://example.invalid'
+  const home = makeTempHome('key-show-no-key-')
+  try {
+    storeSecret(origin, 'no-key-handle', {
+      kind: 'resident',
+      handle: 'no-key-handle',
+      origin,
+      // deliberately missing resident_key -- a staging bundle, a hand-written
+      // entry, or any future bundle shape without one.
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      keyPath,
+      ['show', '--origin', origin, '--allow-origin', origin, '--handle', 'no-key-handle', '--reveal'],
+      { env: home.env, stdio: ['pipe', 'pipe', 'pipe'] },
+    )
+    assert.doesNotMatch(result.stdout, /undefined/u)
+    assert.match(result.stdout, /carries no resident_key/u)
+  } finally {
+    deleteSecret(origin, 'no-key-handle')
+    home.cleanup()
   }
 })

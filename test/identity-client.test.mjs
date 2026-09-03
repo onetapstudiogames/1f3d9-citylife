@@ -15,6 +15,9 @@ import {
   storeSecret,
 } from '../scripts/identity-client.mjs'
 import { assertAllowedOrigin } from '../scripts/lib/origin-guard.mjs'
+import { probeMe } from '../scripts/lib/identity-probe.mjs'
+import { startRedirectingStubServer } from './helpers/stub-city-server.mjs'
+import { runNode } from './helpers/run-identity-cli.mjs'
 
 const identityClientPath = fileURLToPath(new URL('../scripts/identity-client.mjs', import.meta.url))
 
@@ -155,14 +158,96 @@ test('shouldReveal is true only when --reveal was passed AND stdout is a real TT
   assert.equal(shouldReveal({ reveal: false }, true), false)
 })
 
-test('a captured (piped) run never prints resident_key or recovery_codes even with --reveal', () => {
-  // We cannot force process.stdout.isTTY true from a spawned child whose
-  // stdout is a pipe, which is exactly the point: this asserts that a
-  // pipe/capture context (a subprocess, a log file, a CI runner) can never
-  // exfiltrate a secret through --reveal, only an interactive terminal can.
-  const result = runCli(['register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'x', '--client-class', 'coding_persistent', '--human-approved', '--reveal'])
-  assert.doesNotMatch(result.stdout, /1f3d9_sk_/u)
-  assert.doesNotMatch(result.stdout, /1f3d9_rc_/u)
+// The prior version of this suite also carried a subprocess-driven "reveal"
+// test pointed at https://example.invalid, which always died in
+// fetchOrExplain before revealOrHide was ever reached -- it could not fail
+// even with the reveal gate replaced by an unconditional print. Real
+// coverage of "a secret never reaches captured stdout even with --reveal"
+// now lives in shouldReveal above (the pure predicate) plus the
+// stub-server-driven leak assertions in test/identity-commands.test.mjs
+// (setup's second pass, key rotate, key recover generate), which actually
+// exercise a real staged key and would go red if the gate broke.
+
+// --- Redirects: never followed, even to another allowed-origin host -------
+// (finding 7 / the redirect exfiltration primitive)
+
+test('identity-client.mjs never follows a redirect from the (allowed) origin to another host', async () => {
+  const { createServer } = await import('node:http')
+  let attackerHit = false
+  let attackerBody = null
+  const attacker = createServer((req, res) => {
+    attackerHit = true
+    let data = ''
+    req.on('data', chunk => { data += chunk })
+    req.on('end', () => {
+      attackerBody = data
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end('{}')
+    })
+  })
+  await new Promise(resolvePromise => attacker.listen(0, '127.0.0.1', resolvePromise))
+  const attackerPort = attacker.address().port
+
+  // https://localhost:<port> is allowed unconditionally (local development),
+  // so no --allow-origin is needed to reach this stub -- exactly like a real
+  // deployment pointed at the real city.
+  const redirecting = await startRedirectingStubServer(`http://127.0.0.1:${attackerPort}/stolen`)
+  try {
+    // Must be runNode (async spawn), never spawnSync/runCli: this test's
+    // stub HTTPS server runs in THIS process's own event loop, and a
+    // synchronous child would block that loop -- starving the very server
+    // the child is trying to reach -- exactly the pitfall runNode's own doc
+    // comment in test/helpers/run-identity-cli.mjs describes.
+    const result = await runNode(identityClientPath, [
+      'register', '--origin', redirecting.origin,
+      '--handle', 'x', '--client-class', 'coding_persistent', '--human-approved',
+    ])
+    assert.notEqual(result.status, 0, 'register refuses rather than following the redirect')
+    assert.equal(attackerHit, false, 'the redirect target never received any request at all')
+    assert.equal(attackerBody, null)
+    assert.doesNotMatch(result.stdout + result.stderr, /1f3d9_sk_|1f3d9_rc_/u, 'no secret literal anywhere in the CLI output either')
+    assert.match(result.stderr, /redirect/iu, 'sanity: the failure is actually the redirect refusal (fetch\'s redirect: "error")')
+  } finally {
+    await redirecting.close()
+    await new Promise(resolvePromise => attacker.close(resolvePromise))
+  }
+})
+
+test('probeMe never follows a redirect from the origin to another host', async () => {
+  const { createServer } = await import('node:http')
+  let attackerHit = false
+  const attacker = createServer((req, res) => {
+    attackerHit = true
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end('{}')
+  })
+  await new Promise(resolvePromise => attacker.listen(0, '127.0.0.1', resolvePromise))
+  const attackerPort = attacker.address().port
+
+  const redirecting = await startRedirectingStubServer(`http://127.0.0.1:${attackerPort}/stolen`)
+  // probeMe runs in THIS process (unlike the subprocess test above), so the
+  // self-signed fixture cert needs the same trust relaxation
+  // test/helpers/run-identity-cli.mjs sets via env for subprocess callers --
+  // set and restore it directly on this process so it never leaks into
+  // other tests in this file.
+  const previousTlsSetting = process.env.NODE_TLS_REJECT_UNAUTHORIZED
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+  try {
+    const probe = await probeMe(redirecting.origin, `1f3d9_sk_${'a'.repeat(48)}`)
+    assert.equal(probe.ok, false, 'probeMe reports failure rather than following the redirect')
+    // The definitive proof this is the redirect refusal (not, say, an
+    // unrelated network hiccup): the redirect target genuinely never saw a
+    // request. probe.error's exact text is not asserted here -- undici
+    // reports a redirect-mode-error failure only as a bare "fetch failed" at
+    // this level, with the real reason one level deeper in error.cause,
+    // which probeMe's catch (unlike fetchOrExplain's) does not unwrap.
+    assert.equal(attackerHit, false, 'the redirect target never received the bearer-authenticated request')
+  } finally {
+    if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED
+    else process.env.NODE_TLS_REJECT_UNAUTHORIZED = previousTlsSetting
+    await redirecting.close()
+    await new Promise(resolvePromise => attacker.close(resolvePromise))
+  }
 })
 
 // --- Vault round trip against the temp-file backend -----------------------
@@ -273,4 +358,44 @@ test('promoteReplacementKey merges forward client_class and recovery_codes from 
   } finally {
     await rm(homeDir, { recursive: true, force: true })
   }
+})
+
+test('promoteReplacementKey refuses to swallow a write failure after the server already confirmed the new key (finding 3)', () => {
+  // Fully mocked via injected deps (execFileSync never runs a real `security`
+  // binary), so this runs on every platform: the read side succeeds (a live
+  // entry exists) and the write side fails (a locked keychain), exactly the
+  // shape a caller must never see reported as a bare "could not write" with
+  // no context -- by the time this function runs, the server already
+  // confirmed the rotation/recovery, so the OLD key is already dead, and the
+  // ONLY place the new one lives is the staging label.
+  const origin = 'https://example.invalid'
+  const handle = 'promote-write-fail'
+  const stagingLabel = `${handle}--pending-rotation`
+  const previousValue = { kind: 'resident', handle, client_class: 'coding_persistent', resident_key: 'old-key', origin }
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') {
+      return Buffer.from(JSON.stringify(previousValue), 'utf8').toString('base64')
+    }
+    if (command === 'security' && args[0] === '-i') {
+      throw new Error('keychain is locked')
+    }
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const deps = { execFileSync, platform: 'darwin' }
+
+  assert.throws(
+    () => promoteReplacementKey(origin, handle, stagingLabel, 'new-key', (previous) => ({
+      ...(previous?.client_class ? { client_class: previous.client_class } : {}),
+    }), deps),
+    (error) => {
+      assert.match(error.message, /old key.*no longer works/iu, 'names the old key as already dead')
+      assert.match(
+        error.message,
+        new RegExp(stagingLabel.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')),
+        'names the staging label where the confirmed replacement key still lives',
+      )
+      assert.doesNotMatch(error.message, /new-key|old-key/u, 'never includes the raw key values')
+      return true
+    },
+  )
 })
