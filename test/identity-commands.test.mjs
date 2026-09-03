@@ -160,7 +160,34 @@ test('register --replace-vault-entry deliberately overwrites an existing entry',
 // "two concurrent register runs share one staging label").
 
 test('two concurrent register runs for the same handle: the winner promotes, the loser refuses and still names its own untouched staging copy', async () => {
-  const stub = await startStubCityServer()
+  // registerConfirmBarrier forces the actual overlap this test needs
+  // instead of hoping two subprocess spawns happen to collide. Without it,
+  // this was genuinely flaky: 'confirm' is register()'s LAST network call
+  // before its own local pre-flight vault check runs (see register()'s own
+  // comment in identity-client.mjs), and that pre-flight check plus the
+  // rest of a run's local vault work is fast enough -- especially on
+  // POSIX, where it is a plain synchronous file read/write, no subprocess
+  // spawn -- that a loaded CI runner could let one real subprocess finish
+  // its ENTIRE run (stage, pre-flight, stage-write, confirm, promote,
+  // live-vault write) before the other had even gotten its own stage()
+  // response back. When that happened, the loser's pre-flight check (which
+  // runs long before the race-decided path this test actually exercises,
+  // promoteReplacementKey's locked refuseIfPresent re-check) was the one
+  // that caught the now-existing handle instead, and failed this test's
+  // assertions below on wording they never intended to cover ("... vault
+  // entry that already exists for ..." instead of "... that now exists
+  // ...") -- reproduced from a real ubuntu-latest CI failure log, not
+  // theorized. Holding every 'confirm' for this handle until both are
+  // outstanding guarantees, structurally, that neither subprocess's
+  // pre-flight check can be racing against an already-finished other run:
+  // by the time a confirm request reaches the server at all, that
+  // process's own pre-flight check has already happened. What remains
+  // racy -- and is exactly what this test means to cover -- is the two
+  // real subprocesses' concurrent trip through promoteReplacementKey's
+  // per-handle file lock immediately after both confirms release together.
+  const stub = await startStubCityServer({
+    registerConfirmBarrier: { handle: 'race-probe-handle', count: 2 },
+  })
   const home = makeTempHome('register-race-')
   try {
     const args = [
@@ -169,7 +196,10 @@ test('two concurrent register runs for the same handle: the winner promotes, the
     ]
     // Two real, concurrent subprocesses racing the same requested handle
     // against the same stub server and the same shared vault home -- the
-    // actual shape of the finding, not a mocked stand-in for it.
+    // actual shape of the finding, not a mocked stand-in for it. The
+    // barrier above is what makes the overlap deterministic; these are
+    // still real, separate `node` processes actually racing each other
+    // through the client's real vault-locking code once it releases them.
     const [first, second] = await Promise.all([
       runNode(identityClientPath, args, { env: home.env }),
       runNode(identityClientPath, args, { env: home.env }),

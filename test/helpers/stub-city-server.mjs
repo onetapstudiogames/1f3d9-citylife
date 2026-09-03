@@ -60,12 +60,34 @@ function bearerKey(req) {
  * (values: { resident_key, recovery_codes, client_class }) a test can
  * inspect directly after driving a real CLI command against `origin`, or
  * pre-seed before starting a scenario.
+ *
+ * `registerConfirmBarrier` (optional): `{ handle, count }`. When set,
+ * register's 'confirm' action for any stage token whose staged handle
+ * equals `handle` is held -- not responded to at all -- until `count` such
+ * confirm requests are concurrently outstanding, at which point every held
+ * one is released together. This exists for exactly one caller: this
+ * file's own concurrent-registration race test in
+ * test/identity-commands.test.mjs, which needs its two real subprocesses
+ * to genuinely overlap rather than hoping OS scheduling makes them.
+ * 'confirm' is always the LAST network call register() makes before that
+ * process's own local pre-flight vault check (readSecret, called right
+ * after stage() -- see register()'s own comment in identity-client.mjs) --
+ * so a confirm request reaching this server already proves that process's
+ * own pre-flight check has already run. Holding every such request until
+ * `count` have arrived therefore guarantees, structurally rather than by
+ * luck, that no process can reach its own vault write (inside
+ * promoteReplacementKey, which only runs after confirm resolves) before
+ * every other racing process has already passed its own pre-flight
+ * check -- which is the actual overlap the race test means to exercise.
+ * Every other caller of this function omits the option, so it changes
+ * nothing about the ~20 other scenarios sharing this stub.
  */
-export async function startStubCityServer() {
+export async function startStubCityServer({ registerConfirmBarrier } = {}) {
   const residents = new Map()
   const pendingRegistrations = new Map() // stage_token -> { handle, resident_key, recovery_codes, client_class }
   const pendingRotations = new Map() // stage_token -> { handle, resident_key }
   const pendingRecoveries = new Map() // stage_token -> { handle, resident_key }
+  let confirmBarrierWaiters = []
 
   const server = createHttpsServer(TLS_OPTIONS, async (req, res) => {
     try {
@@ -98,6 +120,20 @@ export async function startStubCityServer() {
           const pending = pendingRegistrations.get(body.stage_token)
           if (!pending || pending.resident_key !== body.resident_key) {
             return send(res, 403, { error: 'stage token or resident key mismatch' })
+          }
+          if (registerConfirmBarrier && pending.handle === registerConfirmBarrier.handle) {
+            // Synchronous (no `await` between push and the length check) --
+            // Node's single-threaded event loop means no other request's
+            // handler can interleave here, so two concurrent confirms can
+            // never both observe a stale waiters length and both release.
+            await new Promise(releaseThis => {
+              confirmBarrierWaiters.push(releaseThis)
+              if (confirmBarrierWaiters.length >= registerConfirmBarrier.count) {
+                const waiters = confirmBarrierWaiters
+                confirmBarrierWaiters = []
+                for (const release of waiters) release()
+              }
+            })
           }
           pendingRegistrations.delete(body.stage_token)
           residents.set(pending.handle, {
