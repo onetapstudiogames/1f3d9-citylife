@@ -79,6 +79,23 @@ const RECOVERY_CODE_RE = /^1f3d9_rc_[0-9a-f]{64}$/u
 // the server's own answer as the identity of record, not this local check).
 const HANDLE_RE = /^[a-z0-9][a-z0-9-]{2,31}$/u
 
+// Reserved so a real resident's handle can never collide with this script's
+// OWN staging-label namespace (pendingLabel below stages an in-flight
+// registration/rotation/recovery under `<handle>--pending-<kind>` or, for
+// registration, `<handle>--pending-registration-<hex>`). HANDLE_RE alone
+// permits this sequence -- it allows consecutive hyphens and imposes no
+// reserved-suffix rule -- so without this separate check a handle like
+// "agent--pending-rotation" would be a legal registration that then reads,
+// to every consumer of listVaultLabels/isPendingLabel below, as an
+// abandoned staging entry rather than a real identity: it would be silently
+// filtered out of setup.mjs's duplicate-identity guard, which exists
+// specifically to stop a second, permanent, unrecoverable resident from
+// being registered next to one that already exists. Checked at every point
+// a handle is validated in this file (both the requested spelling and the
+// city's own confirmed spelling), so the reservation holds regardless of
+// what the city itself would otherwise accept.
+const RESERVED_HANDLE_SUBSTRING_RE = /--pending-/u
+
 // The one legal (letter-first) environment variable name used everywhere a
 // resident key is read from the host's own secret store -- by the printed
 // `claude mcp add` / `codex mcp add` commands (scripts/connect.mjs,
@@ -283,12 +300,20 @@ function pendingLabel(handle, kind) {
 }
 
 /**
- * True for a staging label (`pendingLabel` above), never a real registered
- * identity. Covers every kind `pendingLabel` can produce, including the
- * per-run suffixed registration form -- an abandoned registration staging
- * entry (a run that died between staging and promotion) must never trip
- * setup.mjs's duplicate-identity guard (`listVaultLabels` filters through
- * this) the way a genuine second identity would.
+ * A LABEL-TEXT heuristic for "this looks like a staging label" -- covers
+ * every kind `pendingLabel` above can produce, including the per-run
+ * suffixed registration form. Used by listVaultLabels below ONLY as a
+ * fallback for an entry it cannot otherwise decode (a bare `cmdkey /list`
+ * scrape on win32, or a stored bundle this run's platform cannot read back).
+ * It is deliberately NOT the primary source of truth: HANDLE_RE alone would
+ * allow a real resident to register a handle that happens to end in one of
+ * these suffixes (e.g. "agent--pending-rotation"), and RESERVED_HANDLE_SUBSTRING_RE
+ * above closes that off going forward, but this function must still cope
+ * with any handle already in the wild -- so listVaultLabels prefers the
+ * `kind: 'staging'` marker storeSecret writes into the bundle itself
+ * (pendingLabel's three callers all pass it) wherever the backend lets it
+ * read that marker back, and falls back to this suffix test only when it
+ * cannot.
  */
 function isPendingLabel(label) {
   return /--pending-(?:rotation|recovery|registration(?:-[0-9a-f]+)?)$/u.test(label)
@@ -307,18 +332,23 @@ function isPendingLabel(label) {
 // on a non-English Windows install the literal "Target:" label this script
 // parses for never appears, so scraping it alone silently returns nothing,
 // language-dependently. Instead, storeSecret and deleteSecret below keep a
-// small non-secret index file -- ~/.1f3d9/vault-index.json, labels only,
-// never a key or recovery code -- that setup.mjs's duplicate-identity guard
-// reads through listVaultLabels. It is a heuristic, not a source of truth:
-// it can go stale if an entry is removed by some other tool (Keychain
-// Access.app, Windows Credential Manager's own UI, `security`/`cmdkey` by
-// hand), and listVaultLabels below treats that as fine to err toward, since
-// the whole point is only ever to make setup ask for --new-identity one
-// time too many, never to silently register a real duplicate resident. On
-// win32, listVaultLabels unions this index with whatever `cmdkey /list`
-// scraping does find, rather than depending on the index alone -- the index
-// is best-effort too (a write failure here is never fatal), so neither
-// source alone is trusted as complete.
+// small non-secret index file -- ~/.1f3d9/vault-index.json, labels plus a
+// `staging` marker, never a key or recovery code -- that setup.mjs's
+// duplicate-identity guard reads through listVaultLabels. It is a
+// heuristic, not a source of truth: it can go stale if an entry is removed
+// by some other tool (Keychain Access.app, Windows Credential Manager's own
+// UI, `security`/`cmdkey` by hand), and listVaultLabels below treats that as
+// fine to err toward, since the whole point is only ever to make setup ask
+// for --new-identity one time too many, never to silently register a real
+// duplicate resident. On win32, listVaultLabels unions this index with
+// whatever `cmdkey /list` scraping does find, rather than depending on the
+// index alone -- the index is best-effort too (a write failure here is
+// never fatal), so neither source alone is trusted as complete. The
+// `staging` marker on each entry is what listVaultLabels prefers over
+// isPendingLabel's label-text guess (see its own doc comment) -- it comes
+// from the bundle's own `kind` field, recorded here at write time so
+// listVaultLabels never has to decode the secret itself just to tell a real
+// resident from an in-flight staging copy.
 
 function vaultIndexPath(homeDir = homedir()) {
   return join(homeDir, '.1f3d9', 'vault-index.json')
@@ -331,6 +361,31 @@ function readVaultIndex(homeDir) {
   } catch {
     return {}
   }
+}
+
+/**
+ * Normalizes one origin's raw vault-index.json entries -- an array that may
+ * mix legacy bare-string entries (written before this index carried a
+ * `staging` marker) with the current `{ label, staging }` object form --
+ * into a Map from label to `{ staging }`. A legacy string entry's staging
+ * status is unknown (`staging: undefined`), which listVaultLabels below
+ * treats as "fall back to the isPendingLabel suffix guess for this one",
+ * exactly like an entry it cannot decode at all.
+ */
+function vaultIndexEntriesToMap(entries) {
+  const map = new Map()
+  for (const entry of entries) {
+    if (typeof entry === 'string') {
+      map.set(entry, { staging: undefined })
+    } else if (entry && typeof entry === 'object' && typeof entry.label === 'string') {
+      // A malformed or absent `staging` field must stay unknown, not be
+      // read as a definite "not staging" -- only a real boolean this
+      // version itself wrote is trustworthy either way (see
+      // vaultIndexEntriesToMap's own comment above and isStagingLabel).
+      map.set(entry.label, { staging: typeof entry.staging === 'boolean' ? entry.staging : undefined })
+    }
+  }
+  return map
 }
 
 // updateVaultIndex is a read-modify-write over one shared file with no
@@ -407,9 +462,14 @@ function withFileLock(lockPath, fn) {
   }
 }
 
-function setsEqual(a, b) {
+/** Compares two label->{staging} Maps (as built by vaultIndexEntriesToMap / mutated in place below). */
+function labelMapsEqual(a, b) {
   if (a.size !== b.size) return false
-  for (const value of a) if (!b.has(value)) return false
+  for (const [label, meta] of a) {
+    const otherMeta = b.get(label)
+    if (!otherMeta) return false
+    if (Boolean(otherMeta.staging) !== Boolean(meta.staging)) return false
+  }
   return true
 }
 
@@ -438,19 +498,28 @@ function updateVaultIndex(origin, label, homeDir, mutate) {
     const path = vaultIndexPath(homeDir)
 
     const peekIndex = readVaultIndex(homeDir)
-    const peekLabels = new Set(Array.isArray(peekIndex[origin]) ? peekIndex[origin] : [])
-    const probeLabels = new Set(peekLabels)
+    const peekLabels = vaultIndexEntriesToMap(Array.isArray(peekIndex[origin]) ? peekIndex[origin] : [])
+    const probeLabels = new Map(peekLabels)
     mutate(probeLabels, label)
-    if (setsEqual(probeLabels, peekLabels)) return
+    if (labelMapsEqual(probeLabels, peekLabels)) return
 
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     withFileLock(`${path}.lock`, () => {
       const index = readVaultIndex(homeDir)
-      const labels = new Set(Array.isArray(index[origin]) ? index[origin] : [])
-      const before = new Set(labels)
+      const labels = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
+      const before = new Map(labels)
       mutate(labels, label)
-      if (setsEqual(labels, before)) return
-      index[origin] = [...labels]
+      if (labelMapsEqual(labels, before)) return
+      // Preserve unknown-ness on rewrite: a label whose staging status this
+      // version never learned (a legacy bare-string entry this run did not
+      // itself touch with a boolean) must be written back as the same bare
+      // string, not upgraded to `staging: false` -- doing so would assert a
+      // fact this version never actually observed. Only a label this
+      // version itself set `{ staging }` for (via storeSecret's own boolean
+      // above) gets the object form.
+      index[origin] = [...labels].map(([entryLabel, meta]) =>
+        meta.staging === undefined ? entryLabel : { label: entryLabel, staging: meta.staging === true },
+      )
       writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 })
     })
   } catch {
@@ -566,16 +635,20 @@ function storeSecret(origin, label, payload, deps = {}) {
   const os = deps.platform ?? platform()
   const serialized = JSON.stringify(payload)
   const encoded = Buffer.from(serialized, 'utf8').toString('base64')
+  // Recorded into the non-secret index below so listVaultLabels can tell a
+  // staging entry from a real resident without decoding the secret store
+  // itself -- see the "Non-secret vault index" comment above.
+  const staging = payload?.kind === 'staging'
   if (os === 'win32') {
     const target = vaultTarget(origin, label)
     writeWindowsCredential(execImpl, target, label, encoded)
-    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.add(thisLabel))
+    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.set(thisLabel, { staging }))
     return `Windows Credential Manager (target "${target}", value base64-encoded JSON)`
   }
   if (os === 'darwin') {
     const service = vaultTarget(origin, label)
     writeMacKeychainCredential(execImpl, service, label, encoded)
-    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.add(thisLabel))
+    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.set(thisLabel, { staging }))
     return `macOS Keychain (service "${service}", account "${label}")`
   }
   const filePath = credentialsFilePath(origin, label, deps.homeDir)
@@ -616,6 +689,11 @@ function storeSecret(origin, label, payload, deps = {}) {
     }
     throw secretFreeStorageError('local credentials file', filePath)
   }
+  // Recorded in the same non-secret vault index the win32/darwin backends
+  // use, so listVaultLabels below can tell a staging entry from a real
+  // resident without ever opening or parsing a credentials bundle -- see
+  // the "Non-secret vault index" comment above.
+  updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.set(thisLabel, { staging }))
   return `local file ${filePath} (mode ${observedMode.toString(8).padStart(3, '0')})`
 }
 
@@ -956,20 +1034,40 @@ function deleteSecret(origin, label, deps = {}) {
   } catch {
     // Best effort, same as above.
   }
+  updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.delete(thisLabel))
+}
+
+/**
+ * True when `label` should be excluded from listVaultLabels' result --
+ * i.e. it is a staging copy, not a real registered identity. Prefers the
+ * `staging` marker `indexMap` carries for this label (set from the bundle's
+ * own `kind` field at write time -- see storeSecret above), since that is
+ * data, not a guess about what the label text looks like: a real resident
+ * whose handle happens to end in "--pending-rotation" or similar has
+ * `staging: false` recorded for it and is never dropped this way. Falls
+ * back to the isPendingLabel suffix heuristic only when `indexMap` has no
+ * entry for this label at all, or its staging status is unknown (a legacy
+ * index entry written before this marker existed, or -- on win32 -- a label
+ * `cmdkey /list` found that the index never recorded).
+ */
+function isStagingLabel(label, indexMap) {
+  const meta = indexMap.get(label)
+  if (meta && typeof meta.staging === 'boolean') return meta.staging
+  return isPendingLabel(label)
 }
 
 /**
  * Lists every label this host's vault currently holds for `origin`,
- * excluding staging labels (`pendingLabel` above) -- never the exact-handle
- * lookup readSecret already does, but a genuine enumeration of "does
- * anything else already exist here", so setup.mjs's duplicate-identity
- * guard can refuse a fresh registration under a different handle instead of
- * silently creating a second, permanent, unrecoverable resident next to one
- * that already exists. Never throws: an enumeration failure (no `cmdkey` on
- * PATH, an unreadable directory, a missing index) is treated as "found
- * nothing", the same fail-open behavior that guard already accepts for a
- * missing setup-state.json -- the guard exists to catch the common case
- * (state lost, vault intact), not to be a perfect audit.
+ * excluding staging labels -- never the exact-handle lookup readSecret
+ * already does, but a genuine enumeration of "does anything else already
+ * exist here", so setup.mjs's duplicate-identity guard can refuse a fresh
+ * registration under a different handle instead of silently creating a
+ * second, permanent, unrecoverable resident next to one that already
+ * exists. Never throws: an enumeration failure (no `cmdkey` on PATH, an
+ * unreadable directory, a missing index) is treated as "found nothing", the
+ * same fail-open behavior that guard already accepts for a missing
+ * setup-state.json -- the guard exists to catch the common case (state
+ * lost, vault intact), not to be a perfect audit.
  */
 function listVaultLabels(origin, deps = {}) {
   const execImpl = deps.execFileSync ?? execFileSync
@@ -1001,17 +1099,17 @@ function listVaultLabels(origin, deps = {}) {
       // rather than reporting an empty result outright.
     }
     const vaultIndex = readVaultIndex(deps.homeDir)
-    const fromIndex = Array.isArray(vaultIndex[origin]) ? vaultIndex[origin] : []
-    const labels = new Set([...fromCmdkey, ...fromIndex])
-    return [...labels].filter(label => !isPendingLabel(label))
+    const indexMap = vaultIndexEntriesToMap(Array.isArray(vaultIndex[origin]) ? vaultIndex[origin] : [])
+    const labels = new Set([...fromCmdkey, ...indexMap.keys()])
+    return [...labels].filter(label => !isStagingLabel(label, indexMap))
   }
   if (os === 'darwin') {
     const index = readVaultIndex(deps.homeDir)
-    const labels = Array.isArray(index[origin]) ? index[origin] : []
-    return labels.filter(label => !isPendingLabel(label))
+    const indexMap = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
+    return [...indexMap.keys()].filter(label => !isStagingLabel(label, indexMap))
   }
-  const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
   const dir = join(deps.homeDir ?? homedir(), '.1f3d9', 'credentials')
+  const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
   const prefix = `${safeOrigin}__`
   let entries
   try {
@@ -1019,10 +1117,20 @@ function listVaultLabels(origin, deps = {}) {
   } catch {
     return []
   }
-  return entries
+  const labels = entries
     .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
     .map(name => name.slice(prefix.length, -'.json'.length))
-    .filter(label => !isPendingLabel(label))
+  // Same non-secret vault index the win32/darwin backends read above --
+  // storeSecret/deleteSecret now maintain it for the file backend too, so
+  // this enumeration stays label-only and never opens or parses a
+  // credentials bundle just to answer "does this exist", matching the
+  // "Non-secret vault index" comment's promise. A label this version never
+  // indexed (a v1.5.0-era bundle predating this marker, or an index entry
+  // lost to a crash) has no entry here and falls back to the
+  // isPendingLabel suffix guess via isStagingLabel, same as win32/darwin.
+  const index = readVaultIndex(deps.homeDir)
+  const indexMap = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
+  return labels.filter(label => !isStagingLabel(label, indexMap))
 }
 
 // --- HTTP -----------------------------------------------------------------
@@ -1130,6 +1238,12 @@ async function register(flags) {
       'choose a handle that already matches this rule before asking a human to approve it',
     )
   }
+  if (RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
+    throw new Error(
+      `--handle "${handle}" contains "--pending-", which this script reserves for its own in-flight ` +
+      'staging labels; nothing was created -- choose a handle that does not contain that sequence',
+    )
+  }
   const clientClass = requireFlag(flags, 'client-class')
   if (clientClass !== 'coding_persistent' && clientClass !== 'coding_ephemeral') {
     throw new Error('--client-class must be coding_persistent or coding_ephemeral')
@@ -1198,7 +1312,7 @@ async function register(flags) {
   // confirm actually succeeds.
   const stagingLabel = pendingLabel(stagedHandle, 'registration')
   storeSecret(origin, stagingLabel, {
-    kind: 'resident',
+    kind: 'staging',
     handle: stagedHandle,
     client_class: clientClass,
     resident_key: staged.resident_key,
@@ -1235,7 +1349,7 @@ async function register(flags) {
   // city's own confirmed spelling somehow failing the rule this script
   // otherwise enforces before ever asking a human to approve a handle, not
   // an expected path.
-  if (!HANDLE_RE.test(finalHandle)) {
+  if (!HANDLE_RE.test(finalHandle) || RESERVED_HANDLE_SUBSTRING_RE.test(finalHandle)) {
     // Best effort: the stage is already confirmed server-side, so this call
     // is unlikely to change anything beyond what confirming already did --
     // it costs nothing to attempt, and matches every other early exit in
@@ -1243,7 +1357,8 @@ async function register(flags) {
     await cancelStage(origin, '/api/register', staged.stage_token)
     throw new Error(
       `refusing to store or print the handle "${finalHandle}" the city confirmed for this registration: it ` +
-      `does not match the local handle rule ${HANDLE_RE.source}. The resident was already created ` +
+      `does not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" ` +
+      'sequence this script uses for its own in-flight staging labels. The resident was already created ' +
       'server-side under that exact spelling, and its confirmed resident key and recovery codes were NOT ' +
       `lost -- they are still stored under the staging label "${stagingLabel}" and nowhere else. Read them ` +
       `back from "${stagingLabel}" and store them under a label of your choosing yourself; this script will ` +
@@ -1289,7 +1404,7 @@ async function rotate(flags) {
   // is never touched; only this staging copy exists, and it is deleted.
   const stagingLabel = pendingLabel(staged.handle, 'rotation')
   storeSecret(origin, stagingLabel, {
-    kind: 'resident',
+    kind: 'staging',
     handle: staged.handle,
     resident_key: staged.resident_key,
     origin,
@@ -1402,7 +1517,7 @@ async function recoverBegin(flags) {
   // vault entry must not be touched before that.
   const stagingLabel = pendingLabel(staged.handle, 'recovery')
   storeSecret(origin, stagingLabel, {
-    kind: 'resident',
+    kind: 'staging',
     handle: staged.handle,
     resident_key: staged.resident_key,
     origin,
@@ -1494,5 +1609,5 @@ if (isMainModule) {
 // uses this import path itself, so importing this module never runs main().
 export {
   storeSecret, readSecret, deleteSecret, listVaultLabels, promoteReplacementKey, SecretReadFailure, shouldReveal,
-  HANDLE_RE,
+  HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE,
 }

@@ -619,3 +619,168 @@ test('storeSecret/listVaultLabels: an abandoned (stale) vault-index lock is brok
     await rm(homeDir, { recursive: true, force: true })
   }
 })
+
+// --- listVaultLabels must mark staging by DATA, never by label text -------
+// HANDLE_RE alone allows a real resident to register a handle ending in
+// "--pending-rotation"/"-recovery"/"-registration[-hex]" -- the exact suffix
+// shapes pendingLabel mints for a staging copy. isPendingLabel (a label-text
+// guess) would filter such a resident's own live vault entry out of
+// listVaultLabels, making it invisible to setup.mjs's duplicate-identity
+// guard. storeSecret now records a `staging` marker (from the bundle's own
+// `kind` field) in the non-secret vault index / alongside the file backend's
+// bundle, and listVaultLabels prefers that marker over the suffix guess --
+// covered here on every backend this script supports.
+
+const posixFileBackendForStagingTests = process.platform !== 'win32'
+
+for (const backendPlatform of ['win32', 'darwin', 'linux']) {
+  const skip = backendPlatform === 'linux' && !posixFileBackendForStagingTests
+    ? 'temp-file backend depends on POSIX permission bits; run on Linux/macOS or in this repo\'s CI'
+    : false
+
+  test(`listVaultLabels (${backendPlatform}): a real resident whose handle ends in --pending-rotation is still listed`, { skip }, async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), `identity-client-staging-${backendPlatform}-`))
+    const deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+    const handle = 'agent--pending-rotation'
+    try {
+      storeSecret(origin, handle, {
+        kind: 'resident',
+        handle,
+        client_class: 'coding_persistent',
+        resident_key: `1f3d9_sk_${'a'.repeat(48)}`,
+        origin,
+      }, deps)
+
+      assert.deepEqual(
+        listVaultLabels(origin, deps),
+        [handle],
+        'a real resident is never dropped just because its handle looks like a staging label',
+      )
+    } finally {
+      deleteSecret(origin, handle, deps)
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  })
+
+  test(`listVaultLabels (${backendPlatform}): a genuine staging entry is never listed`, { skip }, async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), `identity-client-staging-${backendPlatform}-`))
+    const deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+    const stagingLabel = 'agent-under-stage--pending-registration-deadbeef'
+    try {
+      storeSecret(origin, stagingLabel, {
+        kind: 'staging',
+        handle: 'agent-under-stage',
+        client_class: 'coding_persistent',
+        resident_key: `1f3d9_sk_${'b'.repeat(48)}`,
+        origin,
+      }, deps)
+
+      assert.deepEqual(listVaultLabels(origin, deps), [])
+    } finally {
+      deleteSecret(origin, stagingLabel, deps)
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  })
+
+  // A v1.5.0-era leftover predates the `staging` marker entirely: that
+  // version's storeSecret always wrote `kind: 'resident'` (staging or not)
+  // and never recorded a `staging` field anywhere. Neither an entry this
+  // version never indexed at all nor a legacy bare-string index entry
+  // (written before the index carried `staging`) is trustworthy as a
+  // definite negative -- both must fall back to isPendingLabel's suffix
+  // guess and stay excluded, exactly as they were before this marker
+  // existed, rather than being reclassified as a real second identity just
+  // because `kind !== 'staging'`. This is the fixture the "leftover
+  // registration staging label" coverage in test/identity-commands.test.mjs
+  // originally used before it was aligned with the (also-covered) new
+  // `kind: 'staging'` marker.
+  const label = 'agent-abandoned--pending-registration-deadbeef'
+  const origin = 'https://example.invalid'
+
+  test(
+    `listVaultLabels (${backendPlatform}): a v1.5.0 bundle discoverable with no index entry at all still falls back to the suffix guess`,
+    // Meaningful only where a label can be discovered by something other
+    // than the index itself: the file backend discovers labels by
+    // reading the credentials directory, and win32 additionally unions a
+    // real cmdkey scrape. On darwin, listVaultLabels has no such
+    // alternate source -- an unindexed label is not discoverable at all,
+    // so this scenario collapses into "nothing enumerated" for a reason
+    // unrelated to the staging marker and is not worth asserting here.
+    { skip: skip || backendPlatform === 'darwin' },
+    async () => {
+      const homeDir = await mkdtemp(join(tmpdir(), `identity-client-legacy-staging-${backendPlatform}-`))
+      try {
+        let deps
+        if (backendPlatform === 'linux') {
+          // The v1.5.0 bundle itself, written directly to the deterministic
+          // path (never through the current storeSecret, which would
+          // correctly index it) -- exactly the shape a pre-index version
+          // left behind: discoverable via readdirSync, indexed nowhere.
+          const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
+          const safeLabel = label.replace(/[^a-z0-9._-]/giu, '_')
+          mkdirSync(join(homeDir, '.1f3d9', 'credentials'), { recursive: true })
+          writeFileSync(
+            join(homeDir, '.1f3d9', 'credentials', `${safeOrigin}__${safeLabel}.json`),
+            `${JSON.stringify({ kind: 'resident', handle: 'agent-abandoned', origin })}\n`,
+          )
+          deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+        } else {
+          // win32: discoverable only via the cmdkey scrape (see the LOW
+          // finding this also covers: a real resident found only that way
+          // must not be dropped just because the index never recorded it).
+          deps = {
+            platform: backendPlatform,
+            homeDir,
+            execFileSync: () => `Target: 1f3d9:${origin}:${label}`,
+          }
+        }
+
+        assert.deepEqual(
+          listVaultLabels(origin, deps),
+          [],
+          'no index entry at all for this label must fall back to the suffix guess, not be trusted as a real resident',
+        )
+      } finally {
+        await rm(homeDir, { recursive: true, force: true })
+      }
+    },
+  )
+
+  test(
+    `listVaultLabels (${backendPlatform}): a legacy bare-string index entry (staging unknown) still falls back to the suffix guess`,
+    { skip },
+    async () => {
+      const homeDir = await mkdtemp(join(tmpdir(), `identity-client-legacy-staging-${backendPlatform}-`))
+      try {
+        if (backendPlatform === 'linux') {
+          // The file backend also needs the bundle itself discoverable
+          // (readdirSync-driven, same as above) -- the index entry alone
+          // adds no labels there, only a staging hint for ones already found.
+          const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
+          const safeLabel = label.replace(/[^a-z0-9._-]/giu, '_')
+          mkdirSync(join(homeDir, '.1f3d9', 'credentials'), { recursive: true })
+          writeFileSync(
+            join(homeDir, '.1f3d9', 'credentials', `${safeOrigin}__${safeLabel}.json`),
+            `${JSON.stringify({ kind: 'resident', handle: 'agent-abandoned', origin })}\n`,
+          )
+        }
+        mkdirSync(join(homeDir, '.1f3d9'), { recursive: true })
+        writeFileSync(
+          join(homeDir, '.1f3d9', 'vault-index.json'),
+          `${JSON.stringify({ [origin]: [label] }, null, 2)}\n`,
+        )
+        const deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+
+        assert.deepEqual(
+          listVaultLabels(origin, deps),
+          [],
+          'a legacy bare-string index entry (staging unknown) must also fall back to the suffix guess',
+        )
+      } finally {
+        await rm(homeDir, { recursive: true, force: true })
+      }
+    },
+  )
+}
