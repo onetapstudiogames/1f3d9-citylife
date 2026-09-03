@@ -18,6 +18,12 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
       method: 'GET',
       headers: { authorization: `Bearer ${residentKey}`, accept: 'application/json' },
       signal: AbortSignal.timeout(timeoutMs),
+      // A real identity door has no reason to redirect this call anywhere.
+      // Without this, a 307/308 from the named origin could send the
+      // Authorization header to a third-party host on the next hop -- a
+      // redirect target this file's own assertAllowedOrigin call above never
+      // gets a chance to validate, because only the first hop is checked.
+      redirect: 'error',
     })
     let parsed = null
     try {

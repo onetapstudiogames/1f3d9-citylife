@@ -33,6 +33,18 @@ export declare function readSecret<T = unknown>(
   deps?: StoreSecretDeps,
 ): ReadSecretResult<T>
 
+export declare function deleteSecret(
+  origin: string,
+  label: string,
+  deps?: StoreSecretDeps,
+): void
+
+/** Every label this host's vault currently holds for `origin`, excluding staging labels. Never throws. */
+export declare function listVaultLabels(
+  origin: string,
+  deps?: StoreSecretDeps,
+): string[]
+
 export declare function promoteReplacementKey(
   origin: string,
   handle: string,

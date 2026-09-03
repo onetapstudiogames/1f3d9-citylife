@@ -52,7 +52,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import { mkdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync, unlinkSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync, unlinkSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -239,6 +239,56 @@ function pendingLabel(handle, kind) {
   return `${handle}--pending-${kind}`
 }
 
+/** True for a staging label (`pendingLabel` above), never a real registered identity. */
+function isPendingLabel(label) {
+  return /--pending-(?:rotation|recovery)$/u.test(label)
+}
+
+// --- Non-secret vault index (macOS only) -----------------------------------
+//
+// macOS Keychain has no reliable, non-interactive way for this script to
+// enumerate every entry it owns: `security dump-keychain` prints every
+// stored secret in the user's whole login keychain, not just this plugin's
+// entries, so using it here to answer "does ANY entry already exist for
+// this origin" would mean reading (and having to filter through) secrets
+// this script has no business touching at all. Instead, storeSecret and
+// deleteSecret below keep a small non-secret index file --
+// ~/.1f3d9/vault-index.json, labels only, never a key or recovery code --
+// that setup.mjs's duplicate-identity guard reads through listVaultLabels.
+// It is a heuristic, not a source of truth: it can go stale if an entry is
+// removed by some other tool (Keychain Access.app, `security` by hand), and
+// listVaultLabels below treats that as fine to err toward, since the whole
+// point is only ever to make setup ask for --new-identity one time too many,
+// never to silently register a real duplicate resident.
+
+function vaultIndexPath(homeDir = homedir()) {
+  return join(homeDir, '.1f3d9', 'vault-index.json')
+}
+
+function readVaultIndex(homeDir) {
+  try {
+    const parsed = JSON.parse(readFileSync(vaultIndexPath(homeDir), 'utf8'))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Best effort: the index is a heuristic, so a write failure here is never fatal. */
+function updateVaultIndex(origin, label, homeDir, mutate) {
+  try {
+    const index = readVaultIndex(homeDir)
+    const labels = new Set(Array.isArray(index[origin]) ? index[origin] : [])
+    mutate(labels, label)
+    index[origin] = [...labels]
+    const path = vaultIndexPath(homeDir)
+    mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+    writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 })
+  } catch {
+    // Best effort -- see the module comment above.
+  }
+}
+
 /**
  * The PowerShell/.NET shim that writes one credential through the real
  * Win32 CredWrite API. The secret bundle travels to this process over
@@ -352,6 +402,7 @@ function storeSecret(origin, label, payload, deps = {}) {
   if (os === 'darwin') {
     const service = vaultTarget(origin, label)
     writeMacKeychainCredential(execImpl, service, label, encoded)
+    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.add(thisLabel))
     return `macOS Keychain (service "${service}", account "${label}")`
   }
   const filePath = credentialsFilePath(origin, label, deps.homeDir)
@@ -549,6 +600,16 @@ $bytes = New-Object byte[] $cred.CredentialBlobSize
  * in place rather than deleted, because it is the only place the already-
  * confirmed replacement key currently lives. The caller sees exactly where
  * to recover it and what to fix before retrying.
+ *
+ * The write that follows can fail too (a locked keychain, a permission
+ * error, a full disk) -- and by the time this function runs, the server
+ * already confirmed the rotation/recovery, so the OLD key is already dead
+ * there. A write failure here must never surface as a bare "could not
+ * write" with no context: the caller needs to know the old key no longer
+ * works AND that the only copy of the new one currently lives at
+ * `stagingLabel` and nowhere else. The staging copy is left in place (it is
+ * only deleted after storeSecret below actually succeeds), so nothing is
+ * lost -- but it must be recovered by hand.
  */
 function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeFields, deps = {}) {
   let previous
@@ -562,14 +623,23 @@ function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeF
       `from "${stagingLabel}", then store it under "${handle}" yourself.`,
     )
   }
-  const location = storeSecret(origin, handle, {
-    kind: 'resident',
-    handle,
-    ...mergeFields(previous.found ? previous.value : null),
-    resident_key: residentKey,
-    origin,
-    stored_at: new Date().toISOString(),
-  }, deps)
+  let location
+  try {
+    location = storeSecret(origin, handle, {
+      kind: 'resident',
+      handle,
+      ...mergeFields(previous.found ? previous.value : null),
+      resident_key: residentKey,
+      origin,
+      stored_at: new Date().toISOString(),
+    }, deps)
+  } catch (error) {
+    throw new Error(
+      `the rotation/recovery already CONFIRMED, so the old key for "${handle}" no longer works: ${error.message}. ` +
+      `The replacement key is stored under "${stagingLabel}" and nowhere else -- read it back from ` +
+      `"${stagingLabel}", then store it under "${handle}" yourself before doing anything else.`,
+    )
+  }
   deleteSecret(origin, stagingLabel, deps)
   return location
 }
@@ -596,6 +666,7 @@ function deleteSecret(origin, label, deps = {}) {
     } catch {
       // Best effort, same as above.
     }
+    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.delete(thisLabel))
     return
   }
   try {
@@ -603,6 +674,63 @@ function deleteSecret(origin, label, deps = {}) {
   } catch {
     // Best effort, same as above.
   }
+}
+
+/**
+ * Lists every label this host's vault currently holds for `origin`,
+ * excluding staging labels (`pendingLabel` above) -- never the exact-handle
+ * lookup readSecret already does, but a genuine enumeration of "does
+ * anything else already exist here", so setup.mjs's duplicate-identity
+ * guard can refuse a fresh registration under a different handle instead of
+ * silently creating a second, permanent, unrecoverable resident next to one
+ * that already exists. Never throws: an enumeration failure (no `cmdkey` on
+ * PATH, an unreadable directory, a missing index) is treated as "found
+ * nothing", the same fail-open behavior that guard already accepts for a
+ * missing setup-state.json -- the guard exists to catch the common case
+ * (state lost, vault intact), not to be a perfect audit.
+ */
+function listVaultLabels(origin, deps = {}) {
+  const execImpl = deps.execFileSync ?? execFileSync
+  const os = deps.platform ?? platform()
+  if (os === 'win32') {
+    const prefix = vaultTarget(origin, '')
+    let output
+    try {
+      output = execImpl('cmdkey', ['/list'], { encoding: 'utf8' })
+    } catch {
+      return []
+    }
+    const labels = []
+    for (const match of output.matchAll(/Target:\s*(.+)\s*$/gmu)) {
+      // Real `cmdkey /list` output prefixes the target this script wrote
+      // with its own credential-type marker -- observed as
+      // "LegacyGeneric:target=1f3d9:<origin>:<label>", not the bare target
+      // -- so search for the prefix anywhere in the line rather than
+      // requiring it at the very start.
+      const target = match[1].trim()
+      const index = target.indexOf(prefix)
+      if (index !== -1) labels.push(target.slice(index + prefix.length))
+    }
+    return labels.filter(label => !isPendingLabel(label))
+  }
+  if (os === 'darwin') {
+    const index = readVaultIndex(deps.homeDir)
+    const labels = Array.isArray(index[origin]) ? index[origin] : []
+    return labels.filter(label => !isPendingLabel(label))
+  }
+  const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
+  const dir = join(deps.homeDir ?? homedir(), '.1f3d9', 'credentials')
+  const prefix = `${safeOrigin}__`
+  let entries
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return []
+  }
+  return entries
+    .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
+    .map(name => name.slice(prefix.length, -'.json'.length))
+    .filter(label => !isPendingLabel(label))
 }
 
 // --- HTTP -----------------------------------------------------------------
@@ -618,7 +746,13 @@ function deleteSecret(origin, label, deps = {}) {
  */
 async function fetchOrExplain(url, init) {
   try {
-    return await fetch(url, init)
+    // redirect: 'error' overrides anything a caller passed in `init` -- a
+    // real identity door has no reason to redirect any of these calls, and
+    // without this, a 307/308 response from the (validated) named origin
+    // could carry a secret request body to an entirely different host on
+    // the next hop, a hop assertAllowedOrigin (called only against the
+    // first-hop origin, in originOf above) never gets a chance to check.
+    return await fetch(url, { ...init, redirect: 'error' })
   } catch (error) {
     // Node's fetch wraps the real failure in `error.cause`, which for a
     // connection failure is itself an AggregateError with an EMPTY top-level
@@ -939,6 +1073,9 @@ if (isMainModule) {
   })
 }
 
-// Exported for test/identity-client.test.ts only; the CLI above never uses
-// this import path, so importing this module for tests never runs main().
-export { storeSecret, readSecret, deleteSecret, promoteReplacementKey, SecretReadFailure, shouldReveal }
+// Exported for setup.mjs/connect.mjs/key.mjs (the vault helpers and
+// SecretReadFailure) and for tests (all of the below); the CLI above never
+// uses this import path itself, so importing this module never runs main().
+export {
+  storeSecret, readSecret, deleteSecret, listVaultLabels, promoteReplacementKey, SecretReadFailure, shouldReveal,
+}
