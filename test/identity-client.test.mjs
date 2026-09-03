@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { writeFileSync } from 'node:fs'
+import { writeFileSync, mkdirSync, utimesSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
 import {
+  deleteSecret,
+  listVaultLabels,
   promoteReplacementKey,
   readSecret,
   SecretReadFailure,
@@ -130,6 +132,63 @@ test('assertAllowedOrigin allows the real city, https://localhost, and an exactl
     assertAllowedOrigin('https://evil.example', { allowOrigin: 'https://evil.example' }),
     'https://evil.example',
   )
+})
+
+// --- Finding 8: AGENT_1F3D9_STUB_ONLY=1 refuses every non-loopback origin -
+// (the guard that would have stopped the incident where a review agent ran
+// these scripts against the real city by hand) -- including the real city
+// itself, and including a value the caller confirmed with --allow-origin.
+
+test('assertAllowedOrigin refuses the real city, https://1f3d9.com, when AGENT_1F3D9_STUB_ONLY=1 is set', () => {
+  const previous = process.env.AGENT_1F3D9_STUB_ONLY
+  process.env.AGENT_1F3D9_STUB_ONLY = '1'
+  try {
+    assert.throws(
+      () => assertAllowedOrigin('https://1f3d9.com'),
+      /AGENT_1F3D9_STUB_ONLY=1 is set/u,
+      'the real city is refused even though it is ordinarily the allowed default origin',
+    )
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_1F3D9_STUB_ONLY
+    else process.env.AGENT_1F3D9_STUB_ONLY = previous
+  }
+})
+
+test('assertAllowedOrigin refuses a foreign origin under AGENT_1F3D9_STUB_ONLY=1 even with a matching --allow-origin', () => {
+  const previous = process.env.AGENT_1F3D9_STUB_ONLY
+  process.env.AGENT_1F3D9_STUB_ONLY = '1'
+  try {
+    assert.throws(
+      () => assertAllowedOrigin('https://evil.example', { allowOrigin: 'https://evil.example' }),
+      /AGENT_1F3D9_STUB_ONLY=1 is set/u,
+      '--allow-origin is not an escape hatch from this guardrail',
+    )
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_1F3D9_STUB_ONLY
+    else process.env.AGENT_1F3D9_STUB_ONLY = previous
+  }
+})
+
+test('assertAllowedOrigin still allows localhost/127.0.0.1 when AGENT_1F3D9_STUB_ONLY=1 is set', () => {
+  const previous = process.env.AGENT_1F3D9_STUB_ONLY
+  process.env.AGENT_1F3D9_STUB_ONLY = '1'
+  try {
+    assert.equal(assertAllowedOrigin('https://localhost:4000'), 'https://localhost:4000')
+    assert.equal(assertAllowedOrigin('https://127.0.0.1:4000'), 'https://127.0.0.1:4000')
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_1F3D9_STUB_ONLY
+    else process.env.AGENT_1F3D9_STUB_ONLY = previous
+  }
+})
+
+test('setup.mjs refuses https://1f3d9.com before any network call when AGENT_1F3D9_STUB_ONLY=1 is set', async () => {
+  const setupPath = fileURLToPath(new URL('../scripts/setup.mjs', import.meta.url))
+  const result = await runNode(setupPath, [
+    '--origin', 'https://1f3d9.com', '--handle', 'should-never-register', '--client-class', 'coding_persistent',
+  ], { env: { AGENT_1F3D9_STUB_ONLY: '1' } })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /AGENT_1F3D9_STUB_ONLY=1 is set/u)
+  assert.equal(result.stdout.trim(), '', 'nothing at all was printed before the guard refused')
 })
 
 test('every printed env-var name in the identity-client usage comment is a legal shell identifier', async () => {
@@ -398,4 +457,100 @@ test('promoteReplacementKey refuses to swallow a write failure after the server 
       return true
     },
   )
+})
+
+// --- Finding 2: register()'s overwrite guard is re-checked immediately ----
+// before the final vault write, not only once before the stage/confirm
+// network round trips -- closing the window where a concurrent run could
+// create the same handle in between.
+
+test('promoteReplacementKey with refuseIfPresent:true refuses to overwrite a live entry that now exists, and never touches the staging copy', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'race-handle'
+  const stagingLabel = `${handle}--pending-registration`
+  const liveValue = { kind: 'resident', handle, client_class: 'coding_persistent', resident_key: 'won-the-race-key', origin }
+  let storeCalled = false
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') {
+      return Buffer.from(JSON.stringify(liveValue), 'utf8').toString('base64')
+    }
+    if (command === 'security' && args[0] === '-i') {
+      storeCalled = true
+      throw new Error('this test must never reach a write attempt')
+    }
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const deps = { execFileSync, platform: 'darwin' }
+
+  assert.throws(
+    () => promoteReplacementKey(origin, handle, stagingLabel, 'new-confirmed-key', () => ({}), deps, { refuseIfPresent: true }),
+    (error) => {
+      assert.match(error.message, /now exists/u, 'names the race, not a generic write failure')
+      assert.match(error.message, new RegExp(stagingLabel.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')), 'points at the staging label')
+      assert.doesNotMatch(error.message, /won-the-race-key|new-confirmed-key/u, 'never includes a raw key value')
+      return true
+    },
+  )
+  assert.equal(storeCalled, false, 'the write is never even attempted once the live entry is found present')
+})
+
+test('promoteReplacementKey with refuseIfPresent:true still writes normally when nothing is there yet', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'no-race-handle'
+  const stagingLabel = `${handle}--pending-registration`
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') {
+      throw new Error('not found') // readSecret treats a lookup failure as "not found"
+    }
+    if (command === 'security' && args[0] === '-i') {
+      return '' // the write succeeds
+    }
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const deps = { execFileSync, platform: 'darwin' }
+
+  const location = promoteReplacementKey(origin, handle, stagingLabel, 'brand-new-key', () => ({ client_class: 'coding_persistent' }), deps, { refuseIfPresent: true })
+  assert.match(location, /macOS Keychain/u)
+})
+
+// --- Finding 4: the non-secret vault index is now serialized with a -------
+// short-retry, stale-aware lockfile, so two updates in close succession
+// never clobber each other, and an abandoned lock is broken rather than
+// honored forever.
+
+test('storeSecret/listVaultLabels: an abandoned (stale) vault-index lock is broken rather than blocking the next update forever', async () => {
+  const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-lock-'))
+  try {
+    const origin = 'https://example.invalid'
+    const deps = { platform: 'win32', homeDir, execFileSync: () => {} } // no-op: never touches the real Windows Credential Manager
+    const noop = { kind: 'resident', handle: 'agent-lock-a', client_class: 'coding_persistent', resident_key: 'k', origin }
+
+    storeSecret(origin, 'agent-lock-a', noop, deps)
+    assert.deepEqual(listVaultLabels(origin, deps), ['agent-lock-a'])
+
+    // Simulate a process that acquired the vault-index lock and then died
+    // before ever releasing it: create the lockfile directly and backdate
+    // its mtime well past the staleness threshold.
+    const lockDir = join(homeDir, '.1f3d9')
+    mkdirSync(lockDir, { recursive: true })
+    const lockPath = join(lockDir, 'vault-index.json.lock')
+    writeFileSync(lockPath, '')
+    const longAgo = new Date(Date.now() - 60_000)
+    utimesSync(lockPath, longAgo, longAgo)
+
+    const startedAt = Date.now()
+    storeSecret(origin, 'agent-lock-b', { ...noop, handle: 'agent-lock-b' }, deps)
+    const elapsedMs = Date.now() - startedAt
+    assert.ok(elapsedMs < 3_000, `the stale lock was broken quickly (${elapsedMs}ms), not honored for the full wait budget`)
+
+    const labels = listVaultLabels(origin, deps)
+    assert.ok(labels.includes('agent-lock-a'), 'the entry from before the stale lock is still there')
+    assert.ok(labels.includes('agent-lock-b'), 'the update behind the stale lock actually landed')
+
+    deleteSecret(origin, 'agent-lock-a', deps)
+    deleteSecret(origin, 'agent-lock-b', deps)
+    assert.deepEqual(listVaultLabels(origin, deps), [])
+  } finally {
+    await rm(homeDir, { recursive: true, force: true })
+  }
 })

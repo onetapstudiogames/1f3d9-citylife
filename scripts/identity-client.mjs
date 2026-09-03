@@ -59,7 +59,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { createInterface } from 'node:readline'
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync, unlinkSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync, unlinkSync, openSync, closeSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -300,16 +300,92 @@ function readVaultIndex(homeDir) {
   }
 }
 
+// updateVaultIndex is a read-modify-write over one shared file with no
+// built-in locking of its own -- two runs updating it at nearly the same
+// moment (a rotate and a register from two different sessions, or just two
+// tests in this repo's own suite) can each read the same starting state,
+// mutate their own copy, and write it back, with the second write silently
+// discarding the first's change. lockWithRetry below closes that window
+// with a plain `wx`-mode (O_EXCL) lockfile next to vault-index.json: only
+// one process can ever hold that name at once, so a second one either waits
+// briefly or, if the lock looks abandoned, breaks it and proceeds.
+const VAULT_INDEX_LOCK_STALE_MS = 5_000
+const VAULT_INDEX_LOCK_MAX_WAIT_MS = 2_000
+const VAULT_INDEX_LOCK_RETRY_MS = 20
+
+function sleepSyncMs(ms) {
+  // A real, blocking sleep with no busy-spin -- Atomics.wait blocks this
+  // thread without burning CPU, unlike a `while (Date.now() < until) {}`
+  // spin loop would. Safe here because this whole file is synchronous,
+  // single-threaded CLI code with no event loop work that a spin (or this)
+  // would otherwise starve.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
+}
+
+/**
+ * Runs `fn` (synchronous) while holding a short-lived lockfile at `lockPath`,
+ * retrying with backoff for up to VAULT_INDEX_LOCK_MAX_WAIT_MS if another
+ * process already holds it. A lock older than VAULT_INDEX_LOCK_STALE_MS is
+ * treated as abandoned (the process that created it crashed, was killed, or
+ * otherwise never reached its own cleanup) and broken rather than honored
+ * forever -- this file's own contents are always small and held only for the
+ * few synchronous fs calls inside `fn`, so a real holder is never actually
+ * still working after that long. Returns `undefined` (running `fn` not at
+ * all) if the wait budget is exhausted without ever acquiring the lock,
+ * rather than blocking indefinitely -- callers here already treat the whole
+ * operation as best effort.
+ */
+function withFileLock(lockPath, fn) {
+  const deadline = Date.now() + VAULT_INDEX_LOCK_MAX_WAIT_MS
+  for (;;) {
+    try {
+      closeSync(openSync(lockPath, 'wx'))
+      break
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error
+      let staleEnough = false
+      try {
+        staleEnough = Date.now() - statSync(lockPath).mtimeMs > VAULT_INDEX_LOCK_STALE_MS
+      } catch {
+        // The lock disappeared between the EEXIST above and this stat --
+        // another process's own cleanup won that race; just retry.
+      }
+      if (staleEnough) {
+        try {
+          unlinkSync(lockPath)
+        } catch {
+          // Another process may have broken (or re-created) it first; retry
+          // either way rather than treating that as this call's failure.
+        }
+        continue
+      }
+      if (Date.now() >= deadline) return undefined
+      sleepSyncMs(VAULT_INDEX_LOCK_RETRY_MS)
+    }
+  }
+  try {
+    return fn()
+  } finally {
+    try {
+      unlinkSync(lockPath)
+    } catch {
+      // Best effort -- see the module comment above.
+    }
+  }
+}
+
 /** Best effort: the index is a heuristic, so a write failure here is never fatal. */
 function updateVaultIndex(origin, label, homeDir, mutate) {
   try {
-    const index = readVaultIndex(homeDir)
-    const labels = new Set(Array.isArray(index[origin]) ? index[origin] : [])
-    mutate(labels, label)
-    index[origin] = [...labels]
     const path = vaultIndexPath(homeDir)
     mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-    writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 })
+    withFileLock(`${path}.lock`, () => {
+      const index = readVaultIndex(homeDir)
+      const labels = new Set(Array.isArray(index[origin]) ? index[origin] : [])
+      mutate(labels, label)
+      index[origin] = [...labels]
+      writeFileSync(path, `${JSON.stringify(index, null, 2)}\n`, { mode: 0o600 })
+    })
   } catch {
     // Best effort -- see the module comment above.
   }
@@ -640,8 +716,17 @@ $bytes = New-Object byte[] $cred.CredentialBlobSize
  * `stagingLabel` and nowhere else. The staging copy is left in place (it is
  * only deleted after storeSecret below actually succeeds), so nothing is
  * lost -- but it must be recovered by hand.
+ *
+ * `refuseIfPresent` (default false): when true, refuses to overwrite an
+ * entry the readSecret call just above found -- register() passes this,
+ * since (unlike rotate/recoverBegin, which intentionally replace the live
+ * entry for the SAME already-owned handle) register() must never silently
+ * overwrite a DIFFERENT registration that came to exist for this handle
+ * after register()'s own pre-flight check ran and before this, its last
+ * chance to check again immediately before the write. Same "staging copy
+ * kept, caller-worded message" shape as the SecretReadFailure case above.
  */
-function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeFields, deps = {}) {
+function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeFields, deps = {}, { refuseIfPresent = false } = {}) {
   let previous
   try {
     previous = readSecret(origin, handle, deps)
@@ -651,6 +736,24 @@ function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeF
       'The already-confirmed replacement key was NOT lost -- it is still stored under the ' +
       `staging label "${stagingLabel}". Resolve the unreadable entry, read the replacement key back ` +
       `from "${stagingLabel}", then store it under "${handle}" yourself.`,
+    )
+  }
+  if (refuseIfPresent && previous.found) {
+    // The re-check that closes the TOCTOU window the caller's own earlier
+    // check cannot close on its own: that check can only ever prove
+    // non-existence AT THE MOMENT it ran, before the network round trips
+    // (stage, confirm) that follow it -- a concurrent run can create a live
+    // entry for this exact handle in the time those take. `previous` above
+    // was just read, immediately before the write below, inside this same
+    // function call, so this is the last possible check before the write
+    // that would otherwise destroy whatever now exists.
+    throw new Error(
+      `refusing to overwrite the vault entry for "${handle}" that now exists: it was not there when this ` +
+      'registration started, so a concurrent run must have won the race for this handle. The confirmed ' +
+      `resident key from THIS registration was NOT lost -- it is still stored under the staging label ` +
+      `"${stagingLabel}" and nowhere else. Work out which of the two entries is the one you actually want ` +
+      `(for example \`key status --handle ${handle}\`), then store the key from "${stagingLabel}" under ` +
+      `"${handle}" yourself if it turns out to be the one that should have won.`,
     )
   }
   let location
@@ -975,10 +1078,44 @@ async function register(flags) {
   // bundle to that label and deletes the staging copy only once it has
   // actually landed there.
   const finalHandle = typeof confirmed.handle === 'string' ? confirmed.handle : stagedHandle
+
+  // Validated here, before finalHandle is ever used as a vault label,
+  // printed, or (via setup.mjs's regex parse of the "handle: " line below)
+  // written into setup-state.json -- the same discipline every OTHER
+  // handle in this file gets before use. The registration already happened
+  // server-side by this point, so this is defense in depth against the
+  // city's own confirmed spelling somehow failing the rule this script
+  // otherwise enforces before ever asking a human to approve a handle, not
+  // an expected path.
+  if (!HANDLE_RE.test(finalHandle)) {
+    // Best effort: the stage is already confirmed server-side, so this call
+    // is unlikely to change anything beyond what confirming already did --
+    // it costs nothing to attempt, and matches every other early exit in
+    // this function that cancels the stage before refusing.
+    await cancelStage(origin, '/api/register', staged.stage_token)
+    throw new Error(
+      `refusing to store or print the handle "${finalHandle}" the city confirmed for this registration: it ` +
+      `does not match the local handle rule ${HANDLE_RE.source}. The resident was already created ` +
+      'server-side under that exact spelling, and its confirmed resident key and recovery codes were NOT ' +
+      `lost -- they are still stored under the staging label "${stagingLabel}" and nowhere else. Read them ` +
+      `back from "${stagingLabel}" and store them under a label of your choosing yourself; this script will ` +
+      'not do so automatically for a handle that fails its own naming rule.',
+    )
+  }
+
+  // refuseIfPresent: register() must never silently overwrite a DIFFERENT
+  // registration that came to exist for this exact handle after the
+  // pre-flight check further up this function ran (see promoteReplacementKey's
+  // own doc comment) -- unlike rotate()/recoverBegin() below, which
+  // intentionally replace the live entry for the same already-owned handle.
+  // Only when the caller passed --replace-vault-entry is that overwrite
+  // actually intended -- the same flag the pre-flight check above already
+  // honors, so the final write must honor it identically rather than
+  // refusing what the caller explicitly asked to replace.
   const location = promoteReplacementKey(origin, finalHandle, stagingLabel, staged.resident_key, () => ({
     client_class: clientClass,
     recovery_codes: staged.recovery_codes,
-  }))
+  }), {}, { refuseIfPresent: !replaceVaultEntry })
 
   revealOrHide(flags, 'Resident key', [staged.resident_key])
   revealOrHide(flags, 'Recovery codes (all eight)', staged.recovery_codes)
