@@ -65,6 +65,7 @@ import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/id
 import { probeMe } from './lib/identity-probe.mjs'
 import {
   readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel,
+  KeychainEnumerationIncomplete,
 } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
@@ -386,7 +387,22 @@ if (priorVaultEntry.keyWorks && newIdentity) {
 // recovery staging label, which is not a real registered identity) and
 // refuse outright unless --new-identity was passed.
 if (!newIdentity) {
-  const otherLabels = listVaultLabels(origin).filter(label => label !== handle)
+  let otherLabels
+  try {
+    otherLabels = listVaultLabels(origin).filter(label => label !== handle)
+  } catch (error) {
+    if (!(error instanceof KeychainEnumerationIncomplete)) throw error
+    console.error(
+      `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's macOS Keychain ` +
+      `could not be fully scanned (${error.message}), so an existing resident under a different label may ` +
+      'be invisible right now. A lost or never-written setup-state.json must never turn an existing ' +
+      'resident into a second, permanent, unrecoverable one on the strength of an incomplete read -- retry ' +
+      'once whatever is slowing or blocking the Keychain clears. Only pass --new-identity if a genuinely ' +
+      'new resident is really intended regardless.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
   if (otherLabels.length > 0) {
     console.error(
       `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's vault already ` +

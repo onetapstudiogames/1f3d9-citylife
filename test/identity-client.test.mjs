@@ -9,6 +9,7 @@ import test from 'node:test'
 
 import {
   deleteSecret,
+  KeychainEnumerationIncomplete,
   listVaultLabels,
   promoteReplacementKey,
   readSecret,
@@ -660,6 +661,30 @@ function darwinKeychainDumpSample(origin, label) {
   return darwinKeychainDumpEntry(`1f3d9:${origin}:${label}`, label)
 }
 
+// Same shape as darwinKeychainDumpEntry, but writes the "svce" attribute in
+// the OTHER form real `security dump-keychain` output uses: `0x<HEX>`
+// (raw bytes, uppercase, no separator) followed by a best-effort quoted
+// display string -- the form it emits whenever the value is not cleanly
+// printable. `escapedDisplay` only needs to be plausible text after the
+// hex; darwinKeychainServiceLabels decodes the hex, never that display
+// string, so its exact escaping does not matter to the parser under test.
+function darwinKeychainDumpEntryHex(service, account, escapedDisplay) {
+  const hex = Buffer.from(service, 'utf8').toString('hex').toUpperCase()
+  return [
+    'keychain: "/Users/agent/Library/Keychains/login.keychain-db"',
+    'version: 512',
+    'class: "genp"',
+    'attributes:',
+    `    0x00000007 <blob>="${account}"`,
+    '    "acct"<blob>="' + account + '"',
+    '    "cdat"<timedate>=0x32303236303930333030303030305A00  "20260903000000Z\\000"',
+    '    "crtr"<uint32>=<NULL>',
+    `    "svce"<blob>=0x${hex}  "${escapedDisplay}"`,
+    '    "type"<uint32>=<NULL>',
+    '',
+  ].join('\n')
+}
+
 for (const backendPlatform of ['win32', 'darwin', 'linux']) {
   const skip = backendPlatform === 'linux' && !posixFileBackendForStagingTests
     ? 'temp-file backend depends on POSIX permission bits; run on Linux/macOS or in this repo\'s CI'
@@ -834,13 +859,15 @@ for (const backendPlatform of ['win32', 'darwin', 'linux']) {
 // an internal.
 test(
   'listVaultLabels (darwin): the security dump-keychain scan reads only this plugin\'s own service prefix, ' +
-  'ignores every other entry in the keychain, and unescapes octal byte escapes in the service name',
+  'ignores every other entry in the keychain, unescapes octal byte escapes (including multi-byte UTF-8 ' +
+  'characters split across consecutive escapes) in the service name, and decodes the 0x<HEX> form ' +
+  '`security` uses for values it cannot print as plain quoted text',
   async () => {
     const origin = 'https://example.invalid'
     const otherOrigin = 'https://other.invalid'
     const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-scan-'))
     try {
-      // Four entries in one dump: (1) this plugin, this origin -- must be
+      // Six entries in one dump: (1) this plugin, this origin -- must be
       // found; (2) this plugin, a DIFFERENT origin -- must be excluded, the
       // service prefix match is origin-scoped, not just "1f3d9:"-scoped;
       // (3) a wholly unrelated application's entry -- must be excluded, and
@@ -848,19 +875,30 @@ test(
       // (4) this plugin, this origin, with an octal-escaped byte in the
       // label (the shape `security`'s own output uses for a non-printable
       // or otherwise escaped character) -- must be unescaped back to the
-      // real label, not left as the literal six characters `\140`.
+      // real label, not left as the literal six characters `\140`; (5) this
+      // plugin, this origin, with a label containing "é" (U+00E9), which
+      // `security` emits as the TWO consecutive per-byte octal escapes
+      // `\303\251` (its UTF-8 bytes 0xC3 0xA9) -- decoding each escape as
+      // its own UTF-16 code unit would mangle this into "Ã©"; decoding the
+      // two bytes together as one UTF-8 sequence must recover "é"; (6) this
+      // plugin, this origin, emitted in the `0x<HEX>  "..."` form `security`
+      // uses instead of a plain quoted string for a value needing escaping
+      // -- the plain-form-only regex used to simply never match this line,
+      // silently dropping the entry from the enumeration.
       const output = [
         darwinKeychainDumpEntry(`1f3d9:${origin}:agent-found`, 'agent-found'),
         darwinKeychainDumpEntry(`1f3d9:${otherOrigin}:agent-other-origin`, 'agent-other-origin'),
         darwinKeychainDumpEntry('com.example.totallyUnrelatedApp', 'someone-elses-account'),
         darwinKeychainDumpEntry(`1f3d9:${origin}:agent\\140escaped`, 'agent`escaped'),
+        darwinKeychainDumpEntry(`1f3d9:${origin}:agent-caf\\303\\251`, 'agent-cafe'),
+        darwinKeychainDumpEntryHex(`1f3d9:${origin}:agent-hexform`, 'agent-hexform', `1f3d9:${origin}:agent-hexform`),
       ].join('\n')
       const deps = { platform: 'darwin', homeDir, execFileSync: () => output }
 
       assert.deepEqual(
         listVaultLabels(origin, deps).sort(),
-        ['agent-found', 'agent`escaped'].sort(),
-        'only this origin\'s own service-prefixed entries are returned, with octal escapes decoded',
+        ['agent-found', 'agent`escaped', 'agent-café', 'agent-hexform'].sort(),
+        'only this origin\'s own service-prefixed entries are returned, with octal escapes and the hex form decoded',
       )
     } finally {
       await rm(homeDir, { recursive: true, force: true })
@@ -884,3 +922,91 @@ test('listVaultLabels (darwin): a failing security binary is treated as "found n
     await rm(homeDir, { recursive: true, force: true })
   }
 })
+
+// --- round-3 finding 2: a truncated/timed-out Keychain scan must refuse, -
+// not silently answer "found nothing" -- see KeychainEnumerationIncomplete's
+// own doc comment in identity-client.mjs and the ENOBUFS repro in the
+// finding write-up (execFileSync's default 1 MiB maxBuffer throws ENOBUFS
+// on a keychain dump bigger than that).
+
+test(
+  'listVaultLabels (darwin): an ENOBUFS from a truncated security dump-keychain scan throws ' +
+  'KeychainEnumerationIncomplete instead of returning "found nothing"',
+  async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-enobufs-'))
+    try {
+      const deps = {
+        platform: 'darwin',
+        homeDir,
+        execFileSync: () => {
+          const error = new Error('spawnSync security ENOBUFS')
+          error.code = 'ENOBUFS'
+          throw error
+        },
+      }
+      assert.throws(
+        () => listVaultLabels(origin, deps),
+        KeychainEnumerationIncomplete,
+        'a truncated scan must throw, never silently return []',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'listVaultLabels (darwin): an ETIMEDOUT from a hung security dump-keychain scan also throws ' +
+  'KeychainEnumerationIncomplete',
+  async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-timeout-'))
+    try {
+      const deps = {
+        platform: 'darwin',
+        homeDir,
+        execFileSync: () => {
+          const error = new Error('spawnSync security ETIMEDOUT')
+          error.code = 'ETIMEDOUT'
+          throw error
+        },
+      }
+      assert.throws(
+        () => listVaultLabels(origin, deps),
+        KeychainEnumerationIncomplete,
+        'a timed-out scan must throw, never silently return []',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'listVaultLabels (darwin): a timeout kill with no error.code (killed: true) also throws ' +
+  'KeychainEnumerationIncomplete',
+  async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), 'identity-client-darwin-keychain-killed-'))
+    try {
+      const deps = {
+        platform: 'darwin',
+        homeDir,
+        execFileSync: () => {
+          const error = new Error('spawnSync security ETIMEDOUT')
+          error.killed = true
+          error.signal = 'SIGTERM'
+          throw error
+        },
+      }
+      assert.throws(
+        () => listVaultLabels(origin, deps),
+        KeychainEnumerationIncomplete,
+        'a killed-by-timeout scan (no error.code) must throw, never silently return []',
+      )
+    } finally {
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  },
+)

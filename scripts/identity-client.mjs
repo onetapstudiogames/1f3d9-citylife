@@ -1101,20 +1101,52 @@ function isStagingLabel(label, indexMap) {
 
 /**
  * Un-escapes one `security dump-keychain` attribute-value string: octal
- * byte escapes (`\NNN`, three digits) and a handful of backslash-escaped
- * literal characters (`\"`, `\\`). `security`'s own output uses this same
- * convention for both. Any other `\X` sequence is left as `X` -- this
- * plugin's own service names are plain ASCII (see vaultTarget), so nothing
- * beyond this ever needs to round-trip through here in practice; a stray
- * unrecognized escape from some OTHER application's entry merely fails to
- * match darwinKeychainServiceLabels's own prefix test below, not a parse
- * error.
+ * BYTE escapes (`\NNN`, three digits) and a handful of backslash-escaped
+ * literal characters (`\"`, `\\`). `security` emits `\NNN` per raw UTF-8
+ * BYTE of the underlying string, not per UTF-16 code unit -- a non-ASCII
+ * character like "é" (U+00E9, UTF-8 bytes 0xC3 0xA9) prints as two
+ * consecutive escapes, `\303\251`. Decoding each escape independently with
+ * `String.fromCharCode` (treating the octal value as a whole code point)
+ * would turn that into "Ã©" -- mojibake, not "é" -- because it builds two
+ * separate UTF-16 characters from what is actually one multi-byte UTF-8
+ * sequence. This instead collects every byte (decoded octal escapes AND
+ * the raw UTF-8 bytes of any literal/other-escaped text in between) into
+ * one buffer and decodes the WHOLE thing as UTF-8 once at the end, so a
+ * multi-byte character split across consecutive `\NNN` triplets round-trips
+ * correctly. Any other `\X` sequence is left as `X` -- this plugin's own
+ * service names are plain ASCII (see vaultTarget), so nothing beyond this
+ * ever needs to round-trip through here in practice; a stray unrecognized
+ * escape from some OTHER application's entry merely fails to match
+ * darwinKeychainServiceLabels's own prefix test below, not a parse error.
  */
 function unescapeSecurityDumpString(raw) {
-  return raw.replace(/\\(\d{3}|.)/gsu, (whole, escaped) => (
-    /^\d{3}$/u.test(escaped) ? String.fromCharCode(Number.parseInt(escaped, 8)) : escaped
-  ))
+  const chunks = []
+  const escapeRe = /\\(\d{3}|.)/gsu
+  let lastIndex = 0
+  let match
+  while ((match = escapeRe.exec(raw)) !== null) {
+    if (match.index > lastIndex) chunks.push(Buffer.from(raw.slice(lastIndex, match.index), 'utf8'))
+    const escaped = match[1]
+    chunks.push(
+      /^\d{3}$/u.test(escaped)
+        ? Buffer.from([Number.parseInt(escaped, 8) & 0xff])
+        : Buffer.from(escaped, 'utf8'),
+    )
+    lastIndex = escapeRe.lastIndex
+  }
+  if (lastIndex < raw.length) chunks.push(Buffer.from(raw.slice(lastIndex), 'utf8'))
+  return Buffer.concat(chunks).toString('utf8')
 }
+
+/**
+ * Thrown by darwinKeychainServiceLabels (and surfaced through
+ * listVaultLabels) when `security dump-keychain` truncated its output
+ * (ENOBUFS) or was killed for running too long (ETIMEDOUT/timeout kill)
+ * instead of actually finding nothing -- the enumeration is INCOMPLETE,
+ * never "empty", and a caller like setup.mjs's duplicate-identity guard
+ * must refuse rather than read that as "no other entry exists".
+ */
+class KeychainEnumerationIncomplete extends Error {}
 
 /**
  * Enumerates this plugin's own vault entries directly from the macOS
@@ -1126,26 +1158,62 @@ function unescapeSecurityDumpString(raw) {
  * only the `"svce"<blob>` (service name) attribute of each entry, filtered
  * to this plugin's own `1f3d9:<origin>:` service prefix; every other
  * attribute (including the account name and every timestamp) is ignored.
- * An unparseable or failing `security` call (no such binary, a locked
- * keychain, an unexpected output format) is treated as "found nothing"
- * here, the same fail-open posture listVaultLabels already documents for a
- * missing setup-state.json or an empty cmdkey scrape -- this enumeration is
- * UNIONED with the vault index below, never a replacement for it, so a
- * caller is still protected by whichever source actually has the answer.
+ *
+ * Passes an explicit 64 MiB `maxBuffer` and a 10s `timeout` -- Node's
+ * execFileSync default maxBuffer is 1 MiB, which a normal developer
+ * keychain (a few thousand Safari/wifi/certificate/app-token items) can
+ * exceed, throwing ENOBUFS. A bare `catch { return [] }` here cannot tell
+ * that truncation apart from "no `security` binary on PATH", so it used to
+ * silently answer "found nothing" on a keychain that is actually full of
+ * entries -- re-opening exactly the fail-open this union was added to
+ * close. ENOBUFS and a timeout kill (ETIMEDOUT, or `killed: true` with no
+ * `code`) now throw KeychainEnumerationIncomplete instead, so the caller
+ * can refuse rather than trust an incomplete read; every OTHER failure (no
+ * such binary, a locked keychain, an unexpected output format) is still
+ * treated as "found nothing", the same fail-open posture listVaultLabels
+ * already documents for a missing setup-state.json or an empty cmdkey
+ * scrape -- this enumeration is UNIONED with the vault index below, never
+ * a replacement for it, so a caller is still protected by whichever source
+ * actually has the answer.
  */
 function darwinKeychainServiceLabels(execImpl, origin) {
   let output
   try {
-    output = execImpl('security', ['dump-keychain'], { encoding: 'utf8' })
-  } catch {
+    output = execImpl('security', ['dump-keychain'], {
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      timeout: 10_000,
+    })
+  } catch (error) {
+    if (error?.code === 'ENOBUFS') {
+      throw new KeychainEnumerationIncomplete(
+        'security dump-keychain output exceeded the 64 MiB read limit -- the Keychain scan is incomplete, not empty',
+      )
+    }
+    if (error?.code === 'ETIMEDOUT' || (error?.killed === true && !error?.code)) {
+      throw new KeychainEnumerationIncomplete(
+        'security dump-keychain did not finish within 10s -- the Keychain scan is incomplete, not empty',
+      )
+    }
     return []
   }
   if (typeof output !== 'string') return []
   const prefix = vaultTarget(origin, '')
   const labels = []
-  const serviceRe = /"svce"<blob>="((?:[^"\\]|\\.)*)"/gsu
+  // `security dump-keychain` prints a "svce" value two different ways: the
+  // plain quoted form (group 1) when the whole string is printable, and
+  // `0x<HEX>` -- optionally followed by a best-effort quoted/escaped
+  // rendering, which this never needs to parse -- when it is not (group 2).
+  // The earlier version of this regex only matched the plain form, so any
+  // entry needing the hex form was silently dropped from the enumeration
+  // rather than parsed; the hex bytes are authoritative here (raw UTF-8),
+  // so they are decoded directly rather than round-tripped through the
+  // escaped display text.
+  const serviceRe = /"svce"<blob>=(?:"((?:[^"\\]|\\.)*)"|0x([0-9A-Fa-f]+)(?:\s+"(?:[^"\\]|\\.)*")?)/gsu
   for (const match of output.matchAll(serviceRe)) {
-    const service = unescapeSecurityDumpString(match[1])
+    const service = match[1] !== undefined
+      ? unescapeSecurityDumpString(match[1])
+      : Buffer.from(match[2], 'hex').toString('utf8')
     if (service.startsWith(prefix)) labels.push(service.slice(prefix.length))
   }
   return labels
@@ -1158,11 +1226,16 @@ function darwinKeychainServiceLabels(execImpl, origin) {
  * exist here", so setup.mjs's duplicate-identity guard can refuse a fresh
  * registration under a different handle instead of silently creating a
  * second, permanent, unrecoverable resident next to one that already
- * exists. Never throws: an enumeration failure (no `cmdkey`/`security` on
- * PATH, an unreadable directory, a missing index) is treated as "found
- * nothing", the same fail-open behavior that guard already accepts for a
- * missing setup-state.json -- the guard exists to catch the common case
- * (state lost, vault intact), not to be a perfect audit.
+ * exists. An enumeration failure (no `cmdkey`/`security` on PATH, an
+ * unreadable directory, a missing index) is treated as "found nothing",
+ * the same fail-open behavior that guard already accepts for a missing
+ * setup-state.json -- the guard exists to catch the common case (state
+ * lost, vault intact), not to be a perfect audit. The one exception: on
+ * darwin, a truncated or timed-out `security dump-keychain` scan (see
+ * KeychainEnumerationIncomplete) is NOT "found nothing" -- this throws
+ * KeychainEnumerationIncomplete rather than silently answering an
+ * incomplete read as an empty one, and the caller must refuse rather than
+ * treat that as "no other entry exists".
  */
 function listVaultLabels(origin, deps = {}) {
   const execImpl = deps.execFileSync ?? execFileSync
@@ -1379,6 +1452,26 @@ async function register(flags) {
   // here on ITS answer is the identity of record, never the spelling this
   // call was invoked with (see the module comment on HANDLE_RE above).
   const stagedHandle = typeof staged.handle === 'string' ? staged.handle : handle
+
+  // Validated HERE, before stagedHandle is ever used as a vault label by
+  // the readSecret/pendingLabel/storeSecret calls below -- not only on
+  // confirmed.handle after confirm succeeds, further down. rotate(),
+  // recoverBegin(), and recoverGenerate() already validate every
+  // server-returned handle before using it as a local label (round-3
+  // finding 4); this stage response was the one place in this file that
+  // still trusted a server answer verbatim before ever touching the vault
+  // with it. A malformed or hostile staged.handle must be refused, and the
+  // stage cancelled, before any local read or write happens on its
+  // strength -- not discovered only after confirm already ran.
+  if (!HANDLE_RE.test(stagedHandle) || RESERVED_HANDLE_SUBSTRING_RE.test(stagedHandle)) {
+    await cancelStage(origin, '/api/register', staged.stage_token)
+    throw new Error(
+      `refusing to use the handle ${JSON.stringify(stagedHandle)} the city returned for this registration's ` +
+      `stage as a vault label: it does not match the local handle rule ${HANDLE_RE.source}, or contains the ` +
+      'reserved "--pending-" sequence this script uses for its own in-flight staging labels. The staged ' +
+      'registration was cancelled before ever being confirmed or written to the vault; nothing was created.',
+    )
+  }
 
   // Same discipline rotate()/recoverBegin() already apply, extended to
   // register() itself: never overwrite whatever the vault already holds
@@ -1861,5 +1954,5 @@ if (isMainModule) {
 // uses this import path itself, so importing this module never runs main().
 export {
   storeSecret, readSecret, deleteSecret, listVaultLabels, promoteReplacementKey, SecretReadFailure, shouldReveal,
-  HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel,
+  HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel, KeychainEnumerationIncomplete,
 }

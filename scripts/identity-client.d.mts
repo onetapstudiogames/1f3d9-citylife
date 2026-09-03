@@ -52,7 +52,20 @@ export declare function deleteSecret(
   deps?: StoreSecretDeps,
 ): void
 
-/** Every label this host's vault currently holds for `origin`, excluding staging labels. Never throws. */
+/**
+ * Thrown by listVaultLabels (via darwinKeychainServiceLabels) when a
+ * `security dump-keychain` scan was truncated (ENOBUFS) or timed out --
+ * the enumeration is incomplete, never "found nothing", so a caller like
+ * setup.mjs's duplicate-identity guard must refuse rather than trust it.
+ */
+export declare class KeychainEnumerationIncomplete extends Error {}
+
+/**
+ * Every label this host's vault currently holds for `origin`, excluding
+ * staging labels. Does not throw except on darwin, where a truncated or
+ * timed-out Keychain scan throws KeychainEnumerationIncomplete rather than
+ * silently reporting an incomplete read as an empty one.
+ */
 export declare function listVaultLabels(
   origin: string,
   deps?: StoreSecretDeps,
