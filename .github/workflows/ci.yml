@@ -45,7 +45,7 @@ jobs:
       # full on ubuntu-latest above.
       - name: "Run tests (Windows: vault + packaging only)"
         if: matrix.os == 'windows-latest'
-        run: node --test test/vault-roundtrip-windows.test.mjs test/usefulness-and-packaging.test.mjs
+        run: node scripts/run-tests-with-home-guard.mjs test/vault-roundtrip-windows.test.mjs test/usefulness-and-packaging.test.mjs
         env:
           SKILL_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           REQUIRE_RELEASE_BASE: "1"
