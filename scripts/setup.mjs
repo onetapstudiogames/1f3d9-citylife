@@ -63,6 +63,7 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
+import { readCodingDoorsEnabled } from './lib/official-doors.mjs'
 import {
   readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel,
   KeychainEnumerationIncomplete,
@@ -527,6 +528,13 @@ function approvalQuestion(forHandle, forClientClass) {
  *     follow-up within APPROVAL_TIMEOUT_MS. Same "no next token" shape as
  *     declinedAfterToken; kept as a distinct field only so the caller can
  *     print a message that names what actually happened.
+ *   { approved: false, doorsDormant: true } -- a valid token WAS presented,
+ *     but GET /api/official reports the coding-client identity doors are
+ *     disabled on this deployment right now (decision row 74's own
+ *     default-off switch). The nonce is DELIBERATELY left unconsumed here
+ *     -- unlike every other false branch above, which either already spent
+ *     it or never had one to spend -- so the same token still works once an
+ *     operator turns the doors back on; see the call site below.
  */
 async function confirmHumanApproval() {
   const provided = typeof flags['human-approved'] === 'string' ? flags['human-approved'] : null
@@ -535,6 +543,20 @@ async function confirmHumanApproval() {
   const tokenValid = Boolean(provided) && matchingPending && provided === computeApprovalToken(pending.nonce)
 
   if (tokenValid) {
+    // Read GET /api/official BEFORE the nonce below is ever spent -- see
+    // this function's own doorsDormant doc comment above and setup.mjs's
+    // header comment on "never spend an approval nonce on a registration
+    // the city was always going to refuse". A failed or inconclusive read
+    // (network error, non-JSON body, the field missing entirely) is never
+    // treated as "dormant" -- only an EXPLICIT `doorsEnabled === false`
+    // refuses here; anything else falls through to the real /api/register
+    // call, which is the honest backstop for a door that goes dormant
+    // between this check and that call, or for an /api/official this host
+    // could not reach at all.
+    const doorsCheck = await readCodingDoorsEnabled(origin)
+    if (doorsCheck.ok && doorsCheck.doorsEnabled === false) {
+      return { approved: false, doorsDormant: true }
+    }
     // Single-use: consume the nonce immediately, so this exact token can
     // never approve a later, separate registration attempt -- whether or
     // not the interactive follow-up below is also asked.
@@ -593,6 +615,22 @@ if (!approval.approved) {
       `setup: registration of "${handle}" was declined at the interactive confirmation; nothing was ` +
       'created. Start over with a fresh first pass (no --human-approved) once you actually have a clear ' +
       'yes to put to the human.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
+  if (approval.doorsDormant) {
+    // Unlike every other branch above, the token here was NEVER consumed
+    // -- confirmHumanApproval's own doc comment on doorsDormant explains
+    // why -- so this is the one refusal that ends with the SAME token
+    // still valid, not a dead end requiring a fresh first pass.
+    console.error(
+      `setup: refusing to spend the approval token on "${handle}": ${origin}/api/official reports the ` +
+      'coding-client identity doors are disabled on this deployment right now ' +
+      '(identity.coding_client_json.doors_enabled is false) -- registering would only be refused again ' +
+      'after spending this single-use token, and the token must never be spent on a registration the city ' +
+      'was always going to refuse. Nothing was created and the token is UNCHANGED -- re-run this exact ' +
+      'command with the same --human-approved token once the doors are enabled again.',
     )
     process.exitCode = 1
     process.exit()

@@ -148,9 +148,27 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
  * containing embedded newlines, to reproduce the transcript-injection half
  * of that same finding.
  */
+/**
+ * `officialDoorsEnabled` (optional, default `true`): controls what GET
+ * /api/official reports at `identity.coding_client_json.doors_enabled` --
+ * shaped after the real city's own decision-row-74 field (see
+ * src/public-reference-facts.ts in the city's own source), just enough of
+ * it for setup.mjs's readCodingDoorsEnabled (scripts/lib/official-doors.mjs)
+ * to exercise its real client code against. Exists for exactly the
+ * doors-dormant pre-check test in identity-commands.test.mjs; every other
+ * caller of this function gets the default `true`, which is a no-op change
+ * to any existing scenario since setup.mjs only ever refuses on an explicit
+ * `false`.
+ */
 export async function startStubCityServer({
-  registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle,
+  registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle, officialDoorsEnabled = true,
 } = {}) {
+  // A mutable box, not a bare closed-over boolean, so a test can flip
+  // `official.doorsEnabled` AFTER the server has already started -- the
+  // doors-dormant pre-check test needs to prove the SAME approval token
+  // still works once an operator turns the doors back on, which means
+  // toggling this between two runs against the one already-running stub.
+  const official = { doorsEnabled: officialDoorsEnabled }
   const residents = new Map()
   const pendingRegistrations = new Map() // stage_token -> { handle, resident_key, recovery_codes, client_class }
   const pendingRotations = new Map() // stage_token -> { handle, resident_key }
@@ -179,6 +197,16 @@ export async function startStubCityServer({
         const found = [...residents.entries()].find(([, value]) => value.resident_key === key)
         if (!found) return send(res, 401, { error: 'invalid or expired resident key' })
         return send(res, 200, { handle: found[0] })
+      }
+
+      if (req.method === 'GET' && req.url === '/api/official') {
+        // Only the one field setup.mjs's readCodingDoorsEnabled actually
+        // reads -- this stub never claims to be a full /api/official
+        // fixture the way test/identity-doors-live.test.mjs's own live
+        // checks already cover.
+        return send(res, 200, {
+          identity: { coding_client_json: { doors_enabled: official.doorsEnabled } },
+        })
       }
 
       if (req.method !== 'POST') return send(res, 404, { error: 'not found' })
@@ -430,6 +458,10 @@ export async function startStubCityServer({
   return {
     origin: `https://localhost:${port}`,
     residents,
+    // Exposed (mutable) so a test can flip GET /api/official's
+    // doors_enabled field mid-scenario -- see the `official` box's own
+    // comment above.
+    official,
     // Exposed so a test can prove a stage is genuinely gone SERVER-SIDE
     // after a 'cancel' (or a confirm) -- not just that the client printed
     // a claim that it cancelled. This runs in the same process as the
