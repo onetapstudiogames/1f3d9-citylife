@@ -14,28 +14,36 @@
 //
 // Usage:
 //   node setup.mjs --origin https://1f3d9.com --handle my-agent \
-//     --client-class coding_persistent [--model "claude-x"] [--human-approved] \
+//     --client-class coding_persistent [--model "claude-x"] [--human-approved <token>] \
 //     [--wallet] [--reveal] [--new-identity] [--allow-origin <origin>]
 //   node setup.mjs                      (repair pass: reads prior state)
 //
-// Human approval is a real two-pass gate, not a self-assertion the agent can
-// satisfy alone in one call: the FIRST run (with no --human-approved, and
-// stdin not an interactive terminal) prints the exact question to put to the
-// human and refuses to register. When stdin IS an interactive terminal, this
-// script asks that question itself instead of requiring a second run. Only
-// after a real "yes" — interactively, or already obtained out of band before
-// a SECOND run passing --human-approved — does registration proceed.
-// --human-approved is then the agent's own recorded declaration that the
-// yes already happened; the city records it as such (decision row 74). It
-// is never proof by itself, and this script never treats it as one.
+// Human approval is a real two-pass gate that a single non-interactive call
+// cannot satisfy on its own. When stdin IS an interactive terminal, this
+// script asks the exact question itself and proceeds only on a real "yes" —
+// no second run needed. Off a terminal, the FIRST run (no --human-approved,
+// or a bare --human-approved with no token) can never approve itself: it
+// writes a random nonce into ~/.1f3d9/setup-state.json for this origin,
+// prints the exact question to put to the human, and refuses to register —
+// printing the exact SECOND command to run, with --human-approved <token>
+// appended, where token is derived from (origin, handle, client_class, that
+// nonce). Only a SECOND run passing that exact token back proceeds; an
+// unattended loop cannot produce that token in one call, because computing
+// it requires the nonce this script only ever writes to disk on a prior,
+// separate run. The token is proof a first pass happened here — it is
+// still the agent's own recorded declaration that a human said yes out of
+// band (decision row 74), never proof of who actually said it, and this
+// script never treats it as more than that.
 
 import { spawnSync } from 'node:child_process'
+import { createHash, randomBytes } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
-import { readSecret } from './identity-client.mjs'
+import { readSecret, SecretReadFailure, listVaultLabels } from './identity-client.mjs'
+import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 function parseArgs(argv) {
   const flags = {}
@@ -55,8 +63,21 @@ function parseArgs(argv) {
 }
 
 const flags = parseArgs(process.argv.slice(2))
-const origin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
+const rawOrigin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
 const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
+
+// The origin guard runs before ANYTHING else -- including the "Step 1"
+// output below -- so a disallowed origin can never reach a printed MCP
+// connector command, a registration attempt, or any other output at all.
+let origin
+try {
+  origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
+} catch (error) {
+  console.error(`setup: ${error.message}`)
+  process.exitCode = 1
+  process.exit()
+}
+
 const identityClientPath = resolve(pluginRoot, 'scripts', 'identity-client.mjs')
 
 const lines = []
@@ -86,15 +107,47 @@ try {
   process.exit()
 }
 
+// Throws SecretReadFailure (never silently returns keyWorks:false for it) --
+// a corrupt vault entry is not proof nothing is there, so every caller below
+// must handle that case explicitly rather than let it fall through into an
+// attempted registration.
 async function verifyStoredKey(handle) {
   const stored = readSecret(origin, handle)
   if (!stored.found) return { keyWorks: false, note: 'no vault entry found for this handle' }
   const residentKey = stored.value?.resident_key
   if (typeof residentKey !== 'string') return { keyWorks: false, note: 'vault entry has no resident_key field' }
   const probe = await probeMe(origin, residentKey, { allowOrigin })
-  return probe.ok
-    ? { keyWorks: true, note: `me read succeeded (handle: ${probe.handle ?? handle})` }
-    : { keyWorks: false, note: `me read failed: ${probe.error}` }
+  if (!probe.ok) return { keyWorks: false, note: `me read failed: ${probe.error}` }
+  // The vault entry is LABELLED `handle`, but the key it holds might not
+  // actually authenticate as that resident (a stale label, a hand-copied
+  // entry, or a handle the city normalized at registration) -- never adopt
+  // or report success on that mismatch.
+  if (probe.handle && probe.handle !== handle) {
+    return {
+      keyWorks: false,
+      mismatchedHandle: probe.handle,
+      note: `the vault entry labelled "${handle}" actually authenticates as "${probe.handle}" -- pass ` +
+        `--handle ${probe.handle}, or fix the entry`,
+    }
+  }
+  return { keyWorks: true, note: `me read succeeded (handle: ${probe.handle ?? handle})` }
+}
+
+/** Wraps a call to verifyStoredKey, turning SecretReadFailure into a clean, caller-worded refusal and exit. */
+async function verifyStoredKeyOrRefuse(handle, label) {
+  try {
+    return await verifyStoredKey(handle)
+  } catch (error) {
+    if (!(error instanceof SecretReadFailure)) throw error
+    console.error(
+      `${label}: ${error.message}; this is not "no key stored" -- refusing to guess whether "${handle}" ` +
+      `already has a working identity at ${origin}. Fix or remove the corrupt vault entry first (or, if ` +
+      'you have a saved recovery code for this handle, run `key recover begin` to replace it), then ' +
+      're-run setup. Never create a second identity to work around an unreadable one.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
 }
 
 function printConnectStep(handle) {
@@ -104,8 +157,11 @@ function printConnectStep(handle) {
   say('— never paste the raw key on this command line:')
   say('')
   say('  Claude Code:')
-  say(`    claude mcp add --transport http 1f3d9 ${origin}/mcp \\`)
-  say("      --header 'Authorization: Bearer ${AGENT_1F3D9_SECRET}'")
+  // One line, deliberately: a POSIX `\` line continuation is a hard parse
+  // error in PowerShell, one of the shells this command is most often
+  // pasted into, while this single-line form works unchanged in bash, zsh,
+  // and PowerShell alike.
+  say(`    claude mcp add --transport http 1f3d9 ${origin}/mcp --header 'Authorization: Bearer \${AGENT_1F3D9_SECRET}'`)
   say('    (that placeholder must reach the CLI single-quoted and unexpanded — copy it exactly; export')
   say('    AGENT_1F3D9_SECRET from your secret store first, never the literal key.)')
   say('')
@@ -148,7 +204,7 @@ function printWalletStep() {
 // them.
 async function report(handle, precomputedKeyCheck) {
   say('=== Verification report ===')
-  const keyCheck = precomputedKeyCheck ?? await verifyStoredKey(handle)
+  const keyCheck = precomputedKeyCheck ?? await verifyStoredKeyOrRefuse(handle, 'setup')
   say(`- public city handle: ${handle}`)
   say(`- secret reference works: ${keyCheck.keyWorks ? 'yes' : 'no'} (${keyCheck.note})`)
   say(`- wallet mode: ${flags.wallet === true ? 'requested (see references/wallet.md before funding it)' : 'disabled (default)'}`)
@@ -182,8 +238,9 @@ const newIdentity = flags['new-identity'] === true
 if (!handle || !clientClass) {
   console.error(
     'setup: no existing identity found for this origin. First have the agent choose its own handle ' +
-    '(never the human) and get a clear yes from the human for that exact permanent name, then re-run ' +
-    'with --handle <chosen-handle> --client-class coding_persistent|coding_ephemeral --human-approved.',
+    '(never the human), then re-run with --handle <chosen-handle> --client-class ' +
+    'coding_persistent|coding_ephemeral. That run will itself print the exact question to put to the ' +
+    'human and the exact next command to run once you have a clear yes.',
   )
   process.exitCode = 1
   process.exit()
@@ -197,7 +254,17 @@ if (!handle || !clientClass) {
 // written, and a naive retry would either dead-end on "handle taken" or,
 // worse, succeed under a different handle and create a real, permanent,
 // unrecoverable duplicate.
-const priorVaultEntry = await verifyStoredKey(handle)
+const priorVaultEntry = await verifyStoredKeyOrRefuse(handle, 'setup')
+if (priorVaultEntry.mismatchedHandle) {
+  console.error(
+    `setup: refusing to adopt or register "${handle}" at ${origin}: the vault entry stored under that ` +
+    `label actually authenticates as "${priorVaultEntry.mismatchedHandle}". Pass --handle ` +
+    `${priorVaultEntry.mismatchedHandle} to use the identity that entry really belongs to, or fix the ` +
+    'vault entry before retrying. Never overwrite it or register a fresh identity to work around this.',
+  )
+  process.exitCode = 1
+  process.exit()
+}
 if (priorVaultEntry.keyWorks && !newIdentity) {
   say(`=== A working identity for "${handle}" at ${origin} already exists ===`)
   say(`(${priorVaultEntry.note}). Adopting it instead of registering a second one — this never deletes or`)
@@ -214,41 +281,102 @@ if (priorVaultEntry.keyWorks && newIdentity) {
   say('')
 }
 
-/**
- * A real two-pass human-approval gate. Never trusts --human-approved alone
- * as if it were proof: when stdin is an interactive terminal, this script
- * asks the exact question itself and only proceeds on a real "yes" — the
- * flag is then unnecessary. When stdin is not interactive, --human-approved
- * is accepted only as the agent's own declaration that a human already said
- * yes to this exact handle and client class out of band; without it, this
- * refuses and prints the exact question the agent must put to the human,
- * rather than silently registering on the agent's word alone.
- */
-async function confirmHumanApproval() {
-  if (flags['human-approved'] === true) return true
-  if (!process.stdin.isTTY) return false
-  const question =
-    `Confirm the exact permanent public handle "${handle}" (client class: ${clientClass}) was chosen ` +
-    'with a human\'s clear yes. Register it now?'
-  const rl = createInterface({ input: process.stdin, output: process.stdout })
-  try {
-    const answer = await new Promise(resolve => rl.question(`${question} [y/N] `, resolve))
-    return /^y(es)?$/iu.test(answer.trim())
-  } finally {
-    rl.close()
+// The check above only ever looked at the EXACT handle requested. That
+// leaves the same stranding scenario open under a different handle: the
+// vault is user-scoped and setup-state.json lives under HOME, so "state
+// file gone, vault intact" is the normal shape after a HOME reset, a
+// profile move, or a container with a mounted keychain -- and a fresh
+// session that then chooses a different handle would otherwise register a
+// second, permanent, unrecoverable resident right next to the first one.
+// Enumerate every OTHER label this vault already holds for this origin
+// (never the handle just checked above, and never a rotation/recovery
+// staging label, which is not a real registered identity) and refuse
+// outright unless --new-identity was passed.
+if (!newIdentity) {
+  const otherLabels = listVaultLabels(origin).filter(label => label !== handle)
+  if (otherLabels.length > 0) {
+    console.error(
+      `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's vault already ` +
+      `holds ${otherLabels.length === 1 ? 'an entry' : 'entries'} for this origin under a different ` +
+      `label (${otherLabels.join(', ')}). A lost or never-written setup-state.json must never turn an ` +
+      'existing resident into a second, permanent, unrecoverable one. If one of those is really this ' +
+      'agent\'s own entry under a stale or normalized label, pass --handle <that label> instead. Only ' +
+      'pass --new-identity if a genuinely new resident, distinct from all of those, is really intended.',
+    )
+    process.exitCode = 1
+    process.exit()
   }
 }
 
-const humanApproved = await confirmHumanApproval()
-if (!humanApproved) {
+function computeApprovalToken(nonce) {
+  return createHash('sha256')
+    .update(`${origin} ${handle} ${clientClass} ${nonce}`)
+    .digest('hex')
+    .slice(0, 32)
+}
+
+/**
+ * A real two-pass human-approval gate that a single non-interactive call
+ * cannot satisfy on its own -- see the header comment for the full shape.
+ * Returns { approved: true } once a real yes has been obtained (either
+ * interactively just now, or by a valid token from a prior refused pass);
+ * otherwise { approved: false, token } where `token` is the value the next
+ * run must pass back with --human-approved.
+ */
+async function confirmHumanApproval() {
+  if (process.stdin.isTTY) {
+    const question =
+      `Confirm the exact permanent public handle "${handle}" (client class: ${clientClass}) was chosen ` +
+      'with a human\'s clear yes. Register it now?'
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    try {
+      const answer = await new Promise(resolve => rl.question(`${question} [y/N] `, resolve))
+      return { approved: /^y(es)?$/iu.test(answer.trim()) }
+    } finally {
+      rl.close()
+    }
+  }
+
+  const provided = typeof flags['human-approved'] === 'string' ? flags['human-approved'] : null
+  const pending = existing?.pending_approval
+  if (
+    provided
+    && pending
+    && pending.handle === handle
+    && pending.client_class === clientClass
+    && provided === computeApprovalToken(pending.nonce)
+  ) {
+    // Single-use: consume the nonce so this exact token can never approve a
+    // later, separate registration attempt.
+    writeSetupState(origin, { pending_approval: null })
+    return { approved: true }
+  }
+
+  // No valid token was presented -- mint a fresh nonce, persist it, and
+  // hand back the token derived from it so the caller can print the exact
+  // next command. This never approves on this call, even if a (wrong or
+  // stale) --human-approved value was given.
+  const nonce = randomBytes(16).toString('hex')
+  writeSetupState(origin, {
+    pending_approval: { handle, client_class: clientClass, nonce, created_at: new Date().toISOString() },
+  })
+  return { approved: false, token: computeApprovalToken(nonce) }
+}
+
+const approval = await confirmHumanApproval()
+if (!approval.approved) {
   console.error(
     'setup: before registering, put this exact question to the human: "Confirm the permanent public ' +
     `handle "${handle}" (client class: ${clientClass}) — register it now?" Registration creates a ` +
     'permanent public identity that cannot be silently replaced. After a clear yes, re-run this exact ' +
-    'command with --human-approved appended. That flag is the agent\'s own recorded declaration that the ' +
-    'yes already happened — the city records it as such (decision row 74); it is never proof by itself. ' +
-    '(stdin was not an interactive terminal here, so this script could not ask directly; on one, it would ' +
-    'have asked instead of requiring a second run.)',
+    `command with --human-approved ${approval.token} appended. That token proves THIS first pass ran and ` +
+    'wrote the nonce it is derived from to setup-state.json -- an unattended loop cannot produce it in ' +
+    'one call, because it can only be computed after that nonce already exists on disk. The token is ' +
+    'still only the agent\'s own recorded declaration that the yes already happened, exactly as before -- ' +
+    'the city records it as such (decision row 74); it is never proof of who actually said yes, and this ' +
+    'script never treats it as more than proof that a first pass happened. (stdin was not an interactive ' +
+    'terminal here, so this script could not ask directly; on one, it would have asked instead of ' +
+    'requiring a second run.)',
   )
   process.exitCode = 1
   process.exit()
