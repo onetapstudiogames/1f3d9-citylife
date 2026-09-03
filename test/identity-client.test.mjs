@@ -23,10 +23,24 @@ import { runNode } from './helpers/run-identity-cli.mjs'
 
 const identityClientPath = fileURLToPath(new URL('../scripts/identity-client.mjs', import.meta.url))
 
+// These subprocess tests below all target --origin https://example.invalid
+// (reserved by RFC 2606, can never resolve to anything real) to exercise
+// flag parsing, printed output shape, or refusal wording unrelated to the
+// origin guard itself -- the same rationale test/helpers/run-identity-cli.mjs
+// documents for its own NOT_A_REAL_ORIGIN_ENV. runCli is a raw spawnSync, not
+// routed through that helper's minimalBaseEnv, so it inherits the FULL
+// parent process.env by default -- including a real, exported
+// AGENT_1F3D9_STUB_ONLY=1 (this repo's own documented review guardrail), for
+// which the child would refuse every non-loopback --origin, example.invalid
+// included, before ever reaching the behavior each test below actually means
+// to exercise. Pin it to '0' explicitly here, same as NOT_A_REAL_ORIGIN_ENV
+// does, so this file's own assertions hold regardless of whether the caller
+// exported that guardrail into this test-runner process.
 const runCli = (args, input) => spawnSync(process.execPath, [identityClientPath, ...args], {
   encoding: 'utf8',
   input,
   stdio: input === undefined ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
+  env: { ...process.env, AGENT_1F3D9_STUB_ONLY: '0' },
 })
 
 // --- Refusals: every one of these must fail before any network call -------
@@ -113,25 +127,49 @@ test('assertAllowedOrigin refuses plain http, even for localhost', () => {
   assert.throws(() => assertAllowedOrigin('http://localhost:3000'), /only https is allowed/u)
 })
 
+// Both tests below assert the ORDINARY (non-stub-only) refusal/allow
+// wording, so they must run with AGENT_1F3D9_STUB_ONLY cleared regardless of
+// whatever this test-runner process itself was started with -- unlike the
+// runCli-driven subprocess tests above, these call assertAllowedOrigin
+// in-process and read process.env directly, so a real exported
+// AGENT_1F3D9_STUB_ONLY=1 (this repo's own documented review guardrail)
+// would otherwise leak straight in and produce the stub-only wording
+// instead. Same save/clear/restore shape the positive AGENT_1F3D9_STUB_ONLY
+// tests further down already use.
+
 test('assertAllowedOrigin refuses a foreign https origin without a matching --allow-origin', () => {
-  assert.throws(
-    () => assertAllowedOrigin('https://evil.example'),
-    /refusing to send a resident key to "https:\/\/evil\.example"/u,
-  )
-  assert.throws(
-    () => assertAllowedOrigin('https://evil.example', { allowOrigin: 'https://other.example' }),
-    /refusing to send a resident key/u,
-  )
+  const previous = process.env.AGENT_1F3D9_STUB_ONLY
+  delete process.env.AGENT_1F3D9_STUB_ONLY
+  try {
+    assert.throws(
+      () => assertAllowedOrigin('https://evil.example'),
+      /refusing to send a resident key to "https:\/\/evil\.example"/u,
+    )
+    assert.throws(
+      () => assertAllowedOrigin('https://evil.example', { allowOrigin: 'https://other.example' }),
+      /refusing to send a resident key/u,
+    )
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_1F3D9_STUB_ONLY
+    else process.env.AGENT_1F3D9_STUB_ONLY = previous
+  }
 })
 
 test('assertAllowedOrigin allows the real city, https://localhost, and an exactly-matching --allow-origin', () => {
-  assert.equal(assertAllowedOrigin('https://1f3d9.com'), 'https://1f3d9.com')
-  assert.equal(assertAllowedOrigin('https://localhost:4000'), 'https://localhost:4000')
-  assert.equal(assertAllowedOrigin('https://127.0.0.1:4000'), 'https://127.0.0.1:4000')
-  assert.equal(
-    assertAllowedOrigin('https://evil.example', { allowOrigin: 'https://evil.example' }),
-    'https://evil.example',
-  )
+  const previous = process.env.AGENT_1F3D9_STUB_ONLY
+  delete process.env.AGENT_1F3D9_STUB_ONLY
+  try {
+    assert.equal(assertAllowedOrigin('https://1f3d9.com'), 'https://1f3d9.com')
+    assert.equal(assertAllowedOrigin('https://localhost:4000'), 'https://localhost:4000')
+    assert.equal(assertAllowedOrigin('https://127.0.0.1:4000'), 'https://127.0.0.1:4000')
+    assert.equal(
+      assertAllowedOrigin('https://evil.example', { allowOrigin: 'https://evil.example' }),
+      'https://evil.example',
+    )
+  } finally {
+    if (previous === undefined) delete process.env.AGENT_1F3D9_STUB_ONLY
+    else process.env.AGENT_1F3D9_STUB_ONLY = previous
+  }
 })
 
 // --- Finding 8: AGENT_1F3D9_STUB_ONLY=1 refuses every non-loopback origin -
