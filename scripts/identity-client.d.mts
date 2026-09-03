@@ -4,7 +4,13 @@
 export interface StoreSecretDeps {
   execFileSync?: (command: string, args: readonly string[], options: Record<string, unknown>) => unknown
   platform?: NodeJS.Platform
-  /** Only consulted on the non-Windows, non-macOS (plain-file) storage path. */
+  /**
+   * Consulted on macOS and Windows (the ~/.1f3d9 vault index) and on the
+   * plain-file path (the credentials directory itself); it never changes
+   * where the OS credential store (Windows Credential Manager, macOS
+   * Keychain) keeps the secret entry, only where the non-secret label index
+   * and the plain-file fallback live.
+   */
   homeDir?: string
 }
 

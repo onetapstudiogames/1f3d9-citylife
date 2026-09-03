@@ -21,7 +21,7 @@
 // Usage:
 //   node identity-client.mjs register --origin https://1f3d9.com \
 //     --handle my-agent --client-class coding_persistent \
-//     [--model "claude-opus"] [--human-approved] [--reveal]
+//     [--model "claude-opus"] [--human-approved] [--reveal] [--replace-vault-entry]
 //   node identity-client.mjs rotate --origin https://1f3d9.com \
 //     --resident-key-file /path/to/key   (or - for stdin, or set AGENT_1F3D9_SECRET) [--reveal]
 //   node identity-client.mjs recover generate --origin https://1f3d9.com \
@@ -36,6 +36,13 @@
 // --human-approved only when that confirmation already happened out of band
 // (for example, a human typed the handle into the command that invoked this
 // script) -- it is a caller declaration, never a real substitute for asking.
+// The handle is checked locally against the city's own handle rule before
+// that approval step even runs, so a human is never asked to approve a name
+// the city cannot create. `register` refuses outright, rather than
+// overwriting, if this host's vault already holds an entry under the
+// identity the city actually confirms (which may differ from the requested
+// spelling if the city normalizes it) -- pass --replace-vault-entry only
+// when discarding that existing entry is genuinely intended.
 //
 // --resident-key and --recovery-code are refused as BARE argv flags: a bare
 // flag value lands in shell history and in any process listing (`ps`, Task
@@ -60,6 +67,16 @@ import { assertAllowedOrigin, DEFAULT_ORIGIN } from './lib/origin-guard.mjs'
 
 const ROOT_KEY_RE = /^1f3d9_sk_[0-9a-f]{48}$/u
 const RECOVERY_CODE_RE = /^1f3d9_rc_[0-9a-f]{64}$/u
+
+// The city's own handle rule (matches the browser join door's validation,
+// which the front door states the JSON doors "mirror" in limit, name rule,
+// and refusal). Checked locally, before ever putting a handle in front of a
+// human for approval, so a human is never asked to approve a name the city
+// cannot create -- and so the label this script stores the vault entry
+// under is never assumed to equal the requested spelling (the city may
+// still normalize it further; see register() below, which always trusts
+// the server's own answer as the identity of record, not this local check).
+const HANDLE_RE = /^[a-z0-9][a-z0-9-]{2,31}$/u
 
 // The one legal (letter-first) environment variable name used everywhere a
 // resident key is read from the host's own secret store -- by the printed
@@ -244,22 +261,31 @@ function isPendingLabel(label) {
   return /--pending-(?:rotation|recovery)$/u.test(label)
 }
 
-// --- Non-secret vault index (macOS only) -----------------------------------
+// --- Non-secret vault index (macOS and Windows) -----------------------------
 //
 // macOS Keychain has no reliable, non-interactive way for this script to
 // enumerate every entry it owns: `security dump-keychain` prints every
 // stored secret in the user's whole login keychain, not just this plugin's
 // entries, so using it here to answer "does ANY entry already exist for
 // this origin" would mean reading (and having to filter through) secrets
-// this script has no business touching at all. Instead, storeSecret and
-// deleteSecret below keep a small non-secret index file --
-// ~/.1f3d9/vault-index.json, labels only, never a key or recovery code --
-// that setup.mjs's duplicate-identity guard reads through listVaultLabels.
-// It is a heuristic, not a source of truth: it can go stale if an entry is
-// removed by some other tool (Keychain Access.app, `security` by hand), and
-// listVaultLabels below treats that as fine to err toward, since the whole
-// point is only ever to make setup ask for --new-identity one time too many,
-// never to silently register a real duplicate resident.
+// this script has no business touching at all. Windows has a different
+// problem with the same shape: `cmdkey /list` is this script's only
+// non-interactive way to enumerate entries, but its output is localized --
+// on a non-English Windows install the literal "Target:" label this script
+// parses for never appears, so scraping it alone silently returns nothing,
+// language-dependently. Instead, storeSecret and deleteSecret below keep a
+// small non-secret index file -- ~/.1f3d9/vault-index.json, labels only,
+// never a key or recovery code -- that setup.mjs's duplicate-identity guard
+// reads through listVaultLabels. It is a heuristic, not a source of truth:
+// it can go stale if an entry is removed by some other tool (Keychain
+// Access.app, Windows Credential Manager's own UI, `security`/`cmdkey` by
+// hand), and listVaultLabels below treats that as fine to err toward, since
+// the whole point is only ever to make setup ask for --new-identity one
+// time too many, never to silently register a real duplicate resident. On
+// win32, listVaultLabels unions this index with whatever `cmdkey /list`
+// scraping does find, rather than depending on the index alone -- the index
+// is best-effort too (a write failure here is never fatal), so neither
+// source alone is trusted as complete.
 
 function vaultIndexPath(homeDir = homedir()) {
   return join(homeDir, '.1f3d9', 'vault-index.json')
@@ -387,7 +413,10 @@ function writeMacKeychainCredential(execImpl, service, account, base64Blob) {
  * later reads them back from the same place with the same tool. The secret
  * bundle is always base64-encoded JSON delivered over stdin to whichever
  * tool writes it, never a process argument -- see writeWindowsCredential and
- * writeMacKeychainCredential above.
+ * writeMacKeychainCredential above. `deps.homeDir` is consulted on macOS
+ * and Windows (the non-secret vault index) and on the plain-file path (the
+ * credentials directory); it never changes where the OS credential store
+ * itself keeps the secret entry.
  */
 function storeSecret(origin, label, payload, deps = {}) {
   const execImpl = deps.execFileSync ?? execFileSync
@@ -397,6 +426,7 @@ function storeSecret(origin, label, payload, deps = {}) {
   if (os === 'win32') {
     const target = vaultTarget(origin, label)
     writeWindowsCredential(execImpl, target, label, encoded)
+    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.add(thisLabel))
     return `Windows Credential Manager (target "${target}", value base64-encoded JSON)`
   }
   if (os === 'darwin') {
@@ -654,6 +684,7 @@ function deleteSecret(origin, label, deps = {}) {
     } catch {
       // Best effort: nothing to delete, or cmdkey already reports failure loudly enough elsewhere.
     }
+    updateVaultIndex(origin, label, deps.homeDir, (labels, thisLabel) => labels.delete(thisLabel))
     return
   }
   if (os === 'darwin') {
@@ -694,24 +725,34 @@ function listVaultLabels(origin, deps = {}) {
   const os = deps.platform ?? platform()
   if (os === 'win32') {
     const prefix = vaultTarget(origin, '')
-    let output
+    // cmdkey's own output is localized -- on a non-English Windows install
+    // the literal "Target:" label below never appears, so this alone can
+    // silently return nothing. Union it with the non-secret vault index
+    // (language-independent, maintained by storeSecret/deleteSecret above)
+    // instead of trusting either source alone: a failed or empty cmdkey
+    // scrape still leaves the index, and a stale/incomplete index still
+    // leaves whatever cmdkey actually found.
+    const fromCmdkey = []
     try {
-      output = execImpl('cmdkey', ['/list'], { encoding: 'utf8' })
+      const output = execImpl('cmdkey', ['/list'], { encoding: 'utf8' })
+      for (const match of output.matchAll(/Target:\s*(.+)\s*$/gmu)) {
+        // Real `cmdkey /list` output prefixes the target this script wrote
+        // with its own credential-type marker -- observed as
+        // "LegacyGeneric:target=1f3d9:<origin>:<label>", not the bare target
+        // -- so search for the prefix anywhere in the line rather than
+        // requiring it at the very start.
+        const target = match[1].trim()
+        const index = target.indexOf(prefix)
+        if (index !== -1) fromCmdkey.push(target.slice(index + prefix.length))
+      }
     } catch {
-      return []
+      // cmdkey unavailable or failed -- fall through to the index below
+      // rather than reporting an empty result outright.
     }
-    const labels = []
-    for (const match of output.matchAll(/Target:\s*(.+)\s*$/gmu)) {
-      // Real `cmdkey /list` output prefixes the target this script wrote
-      // with its own credential-type marker -- observed as
-      // "LegacyGeneric:target=1f3d9:<origin>:<label>", not the bare target
-      // -- so search for the prefix anywhere in the line rather than
-      // requiring it at the very start.
-      const target = match[1].trim()
-      const index = target.indexOf(prefix)
-      if (index !== -1) labels.push(target.slice(index + prefix.length))
-    }
-    return labels.filter(label => !isPendingLabel(label))
+    const vaultIndex = readVaultIndex(deps.homeDir)
+    const fromIndex = Array.isArray(vaultIndex[origin]) ? vaultIndex[origin] : []
+    const labels = new Set([...fromCmdkey, ...fromIndex])
+    return [...labels].filter(label => !isPendingLabel(label))
   }
   if (os === 'darwin') {
     const index = readVaultIndex(deps.homeDir)
@@ -818,14 +859,32 @@ async function postAuthed(origin, path, residentKey, body) {
 
 // --- Commands ---------------------------------------------------------
 
+/** Best effort: tells the city to release a stage it will otherwise just let expire on its own. */
+async function cancelStage(origin, path, stageToken) {
+  try {
+    await postJson(origin, path, { action: 'cancel', stage_token: stageToken })
+  } catch {
+    // Best effort -- the stage expires on its own either way, and the
+    // caller above is already reporting the real failure.
+  }
+}
+
 async function register(flags) {
   const origin = originOf(flags)
   const handle = requireFlag(flags, 'handle')
+  if (!HANDLE_RE.test(handle)) {
+    throw new Error(
+      `--handle "${handle}" does not match the city's handle rule ${HANDLE_RE.source} (lowercase letters, ` +
+      'digits, and hyphens, 3-32 characters, must start with a letter or digit); nothing was created -- ' +
+      'choose a handle that already matches this rule before asking a human to approve it',
+    )
+  }
   const clientClass = requireFlag(flags, 'client-class')
   if (clientClass !== 'coding_persistent' && clientClass !== 'coding_ephemeral') {
     throw new Error('--client-class must be coding_persistent or coding_ephemeral')
   }
   const model = typeof flags.model === 'string' ? flags.model : ''
+  const replaceVaultEntry = flags['replace-vault-entry'] === true
 
   let humanApproved = flags['human-approved'] === true
   if (!humanApproved) {
@@ -846,10 +905,50 @@ async function register(flags) {
     client_class: clientClass,
     human_approved: true,
   })
+  // The city may normalize the requested handle at staging time -- from
+  // here on ITS answer is the identity of record, never the spelling this
+  // call was invoked with (see the module comment on HANDLE_RE above).
+  const stagedHandle = typeof staged.handle === 'string' ? staged.handle : handle
 
-  const location = storeSecret(origin, handle, {
+  // Same discipline rotate()/recoverBegin() already apply, extended to
+  // register() itself: never overwrite whatever the vault already holds
+  // under the identity of record without an explicit, deliberate override.
+  // Without this, a stale or normalized label collision would let the
+  // storeSecret call below silently destroy an existing key and its
+  // recovery codes -- exactly the failure mode a dropped/ambiguous probe
+  // result (setup.mjs's own vault-adopt guard cannot always tell "rejected"
+  // from "could not tell") could otherwise walk straight into.
+  if (!replaceVaultEntry) {
+    let existing
+    try {
+      existing = readSecret(origin, stagedHandle)
+    } catch (error) {
+      await cancelStage(origin, '/api/register', staged.stage_token)
+      throw new Error(
+        `refusing to register over a vault entry for "${stagedHandle}" that could not be read back: ` +
+        `${error.message}. The staged registration was cancelled; nothing was created. Resolve the ` +
+        'unreadable entry first, then retry -- or pass --replace-vault-entry only if you are certain that ' +
+        'entry should be discarded.',
+      )
+    }
+    if (existing.found) {
+      await cancelStage(origin, '/api/register', staged.stage_token)
+      throw new Error(
+        `refusing to register over the vault entry that already exists for "${stagedHandle}": the staged ` +
+        'registration was cancelled and nothing was created. Pass --replace-vault-entry only if you are ' +
+        'certain that entry should be discarded -- doing so destroys whatever key and recovery codes it ' +
+        'currently holds.',
+      )
+    }
+  }
+
+  // Stage the new bundle under a DISTINCT vault label first, exactly like
+  // rotate()/recoverBegin() below -- never write to the live label before
+  // confirm actually succeeds.
+  const stagingLabel = pendingLabel(stagedHandle, 'registration')
+  storeSecret(origin, stagingLabel, {
     kind: 'resident',
-    handle: staged.handle,
+    handle: stagedHandle,
     client_class: clientClass,
     resident_key: staged.resident_key,
     recovery_codes: staged.recovery_codes,
@@ -857,15 +956,33 @@ async function register(flags) {
     stored_at: new Date().toISOString(),
   })
 
-  const confirmed = await postJson(origin, '/api/register', {
-    action: 'confirm',
-    stage_token: staged.stage_token,
-    resident_key: staged.resident_key,
-  })
+  let confirmed
+  try {
+    confirmed = await postJson(origin, '/api/register', {
+      action: 'confirm',
+      stage_token: staged.stage_token,
+      resident_key: staged.resident_key,
+    })
+  } catch (error) {
+    deleteSecret(origin, stagingLabel)
+    await cancelStage(origin, '/api/register', staged.stage_token)
+    throw error
+  }
+
+  // The identity of record is the city's CONFIRMED answer, falling back to
+  // the staged one only if the response is somehow missing it -- never the
+  // originally requested spelling. promoteReplacementKey moves the staged
+  // bundle to that label and deletes the staging copy only once it has
+  // actually landed there.
+  const finalHandle = typeof confirmed.handle === 'string' ? confirmed.handle : stagedHandle
+  const location = promoteReplacementKey(origin, finalHandle, stagingLabel, staged.resident_key, () => ({
+    client_class: clientClass,
+    recovery_codes: staged.recovery_codes,
+  }))
 
   revealOrHide(flags, 'Resident key', [staged.resident_key])
   revealOrHide(flags, 'Recovery codes (all eight)', staged.recovery_codes)
-  console.log(`handle: ${confirmed.handle}`)
+  console.log(`handle: ${finalHandle}`)
   console.log(`resident_id: ${confirmed.resident_id}`)
   console.log(`stored: ${location}`)
 }
@@ -903,6 +1020,7 @@ async function rotate(flags) {
     })
   } catch (error) {
     deleteSecret(origin, stagingLabel)
+    await cancelStage(origin, '/api/rotate', staged.stage_token)
     throw error
   }
 
@@ -931,6 +1049,12 @@ async function rotate(flags) {
   console.log(
     'your recovery codes were invalidated by this rotation (the city invalidates every recovery code on ' +
     'confirm) -- run `recover generate` (or `key recover generate`) now to mint a fresh set.',
+  )
+  console.log(
+    'this rotation also revoked every connector session, authorization code, and delegated grant this ' +
+    `resident had (the city invalidates them atomically with the key) -- update whatever host secret ` +
+    `${AGENT_SECRET_ENV_VAR} reads and re-run \`connect\`, and re-pair any chat twin with a fresh ` +
+    '`connect chat` code; both will otherwise start failing with no obvious cause.',
   )
 }
 
@@ -1009,6 +1133,7 @@ async function recoverBegin(flags) {
     })
   } catch (error) {
     deleteSecret(origin, stagingLabel)
+    await cancelStage(origin, '/api/recovery', staged.stage_token)
     throw error
   }
 
@@ -1028,6 +1153,12 @@ async function recoverBegin(flags) {
   console.log(
     'every remaining recovery code was invalidated by this recovery (the city invalidates every sibling ' +
     'code on confirm) -- run `recover generate` (or `key recover generate`) now to mint a fresh set.',
+  )
+  console.log(
+    'this recovery also revoked every connector session, authorization code, and delegated grant the old ' +
+    `key had (the city invalidates them atomically with the key) -- update whatever host secret ` +
+    `${AGENT_SECRET_ENV_VAR} reads and re-run \`connect\`, and re-pair any chat twin with a fresh ` +
+    '`connect chat` code; both will otherwise start failing with no obvious cause.',
   )
 }
 
@@ -1078,4 +1209,5 @@ if (isMainModule) {
 // uses this import path itself, so importing this module never runs main().
 export {
   storeSecret, readSecret, deleteSecret, listVaultLabels, promoteReplacementKey, SecretReadFailure, shouldReveal,
+  HANDLE_RE,
 }
