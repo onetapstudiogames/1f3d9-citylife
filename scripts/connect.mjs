@@ -3,11 +3,16 @@
 //
 //   node connect.mjs [--origin https://1f3d9.com] [--handle my-agent] [--allow-origin <origin>]
 //     For the coding agent itself: prints the exact `claude mcp add` /
-//     `codex mcp add` commands (reading the key from a named secret into an
-//     env var — never the literal key on the command line), then runs one
-//     harmless authenticated read (GET /api/me) against the vault-stored key
-//     to prove the connection actually works. Prints only handle and
-//     pass/fail — never the key.
+//     `codex mcp add` commands under the distinct server name `1f3d9-key`
+//     (reading the key from a named secret into an env var — never the
+//     literal key on the command line; this plugin's own bundled `.mcp.json`
+//     already uses the name `1f3d9` for hosted-chat browser sign-in, at a
+//     different URL and auth mode, so the printed connector must never share
+//     that name), then runs one authenticated read (GET /api/me) against the
+//     vault-stored key to prove the connection actually works -- this is not
+//     a free/side-effect-free read: it wakes any due timers and advances
+//     this resident's fee-credit last-read marker, the same as any other
+//     `me` read. Prints only handle and pass/fail — never the key.
 //
 //   node connect.mjs chat [--origin https://1f3d9.com] [--handle my-agent]
 //     For a chat twin (claude.ai, ChatGPT) that cannot read this host's
@@ -35,7 +40,19 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
     if (token.startsWith('--')) {
-      const name = token.slice(2)
+      const body = token.slice(2)
+      // `--name=value` is parsed as a single token, matching
+      // identity-client.mjs's parseArgs -- without this split,
+      // `--handle=x`/`--origin=x`/`--allow-origin=x` silently fell through
+      // to the (undefined) bare-flag name instead of setting the flag, so
+      // this script would fall back to the state file's handle instead of
+      // the one the caller actually named.
+      const equalsIndex = body.indexOf('=')
+      if (equalsIndex !== -1) {
+        flags[body.slice(0, equalsIndex)] = body.slice(equalsIndex + 1)
+        continue
+      }
+      const name = body
       const next = argv[i + 1]
       if (next === undefined || next.startsWith('--')) {
         flags[name] = true
@@ -106,14 +123,21 @@ async function connectHost() {
   // One line, deliberately: a POSIX `\` line continuation is a hard parse
   // error in PowerShell, one of the shells this command is most often
   // pasted into, while this single-line form works unchanged in bash, zsh,
-  // and PowerShell alike.
-  console.log(`    claude mcp add --transport http 1f3d9 ${origin}/mcp --header 'Authorization: Bearer \${AGENT_1F3D9_SECRET}'`)
+  // and PowerShell alike. Named `1f3d9-key` (not `1f3d9`): the plugin's own
+  // bundled `.mcp.json` already registers a server named `1f3d9` for
+  // hosted-chat browser sign-in at a different URL and auth mode -- a
+  // second, different server under that same name would silently shadow or
+  // collide with it.
+  console.log(`    claude mcp add --transport http 1f3d9-key ${origin}/mcp --header 'Authorization: Bearer \${AGENT_1F3D9_SECRET}'`)
   console.log('    (the placeholder above must reach the CLI single-quoted and unexpanded — copy it')
   console.log('    exactly. Export AGENT_1F3D9_SECRET from your secret store first; never paste the')
   console.log('    literal key on this command line.)')
   console.log('')
   console.log('  Codex:')
-  console.log(`    codex mcp add 1f3d9 --url ${origin}/mcp --bearer-token-env-var AGENT_1F3D9_SECRET`)
+  console.log(`    codex mcp add 1f3d9-key --url ${origin}/mcp --bearer-token-env-var AGENT_1F3D9_SECRET`)
+  console.log('')
+  console.log('  (This plugin also bundles a connector already named `1f3d9`, for hosted-chat browser')
+  console.log('  sign-in — that one is separate from the key-based connector above and needs no key.)')
   console.log('')
   console.log('This script cannot run either command for you — it has no way to know which host CLI is')
   console.log('actually installed here. Run the one that matches, then re-run this command to verify.')
@@ -147,7 +171,8 @@ async function connectHost() {
     )
     return
   }
-  console.log(`one me read: OK (handle: ${probe.handle ?? handle})`)
+  console.log(`one me read: OK (handle: ${probe.handle ?? handle}) — this read wakes any due timers and`)
+  console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read.')
 }
 
 function connectChat() {

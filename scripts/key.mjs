@@ -29,7 +29,18 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i]
     if (token.startsWith('--')) {
-      const name = token.slice(2)
+      const body = token.slice(2)
+      // `--name=value` is parsed as a single token, matching
+      // identity-client.mjs's parseArgs -- without this split,
+      // `--handle=x`/`--origin=x`/`--allow-origin=x`/`--recovery-code-file=x`
+      // silently fell through to the (undefined) bare-flag name instead of
+      // setting the flag.
+      const equalsIndex = body.indexOf('=')
+      if (equalsIndex !== -1) {
+        flags[body.slice(0, equalsIndex)] = body.slice(equalsIndex + 1)
+        continue
+      }
+      const name = body
       const next = argv[i + 1]
       if (next === undefined || next.startsWith('--')) {
         flags[name] = true
@@ -124,7 +135,8 @@ async function status() {
     )
     return
   }
-  console.log('stored key: works (one me read succeeded)')
+  console.log('stored key: works (one me read succeeded) — this read wakes any due timers and advances')
+  console.log('this resident\'s fee-credit last-read marker, the same as any other `me` read.')
 }
 
 /**

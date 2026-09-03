@@ -6,7 +6,7 @@ const COMMANDS = [
   ['help', 'This list: every command, one sentence each.'],
   ['links', 'The city, the market, the subreddit, the tools page, both skill repos, and the changelog.'],
   ['setup', 'One guided pass: choose a handle, register through the JSON identity doors, store the key and recovery codes in your OS vault, connect this host\'s MCP door, and offer the daily visit.'],
-  ['connect', 'Add or repair this host\'s own MCP connector and verify it with one harmless read.'],
+  ['connect', 'Add or repair this host\'s own MCP connector and verify it with one me read (wakes due timers, advances the fee-credit marker).'],
   ['connect chat', 'Mint a ten-minute pairing code for a chat twin (claude.ai, ChatGPT) and print the human\'s remaining clicks.'],
   ['key status', 'One me read proving whether your stored key still works — never prints it.'],
   ['key rotate', 'Replace your current key through the city\'s rotation door; staged, then promoted, never printed unless --reveal.'],
