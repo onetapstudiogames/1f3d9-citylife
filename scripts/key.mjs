@@ -20,7 +20,7 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
-import { readSecret, SecretReadFailure } from './identity-client.mjs'
+import { readSecret, SecretReadFailure, HANDLE_RE } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 function parseArgs(argv) {
@@ -140,6 +140,33 @@ async function status() {
 }
 
 /**
+ * Runs the same label-vs-identity probe status()/connect() already run
+ * before acting on a stored key, refusing with the identical wording when
+ * the vault entry labelled `handle` actually authenticates as someone
+ * else -- so `rotate`/`recover generate` can never silently act on the
+ * WRONG resident's key just because it happened to be stored under this
+ * label. Returns true when the caller should proceed, false when this
+ * already printed a refusal and set process.exitCode.
+ */
+async function probeMatchesOrRefuse(label, handle, residentKey) {
+  const probe = await probeMe(origin, residentKey, { allowOrigin })
+  if (!probe.ok) {
+    console.error(`${label}: stored key does not work (${probe.error}); refusing to act on a key that already fails.`)
+    process.exitCode = 1
+    return false
+  }
+  if (probe.handle && probe.handle !== handle) {
+    console.error(
+      `${label}: refusing -- the vault entry labelled "${handle}" actually authenticates as "${probe.handle}", ` +
+      `not "${handle}". Pass --handle ${probe.handle} instead, or fix the entry.`,
+    )
+    process.exitCode = 1
+    return false
+  }
+  return true
+}
+
+/**
  * Runs `node identity-client.mjs <args...>` with `residentKey` piped in on
  * stdin. When --reveal was requested, this can only take effect if the
  * CHILD's own stdout is a real interactive terminal (revealOrHide there
@@ -172,21 +199,23 @@ function runIdentityClient(label, args, residentKey) {
   }
 }
 
-function rotate() {
+async function rotate() {
   const handle = requireHandle()
   if (!handle) return
   const residentKey = requireStoredKey(handle)
   if (!residentKey) return
+  if (!(await probeMatchesOrRefuse('key rotate', handle, residentKey))) return
   const args = [identityClientPath, 'rotate', '--origin', origin, '--resident-key-file', '-']
   if (allowOrigin) args.push('--allow-origin', allowOrigin)
   runIdentityClient('key rotate', args, residentKey)
 }
 
-function recoverGenerate() {
+async function recoverGenerate() {
   const handle = requireHandle()
   if (!handle) return
   const residentKey = requireStoredKey(handle)
   if (!residentKey) return
+  if (!(await probeMatchesOrRefuse('key recover generate', handle, residentKey))) return
   const args = [identityClientPath, 'recover', 'generate', '--origin', origin, '--resident-key-file', '-']
   if (allowOrigin) args.push('--allow-origin', allowOrigin)
   runIdentityClient('key recover generate', args, residentKey)
@@ -198,6 +227,33 @@ function recoverBegin() {
     console.error('key recover begin: --recovery-code-file <path|-> is required (never a bare --recovery-code).')
     process.exitCode = 1
     return
+  }
+  // Unlike rotate()/recoverGenerate() above, there is no vault-stored
+  // resident key to run probeMatchesOrRefuse against before this call: the
+  // whole point of recovery is to obtain a working key FROM the recovery
+  // code, so no "does the stored key already work, and as whom" pre-check
+  // is possible here -- there is no key yet to probe with. What CAN be
+  // validated locally, before ever spawning identity-client.mjs, is the
+  // SHAPE of a caller-supplied --handle (if any) -- the same HANDLE_RE this
+  // script's other commands already enforce -- so an obviously malformed
+  // expectation is refused up front rather than silently carried into an
+  // operation that, once it confirms, cannot be undone.
+  if (typeof flags.handle === 'string') {
+    if (!HANDLE_RE.test(flags.handle)) {
+      console.error(
+        `key recover begin: --handle "${flags.handle}" does not match the city's handle rule ${HANDLE_RE.source}; ` +
+        'nothing was attempted.',
+      )
+      process.exitCode = 1
+      return
+    }
+    console.error(
+      `key recover begin: cannot verify in advance that this recovery code belongs to "${flags.handle}" -- ` +
+      'unlike rotate/recover generate, there is no vault-stored key to probe before this call runs; the ' +
+      'whole point of recovery is to obtain one FROM the code. After this completes, run `key status ' +
+      `--handle ${flags.handle}\` to confirm it actually matches -- the code will already be consumed ` +
+      'either way, so a mismatch here is a signal to investigate, not something a retry can undo.',
+    )
   }
   const args = [identityClientPath, 'recover', 'begin', '--origin', origin, '--recovery-code-file', codeSource]
   if (allowOrigin) args.push('--allow-origin', allowOrigin)
@@ -254,10 +310,10 @@ function show() {
 
 const command = positionals[0]
 if (command === 'status') await status()
-else if (command === 'rotate') rotate()
+else if (command === 'rotate') await rotate()
 else if (command === 'recover') {
   const sub = positionals[1]
-  if (sub === 'generate') recoverGenerate()
+  if (sub === 'generate') await recoverGenerate()
   else if (sub === 'begin') recoverBegin()
   else {
     console.error('key recover: needs a subcommand, "generate" or "begin"')
