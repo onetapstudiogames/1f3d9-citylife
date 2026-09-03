@@ -58,6 +58,7 @@
 // by untrusted content or a careless flag.
 
 import { execFileSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, chmodSync, statSync, unlinkSync, openSync, closeSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
@@ -251,14 +252,46 @@ function credentialsFilePath(origin, handleOrLabel, homeDir = homedir()) {
   return join(homeDir, '.1f3d9', 'credentials', `${safeOrigin}__${safeLabel}.json`)
 }
 
-/** The staging label a replacement credential is written under before it is confirmed. */
+/**
+ * The staging label a replacement credential is written under before it is
+ * confirmed.
+ *
+ * `kind === 'registration'` gets a short random suffix, making the label
+ * unique PER RUN rather than a pure function of `handle` alone. Without
+ * this, two concurrent `register` invocations racing the SAME requested
+ * handle would stage their bundles under the identical label; the winner's
+ * own cleanup (promoteReplacementKey's final `deleteSecret`, once its write
+ * actually lands) would then delete whatever the LOSER had just staged
+ * there -- even though the loser's resident was itself confirmed
+ * server-side and is now permanent. With the suffix, each run's staging
+ * entry is exclusively its own: nothing but that run's own successful
+ * promotion (or its own error-path cleanup) ever deletes it.
+ *
+ * `rotate()`/`recoverBegin()` do not get a suffix: their staging label is
+ * scoped to a handle the caller already owns and confirms via a valid
+ * resident key/recovery code, and promoteReplacementKey's per-(origin,
+ * handle) file lock already serializes concurrent runs for that handle
+ * end to end -- there is no legitimate way for two DIFFERENT callers to
+ * even reach that code path for the same handle at once the way two
+ * `register` calls can both request the same not-yet-owned handle.
+ */
 function pendingLabel(handle, kind) {
+  if (kind === 'registration') {
+    return `${handle}--pending-registration-${randomBytes(4).toString('hex')}`
+  }
   return `${handle}--pending-${kind}`
 }
 
-/** True for a staging label (`pendingLabel` above), never a real registered identity. */
+/**
+ * True for a staging label (`pendingLabel` above), never a real registered
+ * identity. Covers every kind `pendingLabel` can produce, including the
+ * per-run suffixed registration form -- an abandoned registration staging
+ * entry (a run that died between staging and promotion) must never trip
+ * setup.mjs's duplicate-identity guard (`listVaultLabels` filters through
+ * this) the way a genuine second identity would.
+ */
 function isPendingLabel(label) {
-  return /--pending-(?:rotation|recovery)$/u.test(label)
+  return /--pending-(?:rotation|recovery|registration(?:-[0-9a-f]+)?)$/u.test(label)
 }
 
 // --- Non-secret vault index (macOS and Windows) -----------------------------
@@ -815,13 +848,41 @@ function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeF
       // same (origin, handle) can be reading or writing concurrently while
       // this one holds the lock. `previous` above was read inside that
       // same locked section, immediately before the write below.
+      //
+      // Whether the staging entry is STILL there is a separate question
+      // from whether the live entry now exists, and this refusal must not
+      // assert an answer to it without checking: re-read `stagingLabel`
+      // itself, inside this same locked section, rather than repeating the
+      // fixed "it is still stored under the staging label" claim
+      // unconditionally. Since pendingLabel() now mints a per-run-unique
+      // label for registration (see its own doc comment), nothing but
+      // THIS run's own successful promotion could have deleted it -- and
+      // this run has not reached that point -- so in practice this reads
+      // found:true; the explicit check exists so the message never lies if
+      // that ever stops being true, and says plainly when it is gone
+      // instead.
+      let stagingStillPresent
+      try {
+        stagingStillPresent = readSecret(origin, stagingLabel, deps).found
+      } catch {
+        // An unreadable staging entry is not the same as "confirmed
+        // present" -- word the refusal as not-verifiable rather than
+        // asserting something this call cannot actually stand behind.
+        stagingStillPresent = false
+      }
+      const stagingNote = stagingStillPresent
+        ? `The confirmed resident key from THIS registration was NOT lost -- it is still stored under the ` +
+          `staging label "${stagingLabel}" and nowhere else. Work out which of the two entries is the one ` +
+          `you actually want (for example \`key status --handle ${handle}\`), then store the key from ` +
+          `"${stagingLabel}" under "${handle}" yourself if it turns out to be the one that should have won.`
+        : `The confirmed resident key from THIS registration is NO LONGER at its staging label "${stagingLabel}" ` +
+          '-- it cannot be recovered from this vault. Check whatever recorded the resident_key when this ' +
+          'registration confirmed (terminal scrollback, a captured --reveal run) before concluding it is ' +
+          'gone for good.'
       throw new Error(
         `refusing to overwrite the vault entry for "${handle}" that now exists: it was not there when this ` +
-        'registration started, so a concurrent run on this host must have won the race for this handle. The ' +
-        `confirmed resident key from THIS registration was NOT lost -- it is still stored under the staging ` +
-        `label "${stagingLabel}" and nowhere else. Work out which of the two entries is the one you actually ` +
-        `want (for example \`key status --handle ${handle}\`), then store the key from "${stagingLabel}" ` +
-        `under "${handle}" yourself if it turns out to be the one that should have won.`,
+        'registration started, so a concurrent run on this host must have won the race for this handle. ' +
+        stagingNote,
       )
     }
     let location
