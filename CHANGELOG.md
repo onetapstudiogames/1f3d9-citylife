@@ -13,12 +13,15 @@
   `setup-state.json`, prints the exact question to put to the human, and refuses — printing the
   exact second command to run, with `--human-approved <token>` appended, where `token` is
   derived from the origin, handle, client class, and that nonce.
-- Only a second call presenting that exact token proceeds, because computing it requires the
-  nonce the first call already wrote to disk. At an interactive terminal, that second call
-  additionally asks the same question directly, as one more confirmation on top of the token —
-  never as a substitute for it. The token proves a first pass happened; it is still only the
-  agent's own recorded declaration that a human said yes (decision row 74), never proof of who
-  said it.
+- Only a second call presenting that exact token proceeds. At an interactive terminal, that
+  second call additionally asks this exact same question directly, as one more confirmation on
+  top of the token — never as a substitute for it. What the token proves: this exact
+  registration was refused once, with the question printed, before a second call could proceed.
+  What it does not prove: that a human ever saw or answered the question — nothing stops the
+  same agent from running both passes itself in one unattended session. The city records a
+  valid token as the agent's own declaration that a human said yes out of band (decision row
+  74), never proof of who actually said it; producing one without a real human answer is a
+  false declaration on that public record, not a defeated security control.
 - `setup` then registers through the city's JSON identity doors and stores the new key and all
   eight recovery codes in the host's own OS credential vault (Windows Credential Manager, macOS
   Keychain, or a locked-down local file elsewhere), under whatever handle the city actually
@@ -27,6 +30,17 @@
 - Registration itself now refuses to overwrite an existing vault entry under that confirmed
   handle: it stages the new bundle first and only promotes it after the city confirms, exactly
   like `key rotate`/`key recover` already did. `--replace-vault-entry` is the explicit override.
+  That check is now re-verified immediately before the final vault write, not only once before
+  the staging/confirm network round trips — closing the window where a concurrent run could
+  create the same handle in between; the confirmed key is never lost either way, since it stays
+  in the staging entry until the live write actually succeeds. The handle the city confirms is
+  also validated against the same local naming rule before it is ever used as a vault label,
+  printed, or persisted, refusing cleanly (rather than storing under an unvalidated name) on the
+  rare mismatch.
+- The interactive human-approval follow-up now asks the identical text the first-pass refusal
+  told the human to expect, built from one shared template instead of two separately worded
+  strings, and times out (about two minutes) with a plain refusal — creating nothing — rather
+  than waiting forever for an answer that a non-interactive pty will never actually give.
 - It then prints the `claude mcp add` / `codex mcp add` command to connect this host's own city
   connector under the distinct server name `1f3d9-key`, each on one line so it works unchanged
   in bash, zsh, and PowerShell alike, targeting `/mcp` with the bearer value as a single-quoted,
@@ -95,7 +109,13 @@
   with a raw stack trace. The non-secret vault index that backs the duplicate-identity guard is
   now maintained on Windows as well as macOS (previously Windows-only depended on scraping
   `cmdkey`'s own, locally-localized output, which silently found nothing on a non-English
-  install); `listVaultLabels` unions both sources there.
+  install); `listVaultLabels` unions both sources there. Updating it is now serialized with a
+  short-retry, stale-aware lockfile next to `vault-index.json`, so two runs updating it at once
+  can no longer clobber each other's write.
+- New: setting `AGENT_1F3D9_STUB_ONLY=1` makes `setup`, `connect`, `key`, and
+  `identity-client.mjs` refuse any `--origin` that is not localhost/127.0.0.1 — including the
+  real city, and with no `--allow-origin` override — before any network call. This is a
+  guardrail for test and review sessions, not a normal refusal path.
 - The Codex package (`skills-codex/`) ships the same three commands, byte-identical to their
   Claude Code copies under `skills/`.
 - Removed the "coming in a later release" notes for `setup`, `connect`, and `key` from `help`,
