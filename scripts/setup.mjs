@@ -387,9 +387,9 @@ if (priorVaultEntry.keyWorks && newIdentity) {
 // recovery staging label, which is not a real registered identity) and
 // refuse outright unless --new-identity was passed.
 if (!newIdentity) {
-  let otherLabels
+  let allLabels
   try {
-    otherLabels = listVaultLabels(origin).filter(label => label !== handle)
+    allLabels = listVaultLabels(origin)
   } catch (error) {
     if (!(error instanceof KeychainEnumerationIncomplete)) throw error
     console.error(
@@ -403,6 +403,39 @@ if (!newIdentity) {
     process.exitCode = 1
     process.exit()
   }
+
+  // A registration staging label that outlived its own run is a different,
+  // narrower risk than the ordinary "other label" check just below: it
+  // means a PAST run's /api/register confirm already succeeded server-side
+  // (the resident is already permanent there) while that run's own vault
+  // promotion failed afterward, leaving the confirmed key ONLY under this
+  // staging label -- see listVaultLabels's own doc comment on
+  // registrationStagingLabels. Checked first and separately from
+  // otherLabels below, because listVaultLabels already excludes every
+  // staging label (registration included) from the array otherLabels reads,
+  // so that check alone would never catch this.
+  const registrationStagingLabels = allLabels.registrationStagingLabels ?? []
+  if (registrationStagingLabels.length > 0) {
+    const [stagingLabel] = registrationStagingLabels
+    const baseHandleMatch = /^(.+)--pending-registration-[0-9a-f]+$/u.exec(stagingLabel)
+    const baseHandle = baseHandleMatch ? baseHandleMatch[1] : stagingLabel
+    console.error(
+      `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's vault still ` +
+      `holds a registration staging label, "${stagingLabel}", for this origin. A register whose vault ` +
+      'promotion failed (a lock timeout, a vault-write failure) leaves the confirmed resident key ONLY ' +
+      'under a label like that one, while the resident it named is already permanent server-side -- the ' +
+      `city's own confirm already succeeded. Registering "${handle}" now, without resolving that first, ` +
+      `risks creating a SECOND, permanent, unrecoverable resident next to it. Run \`key status --handle ` +
+      `${baseHandle}\` to check whether "${baseHandle}" already exists server-side, and read the ` +
+      `already-confirmed key back from that staging label (\`key show --handle ${stagingLabel} --reveal\`) ` +
+      'before doing anything else. Only pass --new-identity once that staging entry is resolved and a ' +
+      'genuinely new resident, distinct from it, is still intended.',
+    )
+    process.exitCode = 1
+    process.exit()
+  }
+
+  const otherLabels = allLabels.filter(label => label !== handle)
   if (otherLabels.length > 0) {
     console.error(
       `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's vault already ` +

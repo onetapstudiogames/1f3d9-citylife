@@ -354,6 +354,74 @@ function isPendingLabel(label) {
   return /--pending-(?:rotation|recovery|registration(?:-[0-9a-f]+)?)$/u.test(label)
 }
 
+/**
+ * Matches ONLY the registration form of a staging label -- the one kind
+ * pendingLabel() gives a per-run random hex suffix, deliberately unlike the
+ * fixed `--pending-rotation`/`--pending-recovery` forms (see pendingLabel's
+ * own doc comment for why). Unlike isPendingLabel above, this is never a
+ * fallback heuristic layered under a metadata marker -- the suffix shape is
+ * exclusive to pendingLabel('registration'), and RESERVED_HANDLE_SUBSTRING_RE
+ * already stops any real handle from ever containing "--pending-" going
+ * forward, so a label matching this is authoritatively a registration
+ * staging entry, never a real resident's own chosen handle. Used by
+ * listVaultLabels below to surface exactly these labels (never rotation or
+ * recovery ones) back to setup.mjs's duplicate-identity guard -- see that
+ * property's own doc comment for why only the registration kind matters
+ * there.
+ */
+const REGISTRATION_STAGING_LABEL_RE = /^(.+)--pending-registration-[0-9a-f]+$/u
+
+/**
+ * Splits every label a vault enumeration found (BEFORE any staging filter)
+ * into `kept` (never any kind of staging label -- exactly what
+ * listVaultLabels has always returned) and `registrationStaging` (only the
+ * REGISTRATION-kind staging labels among the ones `kept` excludes; rotation
+ * and recovery staging labels are excluded from `kept` exactly as before,
+ * but never collected here).
+ *
+ * The registration kind gets this separate surfacing because it alone can
+ * strand an already-permanent resident: a register whose vault promotion
+ * fails (promoteReplacementKey.mjs -- a lock timeout, a CredWrite failure,
+ * an unreadable live entry) leaves the confirmed resident_key ONLY under
+ * this staging label while the resident it names is already permanent
+ * server-side (the city's own /api/register confirm already succeeded).
+ * setup.mjs's duplicate-identity guard must see that and refuse, rather
+ * than silently registering a second, permanent, unrecoverable resident
+ * under whatever different handle a later, state-lost run happens to
+ * choose. Rotation/recovery staging labels carry no equivalent risk: their
+ * live entry sits under the same handle the guard already checks against
+ * (rotate/recoverBegin never mint a fresh, not-yet-owned handle the way
+ * register does), so an abandoned one there is already covered.
+ */
+function splitStagingLabels(labels, indexMap) {
+  const kept = []
+  const registrationStaging = []
+  for (const label of labels) {
+    if (REGISTRATION_STAGING_LABEL_RE.test(label)) {
+      registrationStaging.push(label)
+      continue
+    }
+    if (!isStagingLabel(label, indexMap)) kept.push(label)
+  }
+  return { kept, registrationStaging }
+}
+
+/**
+ * Attaches `registrationStaging` to `kept` as a non-enumerable property --
+ * alongside it, not mixed into the array itself, so every existing caller
+ * of listVaultLabels (which only ever iterates/filters/maps the array of
+ * kept labels) sees no change at all, while setup.mjs's guard can read
+ * `allLabels.registrationStagingLabels` explicitly. Non-enumerable so
+ * `[...labels]`, `JSON.stringify(labels)`, and a `for...of` never surface it
+ * as if it were a label itself.
+ */
+function withRegistrationStagingLabels(kept, registrationStaging) {
+  Object.defineProperty(kept, 'registrationStagingLabels', {
+    value: registrationStaging, enumerable: false, writable: false, configurable: true,
+  })
+  return kept
+}
+
 // --- Non-secret vault index (macOS and Windows) -----------------------------
 //
 // Neither macOS nor Windows has a fully reliable, non-interactive way for
@@ -1236,6 +1304,15 @@ function darwinKeychainServiceLabels(execImpl, origin) {
  * KeychainEnumerationIncomplete rather than silently answering an
  * incomplete read as an empty one, and the caller must refuse rather than
  * treat that as "no other entry exists".
+ *
+ * The returned array also carries a non-enumerable `registrationStagingLabels`
+ * property (see splitStagingLabels/withRegistrationStagingLabels above) --
+ * the REGISTRATION-kind staging labels this call filtered out of the array
+ * itself, never rotation or recovery ones. setup.mjs's duplicate-identity
+ * guard reads that property (not the array) to refuse when an abandoned
+ * registration staging entry means a resident may already be permanent
+ * server-side; every other caller keeps seeing exactly the label array it
+ * always has, with no staging label of any kind mixed in.
  */
 function listVaultLabels(origin, deps = {}) {
   const execImpl = deps.execFileSync ?? execFileSync
@@ -1269,7 +1346,8 @@ function listVaultLabels(origin, deps = {}) {
     const vaultIndex = readVaultIndex(deps.homeDir)
     const indexMap = vaultIndexEntriesToMap(Array.isArray(vaultIndex[origin]) ? vaultIndex[origin] : [])
     const labels = new Set([...fromCmdkey, ...indexMap.keys()])
-    return [...labels].filter(label => !isStagingLabel(label, indexMap))
+    const { kept, registrationStaging } = splitStagingLabels(labels, indexMap)
+    return withRegistrationStagingLabels(kept, registrationStaging)
   }
   if (os === 'darwin') {
     // Union the non-secret index with a real Keychain scan (see
@@ -1280,7 +1358,8 @@ function listVaultLabels(origin, deps = {}) {
     const index = readVaultIndex(deps.homeDir)
     const indexMap = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
     const labels = new Set([...fromKeychain, ...indexMap.keys()])
-    return [...labels].filter(label => !isStagingLabel(label, indexMap))
+    const { kept, registrationStaging } = splitStagingLabels(labels, indexMap)
+    return withRegistrationStagingLabels(kept, registrationStaging)
   }
   const dir = join(deps.homeDir ?? homedir(), '.1f3d9', 'credentials')
   const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
@@ -1289,7 +1368,7 @@ function listVaultLabels(origin, deps = {}) {
   try {
     entries = readdirSync(dir)
   } catch {
-    return []
+    return withRegistrationStagingLabels([], [])
   }
   const labels = entries
     .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
@@ -1304,7 +1383,8 @@ function listVaultLabels(origin, deps = {}) {
   // isPendingLabel suffix guess via isStagingLabel, same as win32/darwin.
   const index = readVaultIndex(deps.homeDir)
   const indexMap = vaultIndexEntriesToMap(Array.isArray(index[origin]) ? index[origin] : [])
-  return labels.filter(label => !isStagingLabel(label, indexMap))
+  const { kept, registrationStaging } = splitStagingLabels(labels, indexMap)
+  return withRegistrationStagingLabels(kept, registrationStaging)
 }
 
 // --- HTTP -----------------------------------------------------------------
