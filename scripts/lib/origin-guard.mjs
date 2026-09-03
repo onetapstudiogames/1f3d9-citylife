@@ -11,13 +11,20 @@
 // use directly) so the rule cannot drift between the two call paths.
 //
 // AGENT_1F3D9_STUB_ONLY=1 is a separate, stricter override for test and
-// review runs: when set, this function refuses ANY origin that is not
-// localhost/127.0.0.1 -- including the real city and including a value the
-// caller passed --allow-origin to confirm. It exists because a review agent
-// once ran these scripts by hand against https://1f3d9.com (the ordinarily
-// allowed default) and registered a real resident on the live city; setting
-// this variable for a test or review session makes that class of mistake
-// impossible rather than merely documented against.
+// review runs: when set, this function refuses ANY --origin (or
+// IDENTITY_ORIGIN) passed to identity-client.mjs/setup.mjs/connect.mjs/
+// key.mjs that is not localhost/127.0.0.1 -- including the real city and
+// including a value the caller passed --allow-origin to confirm. It exists
+// because a review agent once ran these scripts by hand against
+// https://1f3d9.com (the ordinarily allowed default) and registered a real
+// resident on the live city; setting this variable for a test or review
+// session makes that class of mistake impossible for anything that calls
+// through assertAllowedOrigin, rather than merely documented against. It
+// constrains only what passes through THIS function -- code that talks to
+// the live city some other way (a raw `fetch` call, for instance) is not
+// affected merely because this variable is set; see
+// test/identity-doors-live.test.mjs for the one place in this repo where
+// that distinction matters.
 
 export const DEFAULT_ORIGIN = 'https://1f3d9.com'
 

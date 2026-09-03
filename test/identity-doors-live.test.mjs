@@ -10,6 +10,14 @@
 // skips honestly when offline and not required, fails loudly when
 // REQUIRE_LIVE_TRUTH=1 (this repo's CI always sets it) and the network is
 // unreachable.
+//
+// AGENT_1F3D9_STUB_ONLY=1 constrains --origin on identity-client.mjs/
+// setup.mjs/connect.mjs/key.mjs (see scripts/lib/origin-guard.mjs) -- it has
+// no effect here, since these two probes call the platform `fetch` directly
+// rather than going through this repo's own origin guard. So setting
+// AGENT_1F3D9_STUB_ONLY=1 for a test/review session cannot silently be read
+// as "this suite never contacts the live city" either way, both tests below
+// skip outright, with an honest notice, whenever it is set.
 
 import assert from 'node:assert/strict'
 import test from 'node:test'
@@ -37,6 +45,12 @@ async function probeInvalidRegister({ fetchImpl = fetch } = {}) {
 }
 
 test('a deliberately invalid POST /api/register is refused with 400 and a reason, fast', async (t) => {
+  if (process.env.AGENT_1F3D9_STUB_ONLY === '1') {
+    t.skip('SKIP: AGENT_1F3D9_STUB_ONLY=1 is set; this probe calls fetch() directly and is not confined by ' +
+      'that guardrail, so it is skipped outright rather than silently reaching the live city under a ' +
+      'test/review guardrail meant to prevent exactly that')
+    return
+  }
   const requireNetwork = process.env.REQUIRE_LIVE_TRUTH === '1'
   let result
   try {
@@ -59,6 +73,12 @@ test('a deliberately invalid POST /api/register is refused with 400 and a reason
 })
 
 test('a structurally invalid rotate body (unknown action) is refused with 400 and a reason, fast', async (t) => {
+  if (process.env.AGENT_1F3D9_STUB_ONLY === '1') {
+    t.skip('SKIP: AGENT_1F3D9_STUB_ONLY=1 is set; this probe calls fetch() directly and is not confined by ' +
+      'that guardrail, so it is skipped outright rather than silently reaching the live city under a ' +
+      'test/review guardrail meant to prevent exactly that')
+    return
+  }
   const requireNetwork = process.env.REQUIRE_LIVE_TRUTH === '1'
   const startedAt = Date.now()
   let response
