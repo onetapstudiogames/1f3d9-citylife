@@ -1741,11 +1741,15 @@ test('setup.mjs refuses a fresh registration while a registration staging label 
       'a staging-only label trips the specific registration-staging refusal, never the ordinary other-label one',
     )
     assert.match(result.stderr, /agent-abandoned--pending-registration-deadbeef/u, 'names the staging label itself')
-    assert.match(result.stderr, /key status --handle agent-abandoned/u, 'points at the base handle to check')
+    assert.match(
+      result.stderr,
+      /key adopt --handle agent-abandoned --from-label agent-abandoned--pending-registration-deadbeef/u,
+      'points at the command that can actually resolve this -- key adopt, not key status',
+    )
     assert.match(
       result.stderr,
       /key show --handle agent-abandoned--pending-registration-deadbeef --reveal/u,
-      'points at reading the key back from the staging label itself',
+      'points at reading the key back from the staging label itself as the manual alternative',
     )
     assert.equal(stub.residents.size, 0, 'nothing was registered')
     assertNoSecretLeaked(result, 'setup.mjs leftover registration staging label')
@@ -1832,11 +1836,15 @@ test(
         /alice-agent--pending-registration-[0-9a-f]+/u,
         'names the actual staging label left behind',
       )
-      assert.match(thirdPass.stderr, /key status --handle alice-agent/u, 'points at the base handle to check')
+      assert.match(
+        thirdPass.stderr,
+        /key adopt --handle alice-agent --from-label alice-agent--pending-registration-[0-9a-f]+/u,
+        'points at the command that can actually resolve this -- key adopt, not key status',
+      )
       assert.match(
         thirdPass.stderr,
         /key show --handle alice-agent--pending-registration-[0-9a-f]+ --reveal/u,
-        'points at reading the already-confirmed key back from the staging label',
+        'points at reading the already-confirmed key back from the staging label as the manual alternative',
       )
       assertNoSecretLeaked(thirdPass, 'setup.mjs stranded-registration pass 3 (different handle)')
 
@@ -1853,6 +1861,135 @@ test(
     }
   },
 )
+
+// --- round-5 finding 1: `key adopt --handle <handle> --from-label <staging>`
+// is the command setup.mjs's stranded-registration refusal (just above)
+// actually points at -- it reads the staged bundle, probes GET /api/me with
+// it, refuses unless that probe's own handle matches --handle exactly, and
+// only then moves the bundle to the real label (staged-then-promote) and
+// deletes the staging copy. Never prints the key.
+
+test('key adopt: happy path -- moves a confirmed staged key to its real handle and deletes the staging copy', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-adopt-happy-')
+  const residentKey = `1f3d9_sk_${'1'.repeat(48)}`
+  const stagingLabel = 'alice-agent--pending-registration-deadbeef'
+  try {
+    // Mirrors the exact stranded state round-4 finding 1 reproduces: the
+    // city already confirmed "alice-agent" server-side, but the confirmed
+    // key lives only under a registration staging label locally.
+    stub.residents.set('alice-agent', { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, stagingLabel, {
+      kind: 'staging',
+      handle: 'alice-agent',
+      client_class: 'coding_persistent',
+      resident_key: residentKey,
+      recovery_codes: [],
+      origin: stub.origin,
+      stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      keyPath,
+      ['adopt', '--origin', stub.origin, '--handle', 'alice-agent', '--from-label', stagingLabel],
+      { env: home.env },
+    )
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /handle: alice-agent/u)
+    assert.match(result.stdout, /stored:/u)
+    assertNoSecretLeaked(result, 'key adopt happy path')
+
+    const live = readSecret(stub.origin, 'alice-agent', { homeDir: home.dir })
+    assert.ok(live.found, 'the real label now holds the adopted key')
+    assert.equal(live.value.resident_key, residentKey)
+
+    const staging = readSecret(stub.origin, stagingLabel, { homeDir: home.dir })
+    assert.equal(staging.found, false, 'the staging copy was deleted once the promotion succeeded')
+  } finally {
+    deleteSecret(stub.origin, 'alice-agent', { homeDir: home.dir })
+    deleteSecret(stub.origin, stagingLabel, { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key adopt: refuses when the staged key authenticates as a different resident than --handle names', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-adopt-mismatch-')
+  const residentKey = `1f3d9_sk_${'2'.repeat(48)}`
+  const stagingLabel = 'bob-agent--pending-registration-cafef00d'
+  try {
+    // The staging label SAYS "bob-agent", but the key it actually holds
+    // authenticates as "carol-agent" server-side -- a mislabeled or
+    // hand-copied staging entry. `key adopt` must trust the probe, not the
+    // label text, and refuse rather than storing a mismatched key under the
+    // wrong handle.
+    stub.residents.set('carol-agent', { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, stagingLabel, {
+      kind: 'staging',
+      handle: 'bob-agent',
+      client_class: 'coding_persistent',
+      resident_key: residentKey,
+      recovery_codes: [],
+      origin: stub.origin,
+      stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      keyPath,
+      ['adopt', '--origin', stub.origin, '--handle', 'bob-agent', '--from-label', stagingLabel],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0, 'refuses on a handle mismatch')
+    assert.match(result.stderr, /authenticates as "carol-agent", not "bob-agent"/u)
+    assertNoSecretLeaked(result, 'key adopt mismatch refusal')
+
+    assert.equal(readSecret(stub.origin, 'bob-agent', { homeDir: home.dir }).found, false, 'nothing was stored under the wrong handle')
+    assert.ok(readSecret(stub.origin, stagingLabel, { homeDir: home.dir }).found, 'the staging copy is left in place, not deleted, on refusal')
+  } finally {
+    deleteSecret(stub.origin, 'bob-agent', { homeDir: home.dir })
+    deleteSecret(stub.origin, stagingLabel, { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key adopt: refuses with a clear message when --from-label names a vault entry that does not exist', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-adopt-missing-label-')
+  try {
+    const result = await runNode(
+      keyPath,
+      ['adopt', '--origin', stub.origin, '--handle', 'dora-agent', '--from-label', 'dora-agent--pending-registration-00000000'],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0, 'refuses rather than guessing')
+    assert.match(result.stderr, /no vault entry found for "dora-agent--pending-registration-00000000"/u)
+    assertNoSecretLeaked(result, 'key adopt missing staging label')
+    assert.equal(readSecret(stub.origin, 'dora-agent', { homeDir: home.dir }).found, false, 'nothing was stored')
+  } finally {
+    deleteSecret(stub.origin, 'dora-agent', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key adopt: --handle and --from-label are both required', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-adopt-missing-flags-')
+  try {
+    const noHandle = await runNode(keyPath, ['adopt', '--origin', stub.origin, '--from-label', 'x--pending-registration-a'], { env: home.env })
+    assert.notEqual(noHandle.status, 0)
+    assert.match(noHandle.stderr, /--handle <handle> is required/u)
+
+    const noLabel = await runNode(keyPath, ['adopt', '--origin', stub.origin, '--handle', 'dora-agent'], { env: home.env })
+    assert.notEqual(noLabel.status, 0)
+    assert.match(noLabel.stderr, /--from-label <staging-label> is required/u)
+  } finally {
+    home.cleanup()
+    await stub.close()
+  }
+})
 
 // --- round-4 finding 3: setup.mjs must never spend its single-use approval
 // nonce on a registration the city was always going to refuse because the

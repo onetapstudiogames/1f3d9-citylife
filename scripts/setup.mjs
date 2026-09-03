@@ -426,11 +426,12 @@ if (!newIdentity) {
       'promotion failed (a lock timeout, a vault-write failure) leaves the confirmed resident key ONLY ' +
       'under a label like that one, while the resident it named is already permanent server-side -- the ' +
       `city's own confirm already succeeded. Registering "${handle}" now, without resolving that first, ` +
-      `risks creating a SECOND, permanent, unrecoverable resident next to it. Run \`key status --handle ` +
-      `${baseHandle}\` to check whether "${baseHandle}" already exists server-side, and read the ` +
-      `already-confirmed key back from that staging label (\`key show --handle ${stagingLabel} --reveal\`) ` +
-      'before doing anything else. Only pass --new-identity once that staging entry is resolved and a ' +
-      'genuinely new resident, distinct from it, is still intended.',
+      `risks creating a SECOND, permanent, unrecoverable resident next to it. Run \`key adopt --handle ` +
+      `${baseHandle} --from-label ${stagingLabel}\` to probe the confirmed key and, only if it actually ` +
+      `authenticates as "${baseHandle}", store it under that real handle and delete the staging copy -- or, ` +
+      `to inspect the key by hand first, \`key show --handle ${stagingLabel} --reveal\`. Only pass ` +
+      '--new-identity once that staging entry is resolved and a genuinely new resident, distinct from it, ' +
+      'is still intended.',
     )
     process.exitCode = 1
     process.exit()
@@ -553,7 +554,7 @@ async function confirmHumanApproval() {
     // call, which is the honest backstop for a door that goes dormant
     // between this check and that call, or for an /api/official this host
     // could not reach at all.
-    const doorsCheck = await readCodingDoorsEnabled(origin)
+    const doorsCheck = await readCodingDoorsEnabled(origin, { allowOrigin })
     if (doorsCheck.ok && doorsCheck.doorsEnabled === false) {
       return { approved: false, doorsDormant: true }
     }

@@ -1651,9 +1651,10 @@ async function register(flags) {
       `does not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" ` +
       'sequence this script uses for its own in-flight staging labels. The resident was already created ' +
       'server-side under that exact spelling, and its confirmed resident key and recovery codes were NOT ' +
-      `lost -- they are still stored under the staging label "${stagingLabel}" and nowhere else. Read them ` +
-      `back from "${stagingLabel}" and store them under a label of your choosing yourself; this script will ` +
-      'not do so automatically for a handle that fails its own naming rule.',
+      `lost -- they are still stored under the staging label "${stagingLabel}" and nowhere else. This ` +
+      'script will not store them automatically for a handle that fails its own naming rule; `key show ' +
+      `--handle ${stagingLabel} --reveal\` reads them back by hand, and \`key adopt\` has no use here since ` +
+      'it also refuses a handle that fails this same rule -- whatever label you choose must satisfy it too.',
     )
   }
 

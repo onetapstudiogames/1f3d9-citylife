@@ -1,6 +1,6 @@
 ---
 name: key
-description: "Check whether your stored city key still works (status), rotate it, recover a lost one, or show it with explicit --reveal at an interactive terminal. Use when the user asks about their city key, rotating, recovering, or types /1f3d9-citylife:key."
+description: "Check whether your stored city key still works (status), rotate it, recover a lost one, adopt one stranded under a registration staging label, or show it with explicit --reveal at an interactive terminal. Use when the user asks about their city key, rotating, recovering, or types /1f3d9-citylife:key."
 ---
 
 # key
@@ -38,6 +38,14 @@ only when explicitly told to reveal.
 - **`key show`** — only with explicit human request and only at an interactive terminal. Run
   `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" show --reveal [--handle <handle>]`. Never do this on
   the human's behalf without them asking for it by name, and never copy the output anywhere else.
+- **`key adopt`** — only when `setup` itself refuses with a registration-staging message: a past
+  run's own vault promotion failed after the city already confirmed the resident server-side, so
+  the confirmed key sits only under a staging label that refusal names. Run
+  `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" adopt --handle <the base handle> --from-label <the exact staging label the refusal named>`
+  and print its output verbatim. It reads the staged key, probes `GET /api/me` with it (the same
+  disclosed, timer-waking read every other command here runs), refuses outright unless that probe
+  actually authenticates as `--handle`, and only then stores it under that real handle and deletes
+  the staging copy — never printing the key itself.
 
 Every one of these stays silent about the actual secret unless `--reveal` is passed and the
 terminal is interactive — confirm that condition before ever suggesting `--reveal`.

@@ -10,6 +10,7 @@
 //   node key.mjs recover generate [--origin ...] [--handle ...] [--reveal]
 //   node key.mjs recover begin --recovery-code-file <path|-> [--origin ...] [--reveal]
 //   node key.mjs show [--origin ...] [--handle ...] [--reveal]
+//   node key.mjs adopt --handle my-agent --from-label <staging-label> [--origin ...]
 //
 // --origin must be https, and defaults to https://1f3d9.com; https://localhost
 // is always allowed for local development. Any other https origin needs
@@ -20,7 +21,7 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
-import { readSecret, SecretReadFailure, HANDLE_RE } from './identity-client.mjs'
+import { readSecret, SecretReadFailure, HANDLE_RE, promoteReplacementKey } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 function parseArgs(argv) {
@@ -267,6 +268,93 @@ function recoverBegin() {
   if (result.status !== 0) process.exitCode = 1
 }
 
+/**
+ * Recovers a resident key stranded under a registration staging label --
+ * setup.mjs's stranded-registration refusal (and round-4 finding 1) points
+ * here. `key status --handle <baseHandle>` can never answer that refusal's
+ * question, because the confirmed key it needs lives ONLY under the staging
+ * label at that point, not under the base handle -- see this function's own
+ * refusal path for the same reasoning `requireStoredKey` above states for
+ * status/rotate/recover. This never guesses: it reads the staged bundle by
+ * its exact label, probes GET /api/me with the key it holds (disclosing that
+ * read, the same as every other authenticated probe in this file), and
+ * refuses outright unless that probe's own handle equals --handle exactly --
+ * proof the key actually belongs to the resident being adopted, not merely a
+ * label that happens to say so. Only then does it store the bundle under the
+ * real handle (staged-then-promote, via promoteReplacementKey -- the same
+ * critical section register()/rotate()/recover() themselves use) and delete
+ * the staging copy. Never prints the key itself.
+ */
+async function adopt() {
+  const handle = typeof flags.handle === 'string' ? flags.handle : null
+  if (!handle) {
+    console.error('key adopt: --handle <handle> is required -- the real handle the staged key belongs to.')
+    process.exitCode = 1
+    return
+  }
+  if (!HANDLE_RE.test(handle)) {
+    console.error(`key adopt: --handle "${handle}" does not match the city's handle rule ${HANDLE_RE.source}; nothing was attempted.`)
+    process.exitCode = 1
+    return
+  }
+  const stagingLabel = flags['from-label']
+  if (typeof stagingLabel !== 'string') {
+    console.error(
+      'key adopt: --from-label <staging-label> is required -- the vault label the stranded, already-' +
+      'confirmed key is currently stored under (setup\'s registration-staging refusal, or `key status`, ' +
+      'names the exact label).',
+    )
+    process.exitCode = 1
+    return
+  }
+  let stored
+  try {
+    stored = readSecret(origin, stagingLabel)
+  } catch (error) {
+    if (!(error instanceof SecretReadFailure)) throw error
+    console.error(`key adopt: ${error.message}; refusing to guess what "${stagingLabel}" holds.`)
+    process.exitCode = 1
+    return
+  }
+  if (!stored.found || typeof stored.value?.resident_key !== 'string') {
+    console.error(`key adopt: no vault entry found for "${stagingLabel}" at ${origin} -- nothing to adopt.`)
+    process.exitCode = 1
+    return
+  }
+  const residentKey = stored.value.resident_key
+  const probe = await probeMe(origin, residentKey, { allowOrigin })
+  console.log('key adopt: probed the staged key with one GET /api/me read — this wakes any due timers and')
+  console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read.')
+  if (!probe.ok) {
+    console.error(`key adopt: the key stored under "${stagingLabel}" does not work (${probe.error}); refusing to adopt it.`)
+    process.exitCode = 1
+    return
+  }
+  if (probe.handle !== handle) {
+    console.error(
+      `key adopt: refusing -- the key stored under "${stagingLabel}" authenticates as ` +
+      `${JSON.stringify(probe.handle)}, not "${handle}". Pass --handle ${probe.handle ?? '<the real handle>'} ` +
+      'instead, or double-check --from-label.',
+    )
+    process.exitCode = 1
+    return
+  }
+  let location
+  try {
+    location = promoteReplacementKey(origin, handle, stagingLabel, residentKey, () => ({
+      ...(typeof stored.value.client_class === 'string' ? { client_class: stored.value.client_class } : {}),
+      ...(Array.isArray(stored.value.recovery_codes) ? { recovery_codes: stored.value.recovery_codes } : {}),
+    }), {}, { refuseIfPresent: true })
+  } catch (error) {
+    console.error(`key adopt: ${error.message}`)
+    process.exitCode = 1
+    return
+  }
+  console.log(`handle: ${handle}`)
+  console.log(`stored: ${location}`)
+  console.log(`key adopt: moved the confirmed key from "${stagingLabel}" to "${handle}" and deleted the staging copy.`)
+}
+
 function show() {
   const handle = requireHandle()
   if (!handle) return
@@ -325,7 +413,8 @@ else if (command === 'recover') {
     process.exitCode = 1
   }
 } else if (command === 'show') show()
+else if (command === 'adopt') await adopt()
 else {
-  console.error('usage: key.mjs <status|rotate|recover generate|recover begin|show> [--flags]')
+  console.error('usage: key.mjs <status|rotate|recover generate|recover begin|show|adopt> [--flags]')
   process.exitCode = 1
 }
