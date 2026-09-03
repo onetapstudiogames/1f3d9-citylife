@@ -103,6 +103,58 @@ test('register --replace-vault-entry deliberately overwrites an existing entry',
   }
 })
 
+// --- register()'s per-run staging label: two concurrent runs for the SAME
+// handle must never share one staging label, or the winner's own cleanup
+// would delete whatever the loser had just staged there (review finding
+// "two concurrent register runs share one staging label").
+
+test('two concurrent register runs for the same handle: the winner promotes, the loser refuses and still names its own untouched staging copy', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('register-race-')
+  try {
+    const args = [
+      'register', '--origin', stub.origin, '--handle', 'race-probe-handle',
+      '--client-class', 'coding_persistent', '--human-approved',
+    ]
+    // Two real, concurrent subprocesses racing the same requested handle
+    // against the same stub server and the same shared vault home -- the
+    // actual shape of the finding, not a mocked stand-in for it.
+    const [first, second] = await Promise.all([
+      runNode(identityClientPath, args, { env: home.env }),
+      runNode(identityClientPath, args, { env: home.env }),
+    ])
+
+    const winner = first.status === 0 ? first : second
+    const loser = first.status === 0 ? second : first
+    assert.equal(winner.status, 0, `exactly one run must succeed (stderr: ${first.stderr}\n---\n${second.stderr})`)
+    assert.notEqual(loser.status, 0, 'the other run must refuse rather than silently overwrite')
+    assert.match(loser.stderr, /now exists/u, 'names the race, not a generic failure')
+
+    const stagingLabelMatch = /staging label "([^"]+)"/u.exec(loser.stderr)
+    assert.ok(stagingLabelMatch, `the refusal names the loser's own staging label (stderr: ${loser.stderr})`)
+    const [, stagingLabel] = stagingLabelMatch
+    assert.match(
+      stagingLabel,
+      /^race-probe-handle--pending-registration-[0-9a-f]+$/u,
+      'the staging label is the per-run suffixed form, not the bare (shareable) one',
+    )
+
+    const staging = readSecret(stub.origin, stagingLabel, { homeDir: home.dir })
+    assert.equal(staging.found, true, "the loser's own staging copy is still there -- the winner's cleanup never touched it")
+    assert.equal(staging.value.handle, 'race-probe-handle')
+    assert.ok(staging.value.resident_key, 'the confirmed replacement key is actually recoverable from the named label')
+
+    assertNoSecretLeaked(winner, 'register race winner')
+    assertNoSecretLeaked(loser, 'register race loser')
+
+    deleteSecret(stub.origin, stagingLabel, { homeDir: home.dir })
+  } finally {
+    deleteSecret(stub.origin, 'race-probe-handle', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
 test('register refuses a handle that does not match the city\'s handle rule, before any network call', async () => {
   const result = await runNode(identityClientPath, [
     'register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
@@ -789,6 +841,48 @@ test('setup.mjs refuses to register under a new handle when this origin already 
     assertNoSecretLeaked(result, 'setup.mjs other-label refusal')
   } finally {
     deleteSecret(stub.origin, 'agent-old', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+// A leftover REGISTRATION staging label (a run that died between staging
+// and promotion) is not a real second identity -- isPendingLabel must cover
+// the per-run suffixed registration form the same way it already covers
+// rotation/recovery, or the guard above wrongly refuses a legitimate fresh
+// registration because of a label this script itself created and never
+// meant as anything but scratch space.
+
+test('setup.mjs does not treat a leftover registration staging label as a second identity', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-stale-registration-staging-')
+  try {
+    // Simulates a register() run that staged a bundle and then died before
+    // ever confirming or promoting it -- exactly the suffixed label shape
+    // pendingLabel(handle, 'registration') now produces.
+    storeSecret(stub.origin, 'agent-abandoned--pending-registration-deadbeef', {
+      kind: 'resident',
+      handle: 'agent-abandoned',
+      client_class: 'coding_persistent',
+      resident_key: `1f3d9_sk_${'8'.repeat(48)}`,
+      recovery_codes: [],
+      origin: stub.origin,
+      stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      setupPath,
+      ['--origin', stub.origin, '--handle', 'agent-fresh', '--client-class', 'coding_persistent'],
+      { env: home.env },
+    )
+    assert.doesNotMatch(
+      result.stderr,
+      /already holds .* entr(?:y|ies) for this origin under a different/u,
+      'a staging-only label must never trip the duplicate-identity guard',
+    )
+    assertNoSecretLeaked(result, 'setup.mjs leftover registration staging label')
+  } finally {
+    deleteSecret(stub.origin, 'agent-abandoned--pending-registration-deadbeef', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
