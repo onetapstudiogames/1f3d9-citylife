@@ -7,7 +7,7 @@
 
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,6 +45,45 @@ function assertNoSecretLeaked(result, label) {
   assert.doesNotMatch(result.stderr ?? '', NO_SECRET_LITERAL, `${label}: stderr never carries a raw secret`)
 }
 
+/**
+ * Enumerates every RAW label this platform's vault backend currently holds
+ * for `origin` under `homeDir` -- unlike identity-client.mjs's own exported
+ * listVaultLabels, this never filters out staging entries. A test that wants
+ * to assert "no staging copy was left behind, whatever it would have been
+ * named" must not check that through listVaultLabels: that function's whole
+ * job is to hide staging labels, so it would report an empty result whether
+ * or not one actually leaked, making such an assertion vacuous regardless of
+ * label format. This reads the same on-disk/index shapes storeSecret and
+ * deleteSecret in identity-client.mjs maintain (vault-index.json on win32/
+ * darwin, the credentials directory listing everywhere else).
+ */
+function listRawVaultLabels(origin, homeDir) {
+  if (process.platform === 'win32' || process.platform === 'darwin') {
+    let parsed
+    try {
+      parsed = JSON.parse(readFileSync(join(homeDir, '.1f3d9', 'vault-index.json'), 'utf8'))
+    } catch {
+      return []
+    }
+    const entries = Array.isArray(parsed?.[origin]) ? parsed[origin] : []
+    return entries
+      .map(entry => (typeof entry === 'string' ? entry : entry?.label))
+      .filter(label => typeof label === 'string')
+  }
+  const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
+  const dir = join(homeDir, '.1f3d9', 'credentials')
+  const prefix = `${safeOrigin}__`
+  let entries
+  try {
+    entries = readdirSync(dir)
+  } catch {
+    return []
+  }
+  return entries
+    .filter(name => name.startsWith(prefix) && name.endsWith('.json'))
+    .map(name => name.slice(prefix.length, -'.json'.length))
+}
+
 // --- register() vault safety: never silently overwrite an existing entry -
 
 test('register refuses to overwrite an existing vault entry under the confirmed handle, and cleans up the staging copy', async () => {
@@ -69,8 +108,20 @@ test('register refuses to overwrite an existing vault entry under the confirmed 
     const stillThere = readSecret(stub.origin, 'agent-collide', { homeDir: home.dir })
     assert.equal(stillThere.value.resident_key, `1f3d9_sk_${'z'.repeat(48)}`, 'the original entry is untouched')
 
-    const staging = readSecret(stub.origin, 'agent-collide--pending-registration', { homeDir: home.dir })
-    assert.equal(staging.found, false, 'the staging copy was cleaned up, not left behind')
+    // register()'s pre-flight collision check throws BEFORE the staging
+    // label is even computed, so no staging entry is ever written on this
+    // path -- and since pendingLabel mints a random hex suffix for every
+    // registration attempt, checking one fixed bare label (as this used to)
+    // would never actually detect a leak. Enumerate the RAW vault contents
+    // (never filtered through listVaultLabels, which hides staging entries
+    // by design) instead, so this keeps meaning something if a future
+    // change ever did leave a suffixed staging copy orphaned here.
+    const rawLabels = listRawVaultLabels(stub.origin, home.dir)
+    const stagingLabelPattern = /^agent-collide--pending-registration(-[0-9a-f]+)?$/u
+    assert.ok(
+      rawLabels.every(label => !stagingLabelPattern.test(label)),
+      `no staging copy (bare or suffixed) was left behind for this collision path; found: ${JSON.stringify(rawLabels)}`,
+    )
   } finally {
     deleteSecret(stub.origin, 'agent-collide', { homeDir: home.dir })
     deleteSecret(stub.origin, 'agent-collide--pending-registration', { homeDir: home.dir })
@@ -162,6 +213,23 @@ test('register refuses a handle that does not match the city\'s handle rule, bef
   ], { env: NOT_A_REAL_ORIGIN_ENV })
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /does not match the city's handle rule/u)
+})
+
+// --- The "--pending-" namespace is reserved: HANDLE_RE alone would accept -
+// a handle like "agent--pending-rotation" (23 chars, lowercase letters and
+// hyphens), which would then read to isPendingLabel's suffix guess as an
+// abandoned staging entry rather than a real resident. register() must
+// refuse it outright, before any network call, rather than let a real
+// resident register under a handle its own vault machinery cannot
+// distinguish from staging.
+
+test('register refuses a handle containing the reserved "--pending-" sequence, before any network call', async () => {
+  const result = await runNode(identityClientPath, [
+    'register', '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+    '--handle', 'agent--pending-rotation', '--client-class', 'coding_persistent', '--human-approved',
+  ], { env: NOT_A_REAL_ORIGIN_ENV })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /reserves.*--pending-|--pending-.*reserves/u)
 })
 
 test('setup.mjs refuses a handle that does not match the city\'s handle rule before ever asking for approval', async () => {
@@ -847,9 +915,11 @@ test('setup.mjs refuses to register under a new handle when this origin already 
 })
 
 // A leftover REGISTRATION staging label (a run that died between staging
-// and promotion) is not a real second identity -- isPendingLabel must cover
-// the per-run suffixed registration form the same way it already covers
-// rotation/recovery, or the guard above wrongly refuses a legitimate fresh
+// and promotion) is not a real second identity -- listVaultLabels must
+// exclude it by the `kind: 'staging'` marker its bundle carries (see
+// storeSecret/isStagingLabel in identity-client.mjs), covering the per-run
+// suffixed registration form the same way it already covers rotation/
+// recovery, or the guard above wrongly refuses a legitimate fresh
 // registration because of a label this script itself created and never
 // meant as anything but scratch space.
 
@@ -859,9 +929,14 @@ test('setup.mjs does not treat a leftover registration staging label as a second
   try {
     // Simulates a register() run that staged a bundle and then died before
     // ever confirming or promoting it -- exactly the suffixed label shape
-    // pendingLabel(handle, 'registration') now produces.
+    // AND the `kind: 'staging'` marker pendingLabel's callers now write
+    // (identity-client.mjs register()). Marking staging by data rather than
+    // by label text alone is what lets a REAL resident's own handle end in
+    // this same suffix shape without being hidden from listVaultLabels --
+    // see the "listVaultLabels ... a real resident whose handle ends in
+    // --pending-rotation is still listed" tests in identity-client.test.mjs.
     storeSecret(stub.origin, 'agent-abandoned--pending-registration-deadbeef', {
-      kind: 'resident',
+      kind: 'staging',
       handle: 'agent-abandoned',
       client_class: 'coding_persistent',
       resident_key: `1f3d9_sk_${'8'.repeat(48)}`,
