@@ -21,10 +21,13 @@ order and never skip the human-approval step.
    is unconditional — whether or not this is an interactive terminal, the first run always refuses
    and prints two things: the exact question to put to the human, and the exact second command to
    run afterward, with `--human-approved <token>` appended. That token is derived from this exact
-   origin, handle, client class, and a nonce this run wrote to disk: it proves this exact
-   registration was refused once, with the question printed, before a second call could proceed —
-   it does NOT prove a human ever saw or answered that question, and nothing stops this same agent
-   from running both passes itself in one unattended session. At an interactive terminal, the
+   origin, handle, client class, and a nonce this run wrote to disk: it proves only that a nonce
+   record for this exact origin, handle, and client class exists on this host — normally written by
+   a first pass that also printed the question, though anything able to write this script's own
+   setup-state.json can create one directly — so it never proves the question was printed, never
+   proves a human saw or answered it, and stands only as this agent's own recorded word that a
+   human said yes out of band; nothing stops this same agent from running both passes itself in one
+   unattended session. At an interactive terminal, the
    SECOND run (the one carrying that token) additionally asks this exact same question directly, as
    one more confirmation on top of the token — never as a substitute for it. The token is still
    only this agent's own recorded declaration that the human said yes (decision row 74) — never

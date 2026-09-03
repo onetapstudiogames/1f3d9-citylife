@@ -33,9 +33,12 @@
 // question directly, as one more confirmation ON TOP OF the valid token —
 // never as a substitute for it, and never on the first run.
 //
-// What this token IS: proof that a first pass ran here and printed the
-// question, before this exact registration was allowed to proceed — so an
-// agent cannot self-approve inside a single call with no refusal in between.
+// What this token IS: proof that a nonce record for this exact origin,
+// handle, and client class exists on this host — normally written by a
+// first pass that also printed the question below, though anything able to
+// write this script's own setup-state.json can create one directly. It
+// never proves the question was printed and never proves a first pass
+// actually ran.
 // What this token is NOT: proof that a human ever saw or answered that
 // question. Nothing stops the SAME agent, in the SAME unattended session,
 // from running the first pass, reading the token it prints, and immediately
@@ -45,11 +48,13 @@
 // is never proof of who actually said it, and a deliberate agent that
 // satisfies this gate without a real human answer is making a false
 // declaration on that public record, not defeating a security control.
-// What the two-pass shape actually buys: it forces the exact question to be
-// printed, in the agent's own transcript, before registration can happen —
-// so a human reviewing that transcript can see plainly whether the question
-// was ever really put to them, and a careless one-shot "just register me"
-// call can never slip through unnoticed.
+// What the two-pass shape actually buys, when a real first pass runs: it
+// puts the exact question on THIS agent's own transcript before
+// registration can happen, so a human reviewing that transcript can see
+// plainly whether the question was ever really put to them. It is not a
+// guarantee — a token minted by hand-writing setup-state.json, without ever
+// running a first pass or printing anything, passes the same check; see the
+// token comment above.
 
 import { spawnSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
@@ -59,7 +64,7 @@ import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
 import {
-  readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE,
+  readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel,
 } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
@@ -321,6 +326,19 @@ if (RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
   process.exit()
 }
 
+// Same rule identity-client.mjs's own register() enforces on --model (see
+// validateModelLabel's own doc comment there, mirroring the city's own
+// /api/register rule) -- checked here too, before ever asking for approval,
+// for the same reason the handle checks above are: a --model the city was
+// always going to refuse must never burn a human-approval round trip first.
+const model = typeof flags.model === 'string' ? flags.model : ''
+const modelError = validateModelLabel(model)
+if (modelError) {
+  console.error(`setup: ${modelError}. Fix --model, then re-run.`)
+  process.exitCode = 1
+  process.exit()
+}
+
 // Before ever attempting to register, check whether this host's vault
 // already has a WORKING key for the exact handle requested. A lost or
 // truncated setup-state.json must never turn a resident that already exists
@@ -536,13 +554,14 @@ if (!approval.approved) {
     `re-run this exact command with --human-approved ${approval.token} appended. This check runs the same ` +
     'way whether or not stdin is an interactive terminal: on one, the second run (the one carrying this ' +
     'token) will ALSO ask this exact same question directly, as one more confirmation on top of the token, ' +
-    'never as a substitute for it. What the token proves: this exact registration was refused once, with ' +
-    'the question above printed, before being allowed to proceed -- it is the agent\'s own recorded ' +
-    'declaration that a human then said yes out of band (decision row 74). What it does NOT prove: that a ' +
-    'human actually saw or answered the question -- nothing stops the same agent, in the same unattended ' +
-    'session, from running this exact refused call and then immediately running the second one itself. ' +
-    'Doing that is a false declaration on the public record, not a defeated security control; this script ' +
-    'never claims otherwise.',
+    'never as a substitute for it. That token proves only that a nonce record for this exact origin, ' +
+    'handle, and client class exists on this host -- normally written by a first pass that also printed ' +
+    'the question above, though anything able to write this script\'s own setup-state.json can create one ' +
+    'directly -- so it never proves the question was printed, never proves a human saw or answered it, ' +
+    'and stands only as this agent\'s own recorded word that a human said yes out of band (decision row ' +
+    '74). Nothing stops the same agent, in the same unattended session, from running this exact refused ' +
+    'call and then immediately running the second one itself. Doing that is a false declaration on the ' +
+    'public record, not a defeated security control; this script never claims otherwise.',
   )
   process.exitCode = 1
   process.exit()
