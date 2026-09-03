@@ -20,7 +20,8 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
-import { readSecret } from './identity-client.mjs'
+import { readSecret, SecretReadFailure } from './identity-client.mjs'
+import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 function parseArgs(argv) {
   const flags = {}
@@ -44,8 +45,20 @@ function parseArgs(argv) {
 }
 
 const { flags, positionals } = parseArgs(process.argv.slice(2))
-const origin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
+const rawOrigin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
 const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
+
+// The origin guard runs before ANYTHING else -- before status/rotate/
+// recover/show ever touch the vault or the network for a disallowed origin.
+let origin
+try {
+  origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
+} catch (error) {
+  console.error(`key: ${error.message}`)
+  process.exitCode = 1
+  process.exit()
+}
+
 const identityClientPath = resolve(pluginRoot, 'scripts', 'identity-client.mjs')
 
 function resolveHandle() {
@@ -73,7 +86,18 @@ function requireHandle() {
 }
 
 function requireStoredKey(handle) {
-  const stored = readSecret(origin, handle)
+  let stored
+  try {
+    stored = readSecret(origin, handle)
+  } catch (error) {
+    if (!(error instanceof SecretReadFailure)) throw error
+    console.error(
+      `key: ${error.message}; this is not "no key stored" -- refusing to guess. If you have a saved ` +
+      'recovery code for this handle, use `key recover begin` to replace it; do not register a new identity.',
+    )
+    process.exitCode = 1
+    return null
+  }
   if (!stored.found || typeof stored.value?.resident_key !== 'string') {
     console.error(`key: no vault entry found for "${handle}" at ${origin}.`)
     process.exitCode = 1
@@ -89,7 +113,18 @@ async function status() {
   if (!residentKey) return
   const probe = await probeMe(origin, residentKey, { allowOrigin })
   console.log(`handle: ${handle}`)
-  console.log(probe.ok ? 'stored key: works (one me read succeeded)' : `stored key: does not work (${probe.error})`)
+  if (!probe.ok) {
+    console.log(`stored key: does not work (${probe.error})`)
+    return
+  }
+  if (probe.handle && probe.handle !== handle) {
+    console.log(
+      `stored key: works, but authenticates as "${probe.handle}", not "${handle}" -- the vault entry ` +
+      `labelled "${handle}" belongs to a different resident. Pass --handle ${probe.handle} instead, or fix the entry.`,
+    )
+    return
+  }
+  console.log('stored key: works (one me read succeeded)')
 }
 
 /**
@@ -162,9 +197,27 @@ function recoverBegin() {
 function show() {
   const handle = requireHandle()
   if (!handle) return
-  const stored = readSecret(origin, handle)
+  let stored
+  try {
+    stored = readSecret(origin, handle)
+  } catch (error) {
+    if (!(error instanceof SecretReadFailure)) throw error
+    console.error(
+      `key: ${error.message}; this is not "no key stored" -- refusing to guess. If you have a saved ` +
+      'recovery code for this handle, use `key recover begin` to replace it; do not register a new identity.',
+    )
+    process.exitCode = 1
+    return
+  }
   if (!stored.found) {
     console.log(`no vault entry found for "${handle}" at ${origin}.`)
+    return
+  }
+  if (typeof stored.value?.resident_key !== 'string') {
+    console.log(
+      `a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field -- there ` +
+      'is nothing to show.',
+    )
     return
   }
   console.log(`handle: ${handle}`)

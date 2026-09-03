@@ -26,7 +26,8 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
-import { readSecret } from './identity-client.mjs'
+import { readSecret, SecretReadFailure } from './identity-client.mjs'
+import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 function parseArgs(argv) {
   const flags = {}
@@ -50,8 +51,22 @@ function parseArgs(argv) {
 }
 
 const { flags, positionals } = parseArgs(process.argv.slice(2))
-const origin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
+const rawOrigin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
 const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
+
+// The origin guard runs before ANYTHING is printed -- including the ready-
+// to-paste `claude mcp add` / `codex mcp add` commands below, which read a
+// resident key into a Bearer header. A disallowed --origin must never reach
+// those commands on screen; assertAllowedOrigin refuses first.
+let origin
+try {
+  origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
+} catch (error) {
+  console.error(`connect: ${error.message}`)
+  process.exitCode = 1
+  process.exit()
+}
+
 const identityClientPath = resolve(pluginRoot, 'scripts', 'identity-client.mjs')
 
 /**
@@ -88,8 +103,11 @@ async function connectHost() {
   console.log('storing the resident key at a named secret this host can read into an environment variable:')
   console.log('')
   console.log('  Claude Code:')
-  console.log(`    claude mcp add --transport http 1f3d9 ${origin}/mcp \\`)
-  console.log("      --header 'Authorization: Bearer ${AGENT_1F3D9_SECRET}'")
+  // One line, deliberately: a POSIX `\` line continuation is a hard parse
+  // error in PowerShell, one of the shells this command is most often
+  // pasted into, while this single-line form works unchanged in bash, zsh,
+  // and PowerShell alike.
+  console.log(`    claude mcp add --transport http 1f3d9 ${origin}/mcp --header 'Authorization: Bearer \${AGENT_1F3D9_SECRET}'`)
   console.log('    (the placeholder above must reach the CLI single-quoted and unexpanded — copy it')
   console.log('    exactly. Export AGENT_1F3D9_SECRET from your secret store first; never paste the')
   console.log('    literal key on this command line.)')
@@ -101,17 +119,35 @@ async function connectHost() {
   console.log('actually installed here. Run the one that matches, then re-run this command to verify.')
   console.log('')
 
-  const stored = readSecret(origin, handle)
+  let stored
+  try {
+    stored = readSecret(origin, handle)
+  } catch (error) {
+    if (!(error instanceof SecretReadFailure)) throw error
+    console.error(
+      `connect: ${error.message}; this is not "no key stored" -- refusing to guess. If you have a saved ` +
+      'recovery code for this handle, use `key recover begin` to replace it; do not register a new identity.',
+    )
+    process.exitCode = 1
+    return
+  }
   if (!stored.found || typeof stored.value?.resident_key !== 'string') {
     console.log(`one me read: skipped — no vault entry found for "${handle}" at ${origin}.`)
     return
   }
   const probe = await probeMe(origin, stored.value.resident_key, { allowOrigin })
-  console.log(
-    probe.ok
-      ? `one me read: OK (handle: ${probe.handle ?? handle})`
-      : `one me read: FAILED (${probe.error})`,
-  )
+  if (!probe.ok) {
+    console.log(`one me read: FAILED (${probe.error})`)
+    return
+  }
+  if (probe.handle && probe.handle !== handle) {
+    console.log(
+      `one me read: MISMATCH — the vault entry labelled "${handle}" actually authenticates as ` +
+      `"${probe.handle}". Pass --handle ${probe.handle} instead, or fix the entry.`,
+    )
+    return
+  }
+  console.log(`one me read: OK (handle: ${probe.handle ?? handle})`)
 }
 
 function connectChat() {
@@ -119,7 +155,18 @@ function connectChat() {
   if (!handle) return
   const pairArgs = [identityClientPath, 'pair', '--origin', origin]
   if (allowOrigin) pairArgs.push('--allow-origin', allowOrigin)
-  const stored = readSecret(origin, handle)
+  let stored
+  try {
+    stored = readSecret(origin, handle)
+  } catch (error) {
+    if (!(error instanceof SecretReadFailure)) throw error
+    console.error(
+      `connect chat: ${error.message}; this is not "no key stored" -- refusing to guess. If you have a ` +
+      'saved recovery code for this handle, use `key recover begin` to replace it; do not register a new identity.',
+    )
+    process.exitCode = 1
+    return
+  }
   if (!stored.found || typeof stored.value?.resident_key !== 'string') {
     console.error(`connect chat: no vault entry found for "${handle}" at ${origin}; cannot mint a pairing code.`)
     process.exitCode = 1
