@@ -41,3 +41,6 @@ export declare function promoteReplacementKey(
   mergeFields: (previous: Record<string, unknown> | null) => Record<string, unknown>,
   deps?: StoreSecretDeps,
 ): string
+
+/** Pure predicate behind revealOrHide: true only when --reveal was passed AND stdout is a real TTY. */
+export declare function shouldReveal(flags: Record<string, unknown>, isTty: boolean | undefined): boolean
