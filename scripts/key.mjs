@@ -140,13 +140,16 @@ async function status() {
 }
 
 /**
- * Runs the same label-vs-identity probe status()/connect() already run
- * before acting on a stored key, refusing with the identical wording when
- * the vault entry labelled `handle` actually authenticates as someone
- * else -- so `rotate`/`recover generate` can never silently act on the
- * WRONG resident's key just because it happened to be stored under this
- * label. Returns true when the caller should proceed, false when this
- * already printed a refusal and set process.exitCode.
+ * Runs the same probe connect() runs, with wording matching connect.mjs's
+ * mismatch message; status() reports the same mismatch without refusing,
+ * since it never acts on the key. Refuses when the vault entry labelled
+ * `handle` actually authenticates as someone else -- so `rotate`/`recover
+ * generate` can never silently act on the WRONG resident's key just
+ * because it happened to be stored under this label. On success, this also
+ * prints the same disclosure `key status` prints, since this probe is the
+ * same state-changing GET /api/me either way. Returns true when the caller
+ * should proceed, false when this already printed a refusal and set
+ * process.exitCode.
  */
 async function probeMatchesOrRefuse(label, handle, residentKey) {
   const probe = await probeMe(origin, residentKey, { allowOrigin })
@@ -163,6 +166,8 @@ async function probeMatchesOrRefuse(label, handle, residentKey) {
     process.exitCode = 1
     return false
   }
+  console.log(`${label}: stored key works (one me read succeeded) — this read wakes any due timers and advances`)
+  console.log('this resident\'s fee-credit last-read marker, the same as any other `me` read.')
   return true
 }
 

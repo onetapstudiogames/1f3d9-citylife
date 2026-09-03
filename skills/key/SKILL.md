@@ -20,10 +20,15 @@ only when explicitly told to reveal.
   the still-valid old key is never destroyed before confirmation succeeds. After it confirms,
   update whatever host secret `AGENT_1F3D9_SECRET` reads and re-run `connect`, and re-pair any
   chat twin with a fresh `connect chat` code — both will otherwise start failing with no obvious
-  cause.
+  cause. Before any of that, this command runs one `GET /api/me` read to confirm the stored key
+  still authenticates as this handle; this is not a free read: it wakes any due timers and
+  advances this resident's fee-credit last-read marker, the same as any other `me` read.
 - **`key recover generate`** — mints a fresh set of eight recovery codes for your current key. Run
   `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" recover generate [--handle <handle>]` and print its
-  output verbatim.
+  output verbatim. Before minting, this command also runs one `GET /api/me` read to confirm the
+  stored key still authenticates as this handle; this is not a free read: it wakes any due
+  timers and advances this resident's fee-credit last-read marker, the same as any other `me`
+  read.
 - **`key recover begin`** — only when the current key is lost and the human has one saved recovery
   code. Ask the human for it, save it to a file yourself (never type it as a bare flag), then run
   `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" recover begin --recovery-code-file <path>` and print
