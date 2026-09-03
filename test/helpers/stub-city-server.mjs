@@ -65,15 +65,20 @@ function bearerKey(req) {
  * register's 'confirm' action for any stage token whose staged handle
  * equals `handle` is held -- not responded to at all -- until `count` such
  * confirm requests are concurrently outstanding, at which point every held
- * one is released together. This exists for exactly one caller: this
- * file's own concurrent-registration race test in
- * test/identity-commands.test.mjs, which needs its two real subprocesses
- * to genuinely overlap rather than hoping OS scheduling makes them.
- * 'confirm' is always the LAST network call register() makes before that
- * process's own local pre-flight vault check (readSecret, called right
- * after stage() -- see register()'s own comment in identity-client.mjs) --
- * so a confirm request reaching this server already proves that process's
- * own pre-flight check has already run. Holding every such request until
+ * one is released together. A held request is also released, on its own,
+ * after REGISTER_CONFIRM_BARRIER_TIMEOUT_MS if `count` never arrives (one
+ * racing subprocess failing before its own confirm -- a PowerShell
+ * CredWrite hiccup, a storeSecret refusal, a crash) -- so that turns into a
+ * loud, failing assertion in the test instead of an indefinite CI hang.
+ * This exists for exactly one caller: this file's own
+ * concurrent-registration race test in test/identity-commands.test.mjs,
+ * which needs its two real subprocesses to genuinely overlap rather than
+ * hoping OS scheduling makes them.
+ * confirm is the FIRST network call register() makes AFTER its own local
+ * pre-flight vault check (readSecret, identity-client.mjs:1277, run right
+ * after stage() -- see register()'s own comment there) -- so a confirm
+ * request reaching this server already proves that process's own
+ * pre-flight check has already run. Holding every such request until
  * `count` have arrived therefore guarantees, structurally rather than by
  * luck, that no process can reach its own vault write (inside
  * promoteReplacementKey, which only runs after confirm resolves) before
@@ -82,12 +87,14 @@ function bearerKey(req) {
  * Every other caller of this function omits the option, so it changes
  * nothing about the ~20 other scenarios sharing this stub.
  */
+const REGISTER_CONFIRM_BARRIER_TIMEOUT_MS = 10_000
 export async function startStubCityServer({ registerConfirmBarrier } = {}) {
   const residents = new Map()
   const pendingRegistrations = new Map() // stage_token -> { handle, resident_key, recovery_codes, client_class }
   const pendingRotations = new Map() // stage_token -> { handle, resident_key }
   const pendingRecoveries = new Map() // stage_token -> { handle, resident_key }
   let confirmBarrierWaiters = []
+  let confirmBarrierTimer = null
 
   const server = createHttpsServer(TLS_OPTIONS, async (req, res) => {
     try {
@@ -128,7 +135,23 @@ export async function startStubCityServer({ registerConfirmBarrier } = {}) {
             // never both observe a stale waiters length and both release.
             await new Promise(releaseThis => {
               confirmBarrierWaiters.push(releaseThis)
+              if (confirmBarrierWaiters.length === 1) {
+                // Deadline for THIS batch: if `count` never arrives (a
+                // racing subprocess failed before reaching its own
+                // confirm), release whoever IS waiting instead of parking
+                // them here forever -- see the doc comment above.
+                confirmBarrierTimer = setTimeout(() => {
+                  const waiters = confirmBarrierWaiters
+                  confirmBarrierWaiters = []
+                  confirmBarrierTimer = null
+                  for (const release of waiters) release()
+                }, REGISTER_CONFIRM_BARRIER_TIMEOUT_MS)
+              }
               if (confirmBarrierWaiters.length >= registerConfirmBarrier.count) {
+                if (confirmBarrierTimer) {
+                  clearTimeout(confirmBarrierTimer)
+                  confirmBarrierTimer = null
+                }
                 const waiters = confirmBarrierWaiters
                 confirmBarrierWaiters = []
                 for (const release of waiters) release()

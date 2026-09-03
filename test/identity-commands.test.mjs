@@ -63,12 +63,33 @@ function listRawVaultLabels(origin, homeDir) {
     try {
       parsed = JSON.parse(readFileSync(join(homeDir, '.1f3d9', 'vault-index.json'), 'utf8'))
     } catch {
-      return []
+      parsed = {}
     }
     const entries = Array.isArray(parsed?.[origin]) ? parsed[origin] : []
-    return entries
+    const fromIndex = entries
       .map(entry => (typeof entry === 'string' ? entry : entry?.label))
       .filter(label => typeof label === 'string')
+    if (process.platform !== 'win32') return fromIndex
+    // storeSecret's updateVaultIndex is explicitly best-effort (identity-
+    // client.mjs) and deleteSecret on the file backend never touches the
+    // index at all, so a credential that reached Windows Credential Manager
+    // while its index write failed would be invisible to the index alone --
+    // union it with a real `cmdkey /list` scrape, mirroring listVaultLabels'
+    // own win32 union in identity-client.mjs, so this assertion covers the
+    // store the credential actually lives in.
+    const prefix = `1f3d9:${origin}:`
+    const fromCmdkey = []
+    try {
+      const output = execFileSync('cmdkey', ['/list'], { encoding: 'utf8' })
+      for (const match of output.matchAll(/Target:\s*(.+)\s*$/gmu)) {
+        const target = match[1].trim()
+        const index = target.indexOf(prefix)
+        if (index !== -1) fromCmdkey.push(target.slice(index + prefix.length))
+      }
+    } catch {
+      // cmdkey unavailable or failed -- fall back to the index alone.
+    }
+    return [...new Set([...fromIndex, ...fromCmdkey])]
   }
   const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
   const dir = join(homeDir, '.1f3d9', 'credentials')
@@ -159,11 +180,11 @@ test('register --replace-vault-entry deliberately overwrites an existing entry',
 // would delete whatever the loser had just staged there (review finding
 // "two concurrent register runs share one staging label").
 
-test('two concurrent register runs for the same handle: the winner promotes, the loser refuses and still names its own untouched staging copy', async () => {
+test('two concurrent register runs for the same handle: the winner promotes, the loser refuses and still names its own untouched staging copy', { timeout: 20_000 }, async () => {
   // registerConfirmBarrier forces the actual overlap this test needs
   // instead of hoping two subprocess spawns happen to collide. Without it,
-  // this was genuinely flaky: 'confirm' is register()'s LAST network call
-  // before its own local pre-flight vault check runs (see register()'s own
+  // this was genuinely flaky: confirm is register()'s FIRST network call
+  // AFTER its own local pre-flight vault check runs (see register()'s own
   // comment in identity-client.mjs), and that pre-flight check plus the
   // rest of a run's local vault work is fast enough -- especially on
   // POSIX, where it is a plain synchronous file read/write, no subprocess
@@ -269,6 +290,21 @@ test('setup.mjs refuses a handle that does not match the city\'s handle rule bef
   ], { env: NOT_A_REAL_ORIGIN_ENV })
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /does not match the city's handle rule/u)
+  assert.doesNotMatch(result.stderr, /put this exact question to the human/u, 'never reaches the approval gate')
+})
+
+// Same reservation as register()'s own check (see the "reserved '--pending-'
+// sequence" test above) but on setup.mjs's own local pre-approval check --
+// without this, HANDLE_RE alone would let such a handle reach the
+// human-approval question, only for the second pass to fail once
+// register() itself refuses it.
+test('setup.mjs refuses a handle containing the reserved "--pending-" sequence before ever asking for approval', async () => {
+  const result = await runNode(setupPath, [
+    '--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid',
+    '--handle', 'agent--pending-rotation', '--client-class', 'coding_persistent',
+  ], { env: NOT_A_REAL_ORIGIN_ENV })
+  assert.notEqual(result.status, 0)
+  assert.match(result.stderr, /reserves.*--pending-|--pending-.*reserves/u)
   assert.doesNotMatch(result.stderr, /put this exact question to the human/u, 'never reaches the approval gate')
 })
 
