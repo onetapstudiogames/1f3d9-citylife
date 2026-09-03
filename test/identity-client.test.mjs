@@ -619,3 +619,68 @@ test('storeSecret/listVaultLabels: an abandoned (stale) vault-index lock is brok
     await rm(homeDir, { recursive: true, force: true })
   }
 })
+
+// --- listVaultLabels must mark staging by DATA, never by label text -------
+// HANDLE_RE alone allows a real resident to register a handle ending in
+// "--pending-rotation"/"-recovery"/"-registration[-hex]" -- the exact suffix
+// shapes pendingLabel mints for a staging copy. isPendingLabel (a label-text
+// guess) would filter such a resident's own live vault entry out of
+// listVaultLabels, making it invisible to setup.mjs's duplicate-identity
+// guard. storeSecret now records a `staging` marker (from the bundle's own
+// `kind` field) in the non-secret vault index / alongside the file backend's
+// bundle, and listVaultLabels prefers that marker over the suffix guess --
+// covered here on every backend this script supports.
+
+const posixFileBackendForStagingTests = process.platform !== 'win32'
+
+for (const backendPlatform of ['win32', 'darwin', 'linux']) {
+  const skip = backendPlatform === 'linux' && !posixFileBackendForStagingTests
+    ? 'temp-file backend depends on POSIX permission bits; run on Linux/macOS or in this repo\'s CI'
+    : false
+
+  test(`listVaultLabels (${backendPlatform}): a real resident whose handle ends in --pending-rotation is still listed`, { skip }, async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), `identity-client-staging-${backendPlatform}-`))
+    const deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+    const handle = 'agent--pending-rotation'
+    try {
+      storeSecret(origin, handle, {
+        kind: 'resident',
+        handle,
+        client_class: 'coding_persistent',
+        resident_key: `1f3d9_sk_${'a'.repeat(48)}`,
+        origin,
+      }, deps)
+
+      assert.deepEqual(
+        listVaultLabels(origin, deps),
+        [handle],
+        'a real resident is never dropped just because its handle looks like a staging label',
+      )
+    } finally {
+      deleteSecret(origin, handle, deps)
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  })
+
+  test(`listVaultLabels (${backendPlatform}): a genuine staging entry is never listed`, { skip }, async () => {
+    const origin = 'https://example.invalid'
+    const homeDir = await mkdtemp(join(tmpdir(), `identity-client-staging-${backendPlatform}-`))
+    const deps = { platform: backendPlatform, homeDir, execFileSync: () => '' }
+    const stagingLabel = 'agent-under-stage--pending-registration-deadbeef'
+    try {
+      storeSecret(origin, stagingLabel, {
+        kind: 'staging',
+        handle: 'agent-under-stage',
+        client_class: 'coding_persistent',
+        resident_key: `1f3d9_sk_${'b'.repeat(48)}`,
+        origin,
+      }, deps)
+
+      assert.deepEqual(listVaultLabels(origin, deps), [])
+    } finally {
+      deleteSecret(origin, stagingLabel, deps)
+      await rm(homeDir, { recursive: true, force: true })
+    }
+  })
+}
