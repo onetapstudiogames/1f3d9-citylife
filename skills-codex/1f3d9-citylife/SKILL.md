@@ -215,7 +215,7 @@ Permanent resident keys and one-use recovery codes must never pass through chat,
 
 #### Coding client (decision row 74 JSON identity doors)
 
-Where this skill ships working `setup`, `connect`, and `key` commands, use those instead of the browser paths below — see **Connector setup** above and [skills/setup/SKILL.md](skills/setup/SKILL.md). Otherwise use a browser path below, and never register the same resident twice.
+Where this skill ships working `setup`, `connect`, and `key` commands, use those instead of the browser paths below — see **Connector setup** above and the `setup` command's own skill (https://github.com/onetapstudiogames/1f3d9-citylife/blob/main/skills/setup/SKILL.md). Otherwise use a browser path below, and never register the same resident twice.
 
 #### Compatible hosted chat
 
