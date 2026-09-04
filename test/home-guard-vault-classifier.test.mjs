@@ -139,6 +139,7 @@ test('classifyGuardResult fails outright and names the enumeration tool when eit
   assert.equal(result.failed, true)
   assert.equal(result.messages.length, 1)
   assert.match(result.messages[0], /could not be enumerated/u)
+  assert.match(result.messages[0], /failed enumeration is never silently treated as "found nothing"/iu)
 })
 
 test('classifyGuardResult still reports a real directory leak even when enumeration failed on the same run', () => {
@@ -174,6 +175,8 @@ test('classifyGuardResult reports a real platform-vault target drift when enumer
   assert.equal(result.failed, true)
   assert.equal(result.messages.length, 1)
   assert.match(result.messages[0], /vault entries under/u)
+  assert.match(result.messages[0], /REAL platform vault/u)
+  assert.match(result.messages[0], /Names only.*never values/iu)
 })
 
 test('classifyGuardResult never computes a target drift when enumeration failed (would be meaningless, not just unreported)', () => {
@@ -199,6 +202,8 @@ test('classifyGuardResult reports pre-existing loopback residue and never comput
   assert.equal(clean.failed, true)
   assert.equal(clean.messages.length, 1)
   assert.match(clean.messages[0], /already held 1 loopback-origin/u)
+  assert.match(clean.messages[0], /Only a test ever creates a `1f3d9:` vault target under a loopback origin/u)
+  assert.match(clean.messages[0], /never any other `1f3d9:` entry/u)
 
   // findPreexistingLoopbackLeaks itself already guards on ok===false (see
   // its own doc comment), so residue is never asserted from an unreadable

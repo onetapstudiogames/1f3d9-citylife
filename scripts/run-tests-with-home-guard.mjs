@@ -246,7 +246,9 @@ function formatEnumerationFailure(before, after) {
   const failedOn = before.ok === false ? 'BEFORE' : 'AFTER'
   return (
     `the platform vault could not be enumerated, this run proves nothing about it (${tool} failed on the ` +
-    `${failedOn} read). Investigate why the enumeration tool failed on this host, then re-run.`
+    `${failedOn} read). A failed enumeration is never silently treated as "found nothing" -- doing that ` +
+    'could either hide a real leak or report every pre-existing entry as spurious drift, depending on ' +
+    'which call failed. Investigate why the enumeration tool failed on this host, then re-run.'
   )
 }
 
@@ -254,15 +256,34 @@ function formatTargetDiff(diff) {
   const lines = [`this host's real OS credential vault entries under the "${VAULT_TARGET_PREFIX}" prefix changed during this test run`]
   for (const name of diff.added) lines.push(`  + ${name}`)
   for (const name of diff.removed) lines.push(`  - ${name}`)
+  lines.push(
+    'This means some test wrote to (or deleted from) the REAL platform vault -- Windows Credential Manager or ' +
+    'macOS Keychain -- instead of a sandboxed one: on these platforms an injected `homeDir` redirects only the ' +
+    'non-secret vault-index.json, never the secret bundle itself, so a call that skips stubbing the platform ' +
+    'vault call entirely leaks a real credential even though the directory diff above sees nothing. Find the ' +
+    'call site (search test/*.test.mjs for a vault function call that reaches the real platform backend) and ' +
+    'fix it there. Names only, above and in this message -- never values.',
+  )
   return lines.join('\n')
 }
 
 function formatPreexistingLoopbackLeaks(leaks) {
   const noun = leaks.length === 1 ? 'entry' : 'entries'
-  return [
+  const lines = [
     `this host's real OS credential vault already held ${leaks.length} loopback-origin "${VAULT_TARGET_PREFIX}" ${noun} BEFORE this run started`,
     ...leaks.map(name => `  ! ${name}`),
-  ].join('\n')
+  ]
+  lines.push(
+    'Only a test ever creates a `1f3d9:` vault target under a loopback origin (localhost or 127.0.0.1) -- a ' +
+    'real resident\'s own entry always names a real hostname, so this can only be residue a PREVIOUS run ' +
+    'leaked into the real platform vault and never cleaned up. The before/after diff above cannot see this: ' +
+    'it only catches a leak that happens during THIS run, so a developer re-running after "fixing" a leak ' +
+    'would see this guard report green while the leaked credential is still sitting in Credential Manager or ' +
+    'Keychain. Remove it by name (never by value, and never any other `1f3d9:` entry -- a real resident ' +
+    'registered at a real hostname on this host must never be touched) and find the call site that leaked ' +
+    'it. Names only, above and in this message -- never values.',
+  )
+  return lines.join('\n')
 }
 
 function classifyGuardResult({ before, after, targetsBefore, targetsAfter }) {

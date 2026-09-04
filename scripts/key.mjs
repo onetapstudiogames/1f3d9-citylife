@@ -147,6 +147,7 @@ async function status() {
       `stored key: works, but authenticates as "${probe.handle}", not "${handle}" -- the vault entry ` +
       `labelled "${handle}" belongs to a different resident. Pass --handle ${probe.handle} instead, or fix the entry.`,
     )
+    process.exitCode = 1
     return
   }
   console.log('stored key: works (one me read succeeded) — this read wakes any due timers and advances')
@@ -168,9 +169,13 @@ async function status() {
 async function probeMatchesOrRefuse(label, handle, residentKey) {
   const probe = await probeMe(origin, residentKey, { allowOrigin })
   if (!probe.ok) {
-    console.error(`${label}: stored key does not work (${probe.error}); refusing to act on a key that already fails.`)
-    process.exitCode = 1
-    return false
+    if (probe.rejected) {
+      console.error(`${label}: stored key does not work (${probe.error}); refusing to act on a key that already fails.`)
+      process.exitCode = 1
+      return false
+    }
+    console.log(`${label}: one me read: FAILED (${probe.error}) -- proceeding, since there is nothing this check can validate.`)
+    return true
   }
   if (probe.handle && probe.handle !== handle) {
     console.error(
@@ -339,8 +344,16 @@ async function adopt() {
     process.exitCode = 1
     return
   }
-  if (!stored.found || typeof stored.value?.resident_key !== 'string') {
+  if (!stored.found) {
     console.error(`key adopt: no vault entry found for "${stagingLabel}" at ${origin} -- nothing to adopt.`)
+    process.exitCode = 1
+    return
+  }
+  if (typeof stored.value?.resident_key !== 'string') {
+    console.error(
+      `key adopt: a vault entry exists for "${stagingLabel}" at ${origin}, but it carries no resident_key field ` +
+      '-- nothing to adopt.',
+    )
     process.exitCode = 1
     return
   }

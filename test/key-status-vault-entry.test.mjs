@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url'
 
 import { deleteSecret, storeSecret } from '../scripts/identity-client.mjs'
 import { makeTempHome, runNode } from './helpers/run-identity-cli.mjs'
+import { startStubCityServer } from './helpers/stub-city-server.mjs'
 
 const keyPath = fileURLToPath(new URL('../scripts/key.mjs', import.meta.url))
 const NO_SECRET_LITERAL = /1f3d9_(?:sk|rc)_[0-9a-f]+/u
@@ -63,5 +64,30 @@ test('key status: truly no vault entry still says "no vault entry found" (contro
     assertNoSecretLeaked(result, 'key status no entry at all')
   } finally {
     home.cleanup()
+  }
+})
+
+test('key status: exits nonzero when the stored key authenticates as a different resident', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-status-mismatch-')
+  const residentKey = `1f3d9_sk_${'b'.repeat(48)}`
+  try {
+    stub.residents.set('bob-agent', { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'alice-agent', {
+      kind: 'resident', handle: 'alice-agent', client_class: 'coding_persistent', resident_key: residentKey,
+      origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    const result = await runNode(
+      keyPath,
+      ['status', '--origin', stub.origin, '--handle', 'alice-agent'],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout, /authenticates as "bob-agent", not "alice-agent"/u)
+    assertNoSecretLeaked(result, 'key status mismatched resident')
+  } finally {
+    deleteSecret(stub.origin, 'alice-agent', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
   }
 })

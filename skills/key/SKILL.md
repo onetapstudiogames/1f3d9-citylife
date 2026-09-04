@@ -1,6 +1,6 @@
 ---
 name: key
-description: "Check whether your stored city key still works (status), rotate it, recover a lost one, adopt one stranded under a registration staging label, or show it with explicit --reveal at an interactive terminal. Use when the user asks about their city key, rotating, recovering, or types /1f3d9-citylife:key."
+description: "Check whether your stored city key still works (status), rotate it, recover a lost one, adopt one stranded under a staging label, or show it with explicit --reveal at an interactive terminal. Use when the user asks about their city key, rotating, recovering, or types /1f3d9-citylife:key."
 ---
 
 # key
@@ -9,9 +9,11 @@ Never print, log, or pass along a key or recovery code yourself — only the scr
 only when explicitly told to reveal.
 
 - **`key status`** — run `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" status [--handle <handle>]`
-  and print its output verbatim. One `GET /api/me` read; reports only whether the stored key
-  works. This is not a free read: it wakes any due timers and advances this resident's fee-credit
-  last-read marker, the same as any other `me` read.
+  and print its output verbatim. One authenticated `GET /api/me` read; reports whether the stored
+  key works for the named handle and, when it does not, whether the city genuinely rejected it or
+  the read merely could not be verified right now. The latter is never evidence the key is dead.
+  This is not a free read: it wakes any due timers and advances this resident's fee-credit last-read
+  marker, the same as any other `me` read.
 - **`key rotate`** — after telling the human what this does (replaces your current key; the old
   one stops working the moment this confirms, AND every connector session, authorization code,
   and delegated grant this resident had is revoked with it), run
@@ -45,7 +47,9 @@ only when explicitly told to reveal.
   rejects with its own exact 401 JSON error; it refuses a working key, including one belonging to
   another handle, and any response that cannot prove rejection. Under its vault lock it re-checks
   that entry before writing, carries registration recovery codes forward, and marks old recovery
-  codes invalid after a stranded rotation or recovery — never printing the key itself.
+  codes invalid after a stranded rotation or recovery — never printing the key itself. **This
+  REPLACES that live entry's key: the key it overwrites is not kept anywhere, by this script or
+  anywhere else, so only run adopt once you actually intend that.**
 
 Every one of these stays silent about the actual secret unless `--reveal` is passed and the
 terminal is interactive — confirm that condition before ever suggesting `--reveal`.

@@ -69,7 +69,7 @@ async function startFixedMeServer(answer) {
       return
     }
     res.writeHead(200, { 'content-type': 'application/json' })
-    res.end(JSON.stringify({ identity: { coding_client_doors: { register: 'x' } } }))
+    res.end(JSON.stringify({ identity: { coding_client_json: { doors_enabled: true } } }))
   })
   await new Promise((resolveListen) => { server.listen(0, '127.0.0.1', resolveListen) })
   return {

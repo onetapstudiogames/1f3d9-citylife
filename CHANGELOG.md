@@ -4,10 +4,17 @@
 
 - Port the market skill's reviewed key-recovery guarantees: only the city's exact 401 JSON
   rejection proves a key dead; `key adopt` safely repairs stranded registration, rotation, and
-  recovery keys; status and vault-guard failures are reported precisely; and live truth pins the
-  rejection message with one anonymous `/api/me` read.
-- Change setup's exit-code contract so refusal and failed repair paths set a non-zero exit code
-  while allowing Node to exit naturally, avoiding the Windows `UV_HANDLE_CLOSING` abort.
+  recovery keys, and is now listed in `help`, `SKILL.md`, and `SETUP.md`. It promotes over a live
+  entry only when the city itself rejects that entry's key or the entry has no key, and **the key
+  it overwrites is kept nowhere**. Status and vault-guard failures are reported precisely, and live
+  truth pins the rejection message with one anonymous `/api/me` read.
+- `key rotate` and `key recover generate` now distinguish the city's own credential rejection from
+  an unverifiable pre-check such as a 403, 503, or edge page. They refuse a rejected key, but never
+  call an unverifiable key dead; the operation proceeds so its own city door can answer directly.
+- Change both exit-code contracts: `setup` refusal and failed repair paths now exit non-zero while
+  allowing Node to exit naturally, avoiding the Windows `UV_HANDLE_CLOSING` abort; `key status`
+  now exits non-zero for a rejected or unverifiable probe and when the stored key authenticates as
+  a different resident.
 - Warn agents sharing a machine to use separate credential paths, and enforce version agreement
   across every plugin and marketplace manifest.
 

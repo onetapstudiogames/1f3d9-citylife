@@ -61,7 +61,9 @@ const tlsFor = () => ({
 
 /** A fixed-answer /api/me server: every call gets the same scripted response. */
 async function startFixedMeServer(answer) {
+  const requests = []
   const server = createHttpsServer(tlsFor(), (req, res) => {
+    requests.push({ method: req.method, url: req.url })
     if (req.method === 'GET' && req.url === '/api/me') {
       res.writeHead(answer.status, { 'content-type': answer.contentType ?? 'application/json' })
       res.end(answer.body)
@@ -73,6 +75,7 @@ async function startFixedMeServer(answer) {
   await new Promise((resolveListen) => { server.listen(0, '127.0.0.1', resolveListen) })
   return {
     origin: `https://localhost:${server.address().port}`,
+    requests,
     close: () => new Promise((resolveClose) => server.close(resolveClose)),
   }
 }
@@ -145,6 +148,70 @@ test('key status: a genuine city 401 JSON rejection still says "does not work" (
     await server.close()
   }
 })
+
+const guardedCommands = [
+  { label: 'key rotate', args: ['rotate'] },
+  { label: 'key recover generate', args: ['recover', 'generate'] },
+]
+
+const guardedProbeCases = [
+  {
+    name: 'an edge/WAF 403 HTML page',
+    answer: { status: 403, contentType: 'text/html', body: '<html><body>Forbidden</body></html>' },
+    error: 'HTTP 403',
+    rejected: false,
+  },
+  {
+    name: 'a city 503',
+    answer: { status: 503, body: JSON.stringify({ error: 'upstream unavailable' }) },
+    error: 'upstream unavailable',
+    rejected: false,
+  },
+  {
+    name: 'the city\'s genuine 401 JSON rejection',
+    answer: { status: 401, body: JSON.stringify({ error: 'resident sign-in failed because Authorization: Bearer is missing or does not contain a current city key; send your saved current key as Authorization: Bearer <key>' }) },
+    error: 'resident sign-in failed',
+    rejected: true,
+  },
+]
+
+for (const command of guardedCommands) {
+  for (const probeCase of guardedProbeCases) {
+    test(`${command.label}: ${probeCase.name} is distinguished from other probe outcomes`, async () => {
+      const server = await startFixedMeServer(probeCase.answer)
+      const home = makeTempHome(`key-guard-${command.args.join('-')}-`)
+      try {
+        storeSecret(server.origin, handle, {
+          kind: 'resident', handle, client_class: 'coding_persistent', resident_key: GOOD,
+          origin: server.origin, stored_at: new Date().toISOString(),
+        }, { homeDir: home.dir })
+        const result = await runNode(
+          keyPath,
+          [...command.args, '--origin', server.origin, '--handle', handle],
+          { env: home.env },
+        )
+        assert.notEqual(result.status, 0)
+        assertNoSecretLeaked(result, `${command.label} ${probeCase.name}`)
+        if (probeCase.rejected) {
+          assert.match(result.stderr, new RegExp(`${command.label}: stored key does not work`, 'u'))
+          assert.doesNotMatch(result.stdout, /proceeding, since there is nothing this check can validate/u)
+          assert.equal(server.requests.filter(request => request.method === 'POST').length, 0)
+        } else {
+          assert.doesNotMatch(result.stderr, /stored key does not work/u)
+          assert.match(
+            result.stdout,
+            new RegExp(`${command.label}: one me read: FAILED \\(${probeCase.error}\\) -- proceeding, since there is nothing this check can validate\\.`, 'u'),
+          )
+          assert.equal(server.requests.filter(request => request.method === 'POST').length, 1)
+        }
+      } finally {
+        try { deleteSecret(server.origin, handle, { homeDir: home.dir }) } catch { /* best effort */ }
+        home.cleanup()
+        await server.close()
+      }
+    })
+  }
+}
 
 // --- Finding 2: `rejected` must require the city's OWN exact JSON error --
 
