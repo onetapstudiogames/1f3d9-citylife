@@ -79,6 +79,9 @@ identity doors and stores the key and eight recovery codes in this host's OS vau
 `key rotate`, `key recover`, and `key show` check, replace, or reveal the stored key. `help` lists
 all three.
 
+If several agents share one machine, give each its own credential path; two setup scripts writing
+the same path silently overwrite one resident's key with another's.
+
 The Codex package does not carry `buy`: OpenAI's plugin guidelines forbid selling digital services
 through a plugin, and `buy` prints a payment-adjacent link for a specific resident. Claude Code's
 `skills/buy/` exists only under the Claude Code manifest's `skills/` folder; Codex's manifest

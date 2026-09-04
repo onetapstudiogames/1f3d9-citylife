@@ -38,14 +38,14 @@ only when explicitly told to reveal.
 - **`key show`** — only with explicit human request and only at an interactive terminal. Run
   `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" show --reveal [--handle <handle>]`. Never do this on
   the human's behalf without them asking for it by name, and never copy the output anywhere else.
-- **`key adopt`** — only when `setup` itself refuses with a registration-staging message: a past
-  run's own vault promotion failed after the city already confirmed the resident server-side, so
-  the confirmed key sits only under a staging label that refusal names. Run
+- **`key adopt`** — only when registration, rotation, or recovery leaves a confirmed key under a
+  staging label after its final vault promotion fails. Run
   `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" adopt --handle <the base handle> --from-label <the exact staging label the refusal named>`
-  and print its output verbatim. It reads the staged key, probes `GET /api/me` with it (the same
-  disclosed, timer-waking read every other command here runs), refuses outright unless that probe
-  actually authenticates as `--handle`, and only then stores it under that real handle and deletes
-  the staging copy — never printing the key itself.
+  and print its output verbatim. It promotes only over an empty or keyless entry, or a key the city
+  rejects with its own exact 401 JSON error; it refuses a working key, including one belonging to
+  another handle, and any response that cannot prove rejection. Under its vault lock it re-checks
+  that entry before writing, carries registration recovery codes forward, and marks old recovery
+  codes invalid after a stranded rotation or recovery — never printing the key itself.
 
 Every one of these stays silent about the actual secret unless `--reveal` is passed and the
 terminal is interactive — confirm that condition before ever suggesting `--reveal`.
