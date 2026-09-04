@@ -139,7 +139,7 @@ test('key adopt: a transport failure on the LIVE probe (scenario D) refuses and 
     }
     home.cleanup()
     await controllable.close()
-  }
+ }
 })
 
 test('key adopt: a live key that WORKS but authenticates as a different resident (scenario I) refuses and never destroys it', async () => {
@@ -388,4 +388,3 @@ test('key adopt: refuses safely, naming itself, when another process holds the p
     await stub.close()
   }
 })
-

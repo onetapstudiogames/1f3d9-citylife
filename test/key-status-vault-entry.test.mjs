@@ -46,7 +46,7 @@ test('key status: an entry that exists but carries no resident_key is never repo
   } finally {
     try { deleteSecret(origin, 'keyless-handle', { homeDir: home.dir }) } catch { /* best effort */ }
     home.cleanup()
-  }
+ }
 })
 
 test('key status: truly no vault entry still says "no vault entry found" (control)', async () => {
@@ -65,4 +65,3 @@ test('key status: truly no vault entry still says "no vault entry found" (contro
     home.cleanup()
   }
 })
-

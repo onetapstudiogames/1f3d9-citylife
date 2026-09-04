@@ -25,7 +25,7 @@ import {
 
 test('parseVaultTargetName splits origin and label around the origin\'s own port colon', () => {
   const parsed = parseVaultTargetName('1f3d9:http://127.0.0.1:54321:alice-agent')
-  assert.deepEqual(parsed, { origin: 'http://127.0.0.1:54321', label: 'alice-agent' })
+ assert.deepEqual(parsed, { origin: 'http://127.0.0.1:54321', label: 'alice-agent' })
 })
 
 test('parseVaultTargetName handles a portless https origin', () => {
@@ -224,4 +224,3 @@ test('classifyGuardResult reports every applicable failure together, not just th
   // findPreexistingLoopbackLeaks already returns []).
   assert.equal(result.messages.length, 2)
 })
-

@@ -125,7 +125,7 @@ test(
       home.cleanup()
       await server.close()
     }
-  },
+ },
 )
 
 test(
@@ -174,4 +174,3 @@ test(
     }
   },
 )
-

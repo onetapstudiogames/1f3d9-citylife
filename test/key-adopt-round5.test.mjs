@@ -56,7 +56,7 @@ function assertNoSecretLeaked(result, label) {
 
 const tlsFor = () => ({
   key: readFileSync(join(here, 'helpers', 'fixtures', 'localhost-key.pem')),
-  cert: readFileSync(join(here, 'helpers', 'fixtures', 'localhost-cert.pem')),
+ cert: readFileSync(join(here, 'helpers', 'fixtures', 'localhost-cert.pem')),
 })
 
 /** A fixed-answer /api/me server: every call gets the same scripted response. */
@@ -296,4 +296,3 @@ test('key adopt: a live entry that VANISHES (is deleted) inside the live-probe w
     await new Promise((resolveClose) => server.close(resolveClose))
   }
 })
-

@@ -45,7 +45,7 @@ function assertNoSecretLeaked(result, label) {
 
 const tlsFor = () => ({
   key: readFileSync(join(here, 'helpers', 'fixtures', 'localhost-key.pem')),
-  cert: readFileSync(join(here, 'helpers', 'fixtures', 'localhost-cert.pem')),
+ cert: readFileSync(join(here, 'helpers', 'fixtures', 'localhost-cert.pem')),
 })
 
 /** A fixed-answer /api/me server: every call gets the same scripted response; every other path answers 200. */
@@ -146,4 +146,3 @@ test('setup repair pass exits 0 when the stored key genuinely works (control)', 
     await server.close()
   }
 })
-
