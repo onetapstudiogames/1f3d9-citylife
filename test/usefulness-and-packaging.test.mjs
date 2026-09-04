@@ -8,7 +8,7 @@ const wallet = await read('references/wallet.md')
 const publicReading = await read('references/public-reading.md')
 const readme = await read('README.md')
 
-test('every visit starts with awareness and resolves actionable credit attention', () => {
+test('every visit starts with awareness without choosing for the resident', () => {
   const visit = skill.slice(skill.indexOf('## Visit 1F3D9'), skill.indexOf('## Trade through 1F3EA'))
   const ordered = ['front_door', 'official_facts', 'me']
   let cursor = -1
@@ -21,9 +21,17 @@ test('every visit starts with awareness and resolves actionable credit attention
   assert.match(visit, /`me\.attention`|`attention`/u)
   assert.match(visit, /net fee-credit balance change/iu)
   assert.match(visit, /first (?:completed )?`me`[\s\S]{0,160}(?:marker|historical change)/iu)
-  assert.match(visit, /ordinary pending[\s\S]{0,180}accept[\s\S]{0,180}before acting/iu)
-  assert.match(visit, /dispute-frozen[\s\S]{0,180}(?:only|sole)[\s\S]{0,80}refus/iu)
+  assert.match(visit, /ordinary pending[\s\S]{0,180}accept[\s\S]{0,180}refus[\s\S]{0,180}leave it pending/iu)
+  assert.match(visit, /dispute-frozen[\s\S]{0,180}cannot be accepted[\s\S]{0,180}refus/iu)
   assert.match(skill, /`pending_gifts_count`/u)
+})
+
+test('the skill supplies mechanics without prescribing resident preferences', () => {
+  assert.match(skill, /does not decide what a resident should care about/iu)
+  assert.doesNotMatch(skill, /do nothing|nothing is (?:always )?valid|nothing is a complete/iu)
+  assert.doesNotMatch(skill, /nothing is worth doing|if you want to be remembered/iu)
+  assert.doesNotMatch(skill, /accept (?:an |each )?ordinary pending gift before/iu)
+  assert.doesNotMatch(skill, /spend merely to appear active|keep the approved leisure balance small/iu)
 })
 
 test('standing and scheduled prompts carry the required three-step visit order', () => {
@@ -82,8 +90,8 @@ test('drawing guidance gives executable limits without becoming a full API manua
 })
 
 test('wallet and snapshot guidance use the current provider-neutral contract', () => {
-  assert.match(skill, /Get a wallet; some wallets allow agent autonomy\./u)
-  assert.match(wallet, /Get a wallet; some wallets allow agent autonomy\./u)
+  assert.match(skill, /Wallet configuration is optional\. Some wallets can enforce autonomous limits\./u)
+  assert.match(wallet, /Wallet configuration is optional\. Some wallets can enforce autonomous limits\./u)
   assert.doesNotMatch(wallet, /Circle Agent Wallet|@circle-fin\/cli|circle wallet/iu)
   assert.match(publicReading, /releases\?q=city-snapshot-/u)
   assert.doesNotMatch(publicReading, /city-snapshot-v1-/u)
@@ -99,10 +107,10 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
   ])
 
   for (const manifest of [claude, codex]) {
-    assert.equal(manifest.version, '1.5.2')
+    assert.equal(manifest.version, '1.5.3')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.5.2')
-  assert.equal(codexMarketplace.plugins[0].version, '1.5.2')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.5.3')
+  assert.equal(codexMarketplace.plugins[0].version, '1.5.3')
   assert.equal(claude.skills, './skills/')
   // Codex gets its own skills subset (see the packaging test below) so that
   // `buy` — which OpenAI's plugin guidelines forbid — is physically absent,

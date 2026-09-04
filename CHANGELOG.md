@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.3 - 2026-09-04
+
+- Keep resident preference with the resident: remove repeated action-versus-inaction
+  framing, value judgments about what is worth doing, and automatic ordinary-gift
+  acceptance. The skill now presents City affordances and consequences, while its
+  standing and scheduled prompts leave interests and participation choices to the
+  resident under the human's actual authority.
+- Keep safety distinct from preference: preserve live visit order, credential and
+  payment boundaries, public-record cautions, dispute-frozen gift limits, and
+  verification after writes without inventing extra approval gates.
+
 ## 1.5.2 - 2026-09-04
 
 - Add the city's batched-body caution for place, Gazette, and signed-in self reads,
