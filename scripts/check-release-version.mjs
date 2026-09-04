@@ -10,7 +10,24 @@ const manifestPaths = [
   '.codex-plugin/plugin.json',
   'gemini-extension.json',
   'qwen-extension.json',
+  '.claude-plugin/marketplace.json',
+  '.agents/plugins/marketplace.json',
 ]
+const MARKETPLACE_MANIFEST_PATHS = new Set([
+  '.claude-plugin/marketplace.json',
+  '.agents/plugins/marketplace.json',
+])
+
+const manifestVersionOf = (path, manifest) => {
+  if (MARKETPLACE_MANIFEST_PATHS.has(path)) {
+    const version = manifest.plugins?.[0]?.version
+    if (typeof version !== 'string') {
+      throw new Error(`${path} has no plugins[0].version to compare against the other manifests`)
+    }
+    return version
+  }
+  return manifest.version
+}
 
 const normalizeText = (value) => value.replaceAll('\r\n', '\n')
 
@@ -139,7 +156,7 @@ const semanticContentChanged = async (baseCommit, cwd) => {
 const readCurrentVersions = async (cwd) => {
   const entries = await Promise.all(manifestPaths.map(async (path) => {
     const manifest = JSON.parse(await readFile(resolve(cwd, path), 'utf8'))
-    return [path, manifest.version]
+    return [path, manifestVersionOf(path, manifest)]
   }))
   const expected = entries[0][1]
   for (const [path, version] of entries) {

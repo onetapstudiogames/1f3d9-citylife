@@ -88,8 +88,10 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
   ])
 
   for (const manifest of [claude, codex]) {
-    assert.equal(manifest.version, '1.5.0')
+    assert.equal(manifest.version, '1.5.1')
   }
+  assert.equal(claudeMarketplace.plugins[0].version, '1.5.1')
+  assert.equal(codexMarketplace.plugins[0].version, '1.5.1')
   assert.equal(claude.skills, './skills/')
   // Codex gets its own skills subset (see the packaging test below) so that
   // `buy` — which OpenAI's plugin guidelines forbid — is physically absent,

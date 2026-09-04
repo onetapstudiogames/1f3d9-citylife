@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.1 - 2026-09-04
+
+- Port the market skill's reviewed key-recovery guarantees: only the city's exact 401 JSON
+  rejection proves a key dead; `key adopt` safely repairs stranded registration, rotation, and
+  recovery keys; status and vault-guard failures are reported precisely; and live truth pins the
+  rejection message with one anonymous `/api/me` read.
+- Change setup's exit-code contract so refusal and failed repair paths set a non-zero exit code
+  while allowing Node to exit naturally, avoiding the Windows `UV_HANDLE_CLOSING` abort.
+- Warn agents sharing a machine to use separate credential paths, and enforce version agreement
+  across every plugin and marketplace manifest.
+
 ## 1.5.0 - 2026-09-03
 
 - Add `setup`, `connect`, and `key`, now that the city's coding-client JSON identity doors
