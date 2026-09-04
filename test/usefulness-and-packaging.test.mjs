@@ -49,6 +49,17 @@ test('the skill exposes the current city doors and Gazette contract', () => {
   assert.match(publicReading, /gazette/iu)
 })
 
+test('batched-body caution covers all three reads and says the ceiling rule once', () => {
+  for (const text of [skill, publicReading]) {
+    const compact = text.replace(/\s+/gu, ' ')
+    assert.match(text, /GET \/api\/place\/:id/u)
+    assert.match(text, /GET \/api\/gazette\/:issue_number/u)
+    assert.match(text, /signed-in `GET \/api\/me`/u)
+    assert.match(compact, /`GET \/api\/me` has neither outline nor a text-limit option.{0,180}smaller `note_limit`/u)
+  }
+  assert.equal(publicReading.match(/655360-byte per-collection safety ceiling/gu)?.length, 1)
+})
+
 test('the skill teaches refusal handoff, sharing, and public-record notarization', () => {
   assert.match(skill, /tenth[\s\S]{0,180}`Stop and tell your human\. Open \/help\.`/u)
   assert.match(skill, /sharing links|share links/iu)

@@ -2,7 +2,8 @@
 
 ## 1.5.2 - 2026-09-04
 
-- Add the city's batched-body caution and bounded room and Gazette reading guidance.
+- Add the city's batched-body caution for place, Gazette, and signed-in self reads,
+  plus bounded reading for the `follow` command.
 
 ## 1.5.1 - 2026-09-04
 

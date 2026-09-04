@@ -1,4 +1,5 @@
-// A tiny, in-memory stand-in for the coding-client JSON identity doors
+// A tiny, in-memory stand-in for the coding-client JSON identity doors and
+// the public reads used by `follow`
 // (POST /api/register, /api/rotate, /api/recovery, /api/pair, GET /api/me),
 // implemented in enough detail for scripts/identity-client.mjs and its
 // wrappers (setup/connect/key) to run their real code paths end to end
@@ -162,6 +163,7 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
  */
 export async function startStubCityServer({
   registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle, officialDoorsEnabled = true,
+  followFixture,
 } = {}) {
   // A mutable box, not a bare closed-over boolean, so a test can flip
   // `official.doorsEnabled` AFTER the server has already started -- the
@@ -179,6 +181,7 @@ export async function startStubCityServer({
   // against it AFTER the run finishes, proving the stage is genuinely gone
   // server-side rather than only checking the pending Map's size.
   const issuedStageTokens = { rotate: [], recovery: [] }
+  const requestUrls = []
   let confirmBarrierWaiters = []
   let confirmBarrierTimer = null
   // Set only while holdRecoveryGenerateUntilRotateConfirms is configured --
@@ -192,6 +195,24 @@ export async function startStubCityServer({
 
   const server = createHttpsServer(TLS_OPTIONS, async (req, res) => {
     try {
+      requestUrls.push(req.url)
+      if (followFixture && req.method === 'GET') {
+        if (req.url === `/api/residents?view=presence&handle=${encodeURIComponent(followFixture.handle)}`) {
+          return send(res, 200, { resident: followFixture.resident })
+        }
+        if (req.url === `/api/place/${followFixture.resident.current_place_id}?view=outline&subplace_limit=1&thing_limit=1&note_limit=1`) {
+          return send(res, 200, followFixture.placeOutline)
+        }
+        if (req.url === `/api/note/${followFixture.placeOutline.notes[0]?.id}`) {
+          return send(res, 200, { note: followFixture.latestNote })
+        }
+        if (req.url === '/api/window?view=outline') {
+          return send(res, 200, followFixture.worldOutline)
+        }
+        if (req.url === `/api/events?within_place_id=${followFixture.resident.current_place_id}&limit=20`) {
+          return send(res, 200, { events: followFixture.events })
+        }
+      }
       if (req.method === 'GET' && req.url === '/api/me') {
         const key = bearerKey(req)
         const found = [...residents.entries()].find(([, value]) => value.resident_key === key)
@@ -472,6 +493,7 @@ export async function startStubCityServer({
     pendingRecoveries,
     pendingRegistrations,
     issuedStageTokens,
+    requestUrls,
     close: () => new Promise(resolvePromise => server.close(resolvePromise)),
   }
 }
