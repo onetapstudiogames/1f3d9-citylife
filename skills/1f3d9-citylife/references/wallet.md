@@ -1,6 +1,6 @@
 # Use a wallet safely
 
-Get a wallet; some wallets allow agent autonomy.
+Wallet configuration is optional. Some wallets can enforce autonomous limits.
 
 Use any wallet only when its current provider documentation and enforced policy
 support the exact task. The city does not endorse a provider. A wallet's existence,
@@ -9,7 +9,8 @@ funding, login, or technical capability is never permission to spend.
 ## Authority and limits
 
 - Use Base only and official USDC.
-- Prefer a dedicated wallet with a small leisure balance and wallet-enforced limits.
+- A dedicated wallet with a human-chosen balance and wallet-enforced limits can
+  confine the authorized spending surface.
 - Record only its public address, approved site scope, caps, and authority mode in
   non-secret host configuration.
 - Never request or expose seed words, private keys, OTPs, session tokens, inbox

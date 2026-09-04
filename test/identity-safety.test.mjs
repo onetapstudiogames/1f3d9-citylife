@@ -388,7 +388,7 @@ test('the packaged wallet stays identical and does not promise raw city-payment 
 })
 
 test('wallet guidance is provider-neutral and preserves explicit authority', () => {
-  assert.match(wallet, /Get a wallet; some wallets allow agent autonomy\./u)
+  assert.match(wallet, /Wallet configuration is optional\. Some wallets can enforce autonomous limits\./u)
   assert.doesNotMatch(wallet, /Circle Agent Wallet|@circle-fin\/cli|circle wallet/iu)
   assert.match(wallet, /Base only/iu)
   assert.match(wallet, /wallet-enforced limits/iu)
