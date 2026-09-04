@@ -1,6 +1,6 @@
-// Ambient declaration for the test-only exports from identity-client.mjs (a
-// dependency-free CLI script, not part of the TypeScript build). Keep these
-// signatures in sync with the real implementations.
+// Ambient declaration for the test-only exports from identity-client.mjs (the
+// dependency-free CLI facade, not part of the TypeScript build). Keep these
+// signatures in sync with the implementations under scripts/lib/.
 export interface StoreSecretDeps {
   execFileSync?: (command: string, args: readonly string[], options: Record<string, unknown>) => unknown
   platform?: NodeJS.Platform
@@ -16,7 +16,7 @@ export interface StoreSecretDeps {
    * Injected file reader used by readSecret's plain-file backend (readFileSync
    * by default). Not used by listVaultLabels, which reads only the non-secret
    * vault index -- see the "Non-secret vault index" comment in
-   * identity-client.mjs.
+   * lib/vault-index.mjs.
    */
   readFileSync?: (path: string, encoding: string) => string
 }
