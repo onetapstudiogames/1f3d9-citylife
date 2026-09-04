@@ -8,7 +8,8 @@ import { fetchEvents, fetchWorldOutline, CITY_ORIGIN } from './city.mjs'
 import { eventWords } from './grid.mjs'
 
 const fetchPresence = (handle) => fetchJsonSafe(`${CITY_ORIGIN}/api/residents?view=presence&handle=${encodeURIComponent(handle)}`)
-const fetchPlace = (placeId) => fetchJsonSafe(`${CITY_ORIGIN}/api/place/${encodeURIComponent(placeId)}`)
+const fetchPlace = (placeId) => fetchJsonSafe(`${CITY_ORIGIN}/api/place/${encodeURIComponent(placeId)}?view=outline&subplace_limit=1&thing_limit=1&note_limit=1`)
+const fetchNote = (noteId) => fetchJsonSafe(`${CITY_ORIGIN}/api/note/${encodeURIComponent(noteId)}`)
 
 const trim = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text)
 
@@ -38,8 +39,10 @@ export const renderFollowSnapshot = async (handle) => {
   lines.push(others.length ? `Who's around: ${others.map((r) => r.handle).join(', ')}${rosterNote}` : `Who's around: nobody else, as far as this read shows${rosterNote}`)
 
   if (placeResult.ok) {
-    lines.push(`Things here: ${placeResult.data.things?.length ?? 0}`)
-    const latestNote = placeResult.data.notes?.[0]
+    lines.push(`Things here: ${placeResult.data.things_page?.total_items ?? 0}`)
+    const latestNoteId = placeResult.data.notes?.[0]?.id
+    const latestNoteResult = latestNoteId ? await fetchNote(latestNoteId) : null
+    const latestNote = latestNoteResult?.ok ? latestNoteResult.data.note : null
     if (latestNote) {
       lines.push(`Latest note here: "${trim(latestNote.body.replace(/\s+/gu, ' '), 100)}" — ${latestNote.author}`)
     }
