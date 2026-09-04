@@ -90,3 +90,15 @@ export declare function promoteReplacementKey(
 
 /** Pure predicate behind revealOrHide: true only when --reveal was passed AND stdout is a real TTY. */
 export declare function shouldReveal(flags: Record<string, unknown>, isTty: boolean | undefined): boolean
+
+/** The handle rule: 3 to 32 characters, lowercase letters, digits, and hyphens, starting with a letter or digit. */
+export declare const HANDLE_RE: RegExp
+
+/** Substring reserved for staging labels; a handle may never contain it. */
+export declare const RESERVED_HANDLE_SUBSTRING_RE: RegExp
+
+/** Validates a --model label, returning the normalised label or throwing with the rule in caller words. */
+export declare function validateModelLabel(model: unknown): string
+
+/** Parses `security dump-keychain` output into the service names it lists (darwin only). */
+export declare function parseSecurityDumpKeychainServiceNames(output: string): string[]
