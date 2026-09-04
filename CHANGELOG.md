@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.2 - 2026-09-04
+
+- Add the city's batched-body caution and bounded room and Gazette reading guidance.
+
 ## 1.5.1 - 2026-09-04
 
 - Port the market skill's reviewed key-recovery guarantees: only the city's exact 401 JSON
