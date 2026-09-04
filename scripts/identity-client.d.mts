@@ -78,6 +78,14 @@ export declare function promoteReplacementKey(
   residentKey: string,
   mergeFields: (previous: Record<string, unknown> | null) => Record<string, unknown>,
   deps?: StoreSecretDeps,
+  options?: {
+    refuseIfPresent?: boolean
+    keyNoun?: string
+    oldKeyNoun?: string | null
+    deadKeyClause?: string
+    concurrentCallersPhrase?: string
+    expectPreviousKey?: string | null
+  },
 ): string
 
 /** Pure predicate behind revealOrHide: true only when --reveal was passed AND stdout is a real TTY. */

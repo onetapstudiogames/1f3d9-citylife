@@ -101,6 +101,9 @@ function parseArgs(argv) {
   return flags
 }
 
+class SetupRefusal extends Error {}
+
+async function main() {
 const flags = parseArgs(process.argv.slice(2))
 const rawOrigin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
 const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
@@ -114,7 +117,7 @@ try {
 } catch (error) {
   console.error(`setup: ${error.message}`)
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 
 const identityClientPath = resolve(pluginRoot, 'scripts', 'identity-client.mjs')
@@ -143,7 +146,7 @@ try {
     'directly (for example `key status --handle <handle>` for the handle you suspect), then re-run setup.',
   )
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 
 // Throws SecretReadFailure (never silently returns keyWorks:false for it) --
@@ -190,7 +193,7 @@ async function verifyStoredKeyOrRefuse(handle, label) {
       're-run setup. Never create a second identity to work around an unreadable one.',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
 }
 
@@ -261,6 +264,7 @@ async function report(handle, precomputedKeyCheck) {
   const keyCheck = precomputedKeyCheck ?? await verifyStoredKeyOrRefuse(handle, 'setup')
   say(`- public city handle: ${handle}`)
   say(`- secret reference works: ${keyCheck.keyWorks ? 'yes' : 'no'} (${keyCheck.note})`)
+  if (!keyCheck.keyWorks) process.exitCode = 1
   say(`- wallet mode: ${flags.wallet === true ? 'requested (see references/wallet.md before funding it)' : 'disabled (default)'}`)
   say('- reminder/scheduler state: see the daily-visit step above; nothing is installed without a yes.')
   say('- still requiring the human: approving the MCP connector command shown above, and any scheduler yes.')
@@ -282,7 +286,7 @@ if (existing?.handle) {
   say('')
   await finishAsRepair(existing.handle, existing.client_class)
   console.log(lines.join('\n'))
-  process.exit(0)
+  return
 }
 
 const handle = typeof flags.handle === 'string' ? flags.handle : null
@@ -297,7 +301,7 @@ if (!handle || !clientClass) {
     'human and the exact next command to run once you have a clear yes.',
   )
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 
 // Checked locally, before any approval step or network call, against the
@@ -311,7 +315,7 @@ if (!HANDLE_RE.test(handle)) {
     'that already matches this rule, then re-run.',
   )
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 
 // Same reservation identity-client.mjs's own register()/rotate() enforce --
@@ -325,7 +329,7 @@ if (RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
     'staging labels. Choose a handle that does not contain that sequence, then re-run.',
   )
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 
 // Same rule identity-client.mjs's own register() enforces on --model (see
@@ -338,7 +342,7 @@ const modelError = validateModelLabel(model)
 if (modelError) {
   console.error(`setup: ${modelError}. Fix --model, then re-run.`)
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 
 // Before ever attempting to register, check whether this host's vault
@@ -358,7 +362,7 @@ if (priorVaultEntry.mismatchedHandle) {
     'vault entry before retrying. Never overwrite it or register a fresh identity to work around this.',
   )
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 if (priorVaultEntry.keyWorks && !newIdentity) {
   say(`=== A working identity for "${handle}" at ${origin} already exists ===`)
@@ -367,7 +371,7 @@ if (priorVaultEntry.keyWorks && !newIdentity) {
   say('')
   await finishAsRepair(handle, clientClass, priorVaultEntry)
   console.log(lines.join('\n'))
-  process.exit(0)
+  return
 }
 if (priorVaultEntry.keyWorks && newIdentity) {
   say(`--new-identity was passed, so proceeding to register "${handle}" even though a working vault entry`)
@@ -402,7 +406,7 @@ if (!newIdentity) {
       'new resident is really intended regardless.',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
 
   // A registration staging label that outlived its own run is a different,
@@ -434,7 +438,7 @@ if (!newIdentity) {
       'is still intended.',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
 
   const otherLabels = allLabels.filter(label => label !== handle)
@@ -451,7 +455,7 @@ if (!newIdentity) {
       'listVaultLabels cannot always tell the two apart from a Credential Manager scrape alone.)',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
 }
 
@@ -604,7 +608,7 @@ if (!approval.approved) {
       '(no --human-approved) once a human is actually present to answer.',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
   if (approval.declinedAfterToken) {
     // The token was genuinely valid (and is now spent) -- the interactive
@@ -618,7 +622,7 @@ if (!approval.approved) {
       'yes to put to the human.',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
   if (approval.doorsDormant) {
     // Unlike every other branch above, the token here was NEVER consumed
@@ -634,7 +638,7 @@ if (!approval.approved) {
       'command with the same --human-approved token once the doors are enabled again.',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
   console.error(
     `setup: before registering, put this exact question to the human: "${approvalQuestion(handle, clientClass)}" ` +
@@ -652,7 +656,7 @@ if (!approval.approved) {
     'public record, not a defeated security control; this script never claims otherwise.',
   )
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 
 say(`=== Step 2: Register "${handle}" through the coding-client JSON identity door ===`)
@@ -693,7 +697,7 @@ if (flags.reveal === true) {
       '--reveal and read the key back afterward with `key show --reveal` at one.',
     )
     process.exitCode = 1
-    process.exit()
+    throw new SetupRefusal()
   }
   console.log(lines.join('\n'))
   lines.length = 0
@@ -709,7 +713,7 @@ if (registerResult.status !== 0) {
   console.log(lines.join('\n'))
   console.error('setup: registration did not complete; nothing else below was configured.')
   process.exitCode = 1
-  process.exit()
+  throw new SetupRefusal()
 }
 say('')
 
@@ -721,3 +725,10 @@ printWalletStep()
 await report(registeredHandle)
 
 console.log(lines.join('\n'))
+}
+
+try {
+  await main()
+} catch (error) {
+  if (!(error instanceof SetupRefusal)) throw error
+}

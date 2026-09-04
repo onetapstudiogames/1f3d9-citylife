@@ -550,6 +550,42 @@ test('promoteReplacementKey with refuseIfPresent:true refuses to overwrite a liv
   }
 })
 
+test('promoteReplacementKey uses caller-neutral wording when a recovery staging copy vanished', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'recovery-race'
+  const stagingLabel = `${handle}--pending-recovery`
+  const liveValue = { kind: 'resident', handle, resident_key: 'live-key', origin }
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') {
+      if (args[2] === stagingLabel) throw new Error('not found')
+      return Buffer.from(JSON.stringify(liveValue), 'utf8').toString('base64')
+    }
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'replacement-key', () => ({}), {
+        execFileSync,
+        platform: 'darwin',
+        homeDir,
+      }, {
+        refuseIfPresent: true,
+        keyNoun: 'the confirmed replacement key from this recovery',
+      }),
+      (error) => {
+        assert.match(error.message, /when it was first confirmed/iu)
+        assert.doesNotMatch(error.message, /this registration confirmed/iu)
+        assert.doesNotMatch(error.message, /replacement-key|live-key/u)
+        return true
+      },
+    )
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
 test('promoteReplacementKey with refuseIfPresent:true still writes normally when nothing is there yet', () => {
   const origin = 'https://example.invalid'
   const handle = 'no-race-handle'

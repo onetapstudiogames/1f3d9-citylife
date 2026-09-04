@@ -10,18 +10,22 @@
 // {"mode":"later_holder_notice"} read) because every current caller needs
 // the handle this read returns to detect a mismatched vault label; the
 // passive read's own contract does not return one. Never throws — callers
-// get { ok, handle, error } and decide what to say.
+// get { ok, handle, error, status, rejected } and decide what to say.
 
 import { assertAllowedOrigin } from './origin-guard.mjs'
 
 const DEFAULT_TIMEOUT_MS = 10_000
+
+// The city server's exact GET /api/me credential refusal. check:live-truth
+// pins this unpublished string anonymously so a server reword fails closed.
+export const CITY_REJECTION_MESSAGE = 'resident sign-in failed because Authorization: Bearer is missing or does not contain a current city key; send your saved current key as Authorization: Bearer <key>'
 
 export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT_MS, allowOrigin } = {}) {
   let safeOrigin
   try {
     safeOrigin = assertAllowedOrigin(origin, { allowOrigin })
   } catch (error) {
-    return { ok: false, error: error.message }
+    return { ok: false, error: error.message, rejected: false }
   }
   try {
     const response = await fetch(`${safeOrigin}/api/me`, {
@@ -42,10 +46,15 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
       // handled below
     }
     if (!response.ok || !parsed) {
-      return { ok: false, error: parsed?.error ?? `HTTP ${response.status}` }
+      return {
+        ok: false,
+        error: parsed?.error ?? `HTTP ${response.status}`,
+        status: response.status,
+        rejected: response.status === 401 && parsed != null && parsed.error === CITY_REJECTION_MESSAGE,
+      }
     }
     return { ok: true, handle: parsed.handle ?? null }
   } catch (error) {
-    return { ok: false, error: error?.message ?? String(error) }
+    return { ok: false, error: error?.message ?? String(error), rejected: false }
   }
 }

@@ -110,8 +110,13 @@ function requireStoredKey(handle) {
     process.exitCode = 1
     return null
   }
-  if (!stored.found || typeof stored.value?.resident_key !== 'string') {
+  if (!stored.found) {
     console.error(`key: no vault entry found for "${handle}" at ${origin}.`)
+    process.exitCode = 1
+    return null
+  }
+  if (typeof stored.value?.resident_key !== 'string') {
+    console.error(`key: a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field.`)
     process.exitCode = 1
     return null
   }
@@ -126,7 +131,15 @@ async function status() {
   const probe = await probeMe(origin, residentKey, { allowOrigin })
   console.log(`handle: ${handle}`)
   if (!probe.ok) {
-    console.log(`stored key: does not work (${probe.error})`)
+    if (probe.rejected) {
+      console.log(`stored key: does not work (${probe.error})`)
+    } else {
+      console.log(
+        `stored key: could not be verified right now (${probe.error}); this is not evidence the key is dead -- ` +
+        'retry when the city is reachable.',
+      )
+    }
+    process.exitCode = 1
     return
   }
   if (probe.handle && probe.handle !== handle) {
@@ -307,6 +320,16 @@ async function adopt() {
     process.exitCode = 1
     return
   }
+  if (stagingLabel === handle) {
+    console.error(
+      `key adopt: --from-label and --handle are both "${handle}"; there is no staging copy to move -- a key ` +
+      'already stored under its real handle is not something adopt does anything with. Run `key status ' +
+      `--handle ${handle}\` to check whether it works, or, if you believe this label is a redundant leftover ` +
+      'copy rather than the resident\'s real entry, delete it by hand instead of running adopt.',
+    )
+    process.exitCode = 1
+    return
+  }
   let stored
   try {
     stored = readSecret(origin, stagingLabel)
@@ -326,7 +349,14 @@ async function adopt() {
   console.log('key adopt: probed the staged key with one GET /api/me read — this wakes any due timers and')
   console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read.')
   if (!probe.ok) {
-    console.error(`key adopt: the key stored under "${stagingLabel}" does not work (${probe.error}); refusing to adopt it.`)
+    if (probe.rejected) {
+      console.error(`key adopt: the key stored under "${stagingLabel}" does not work (${probe.error}); refusing to adopt it.`)
+    } else {
+      console.error(
+        `key adopt: the key stored under "${stagingLabel}" could not be verified right now (${probe.error}); ` +
+        'nothing was changed. Retry this exact adopt command when the city is reachable.',
+      )
+    }
     process.exitCode = 1
     return
   }
@@ -339,12 +369,90 @@ async function adopt() {
     process.exitCode = 1
     return
   }
+
+  let existingLive
+  try {
+    existingLive = readSecret(origin, handle)
+  } catch (error) {
+    if (!(error instanceof SecretReadFailure)) throw error
+    console.error(
+      `key adopt: could not read the existing vault entry for "${handle}" (${error.message}); refusing to ` +
+      `guess whether it is safe to overwrite. The staging copy at "${stagingLabel}" -- already proven to ` +
+      'authenticate as this handle -- is untouched. Resolve the unreadable entry by hand, then run this ' +
+      'exact adopt command again.',
+    )
+    process.exitCode = 1
+    return
+  }
+
+  let liveIsDead = false
+  let deadReason = null
+  if (existingLive.found && typeof existingLive.value?.resident_key !== 'string') {
+    console.log(`key adopt: an entry exists at "${handle}" but holds no resident_key; replacing it.`)
+    liveIsDead = true
+    deadReason = 'it held no resident_key'
+  } else if (existingLive.found) {
+    const liveProbe = await probeMe(origin, existingLive.value.resident_key, { allowOrigin })
+    console.log(
+      liveProbe.ok
+        ? `key adopt: one me read on the existing entry at "${handle}": OK (handle: ${liveProbe.handle ?? 'unknown'}).`
+        : `key adopt: one me read on the existing entry at "${handle}": FAILED (${liveProbe.error}).`,
+    )
+    if (liveProbe.ok && liveProbe.handle === handle) {
+      console.error(
+        `key adopt: refusing -- the vault already holds a live entry for "${handle}" that ALSO currently ` +
+        'authenticates as that same handle, so adopt will not silently pick one to keep. Read both before ' +
+        `deleting either: \`key show --handle ${handle} --reveal\` for the live entry, and ` +
+        `\`key show --handle ${stagingLabel} --reveal\` for the staged copy.`,
+      )
+      process.exitCode = 1
+      return
+    }
+    if (liveProbe.ok) {
+      console.error(
+        `key adopt: refusing -- the vault entry at "${handle}" holds a key that WORKS, but authenticates as ` +
+        `"${liveProbe.handle}", not "${handle}" -- it belongs to a different resident, not a dead entry. ` +
+        `Nothing was changed. Recover the mislabelled entry first: \`key show --handle ${handle} --reveal\` ` +
+        `reads it, and \`key adopt --handle ${liveProbe.handle} --from-label ${handle}\` moves it to its real ` +
+        `handle. The staged key at "${stagingLabel}" is untouched; re-run this adopt once "${handle}" is clear.`,
+      )
+      process.exitCode = 1
+      return
+    }
+    if (!liveProbe.rejected) {
+      console.error(
+        `key adopt: could not verify whether the existing entry at "${handle}" is dead (${liveProbe.error}); ` +
+        'nothing was changed. Retry this exact adopt command once the city is reachable. The staged key at ' +
+        `"${stagingLabel}" is untouched.`,
+      )
+      process.exitCode = 1
+      return
+    }
+    liveIsDead = true
+    deadReason = `the city rejected it (${liveProbe.error})`
+  }
+
   let location
   try {
-    location = promoteReplacementKey(origin, handle, stagingLabel, residentKey, () => ({
-      ...(typeof stored.value.client_class === 'string' ? { client_class: stored.value.client_class } : {}),
-      ...(Array.isArray(stored.value.recovery_codes) ? { recovery_codes: stored.value.recovery_codes } : {}),
-    }), {}, { refuseIfPresent: true })
+    location = promoteReplacementKey(origin, handle, stagingLabel, residentKey, previous => ({
+      ...(typeof stored.value.client_class === 'string'
+        ? { client_class: stored.value.client_class }
+        : previous?.client_class ? { client_class: previous.client_class } : {}),
+      ...(Array.isArray(stored.value.recovery_codes)
+        ? { recovery_codes: stored.value.recovery_codes }
+        : (liveIsDead ? { recovery_codes_invalidated_at: new Date().toISOString() } : {})),
+    }), {}, {
+      refuseIfPresent: !existingLive.found,
+      expectPreviousKey: existingLive.found
+        ? (typeof existingLive.value?.resident_key === 'string' ? existingLive.value.resident_key : null)
+        : undefined,
+      keyNoun: liveIsDead
+        ? 'the already-authenticated replacement key this adopt is moving'
+        : 'the already-authenticated key this adopt is moving',
+      oldKeyNoun: liveIsDead ? 'the previous entry at this handle' : null,
+      deadKeyClause: "this adopt's own check already found the previous entry unusable",
+      concurrentCallersPhrase: 'another registration, rotation, recovery, or adopt',
+    })
   } catch (error) {
     console.error(`key adopt: ${error.message}`)
     process.exitCode = 1
@@ -352,7 +460,12 @@ async function adopt() {
   }
   console.log(`handle: ${handle}`)
   console.log(`stored: ${location}`)
-  console.log(`key adopt: moved the confirmed key from "${stagingLabel}" to "${handle}" and deleted the staging copy.`)
+  console.log(
+    liveIsDead
+      ? `key adopt: moved the confirmed key from "${stagingLabel}" to "${handle}", replacing the entry found ` +
+        `there -- ${deadReason} -- and deleted the staging copy.`
+      : `key adopt: moved the confirmed key from "${stagingLabel}" to "${handle}" and deleted the staging copy.`,
+  )
 }
 
 function show() {

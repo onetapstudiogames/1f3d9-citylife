@@ -37,7 +37,7 @@
 
 import { execFileSync, spawnSync } from 'node:child_process'
 import { readdirSync, statSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { homedir, platform } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -116,6 +116,22 @@ function classifyVaultTargetOrigin(name) {
   return 'other'
 }
 
+const VAULT_TARGET_PATTERN = /^1f3d9:(https?:\/\/[^:/]+(?::\d+)?)(?:\/[^:]*)?:(.+)$/u
+
+function parseVaultTargetName(name) {
+  const match = VAULT_TARGET_PATTERN.exec(name)
+  return match ? { origin: match[1], label: match[2] } : null
+}
+
+function isLoopbackOrigin(origin) {
+  try {
+    const hostname = new URL(origin).hostname
+    return hostname === 'localhost' || hostname === '127.0.0.1'
+  } catch {
+    return false
+  }
+}
+
 /**
  * Enumerates this plugin's own `1f3d9:`-prefixed platform-vault entries.
  * Returns `{ ok: true, names }` on a successful (possibly empty)
@@ -140,8 +156,8 @@ function classifyVaultTargetOrigin(name) {
  * a prior copy here did not run unescapeSecurityDumpString, so it decoded a
  * non-ASCII label byte differently (mojibake) than the shared parser does.
  */
-function snapshotPlatformVaultNames() {
-  if (process.platform === 'win32') {
+function snapshotPlatformVaultTargets() {
+  if (platform() === 'win32') {
     try {
       const output = execFileSync('cmdkey', ['/list'], { encoding: 'utf8' })
       const names = []
@@ -150,12 +166,12 @@ function snapshotPlatformVaultNames() {
         const index = target.indexOf(VAULT_TARGET_PREFIX)
         if (index !== -1) names.push(target.slice(index))
       }
-      return { ok: true, names: names.sort() }
+      return { supported: true, ok: true, names: names.sort() }
     } catch {
-      return { ok: false, names: [] }
+      return { supported: true, ok: false, names: [] }
     }
   }
-  if (process.platform === 'darwin') {
+  if (platform() === 'darwin') {
     try {
       const output = execFileSync('security', ['dump-keychain'], {
         encoding: 'utf8',
@@ -163,15 +179,25 @@ function snapshotPlatformVaultNames() {
         timeout: 10_000,
       })
       const names = parseSecurityDumpKeychainServiceNames(output).filter(name => name.startsWith(VAULT_TARGET_PREFIX))
-      return { ok: true, names: names.sort() }
+      return { supported: true, ok: true, names: names.sort() }
     } catch {
-      return { ok: false, names: [] }
+      return { supported: true, ok: false, names: [] }
     }
   }
   // Any other platform has no platform-vault tool this guard knows how to
   // ask at all -- a genuine, successful "nothing to enumerate here", never
   // a failure.
-  return { ok: true, names: [] }
+  return { supported: false, ok: true, names: [] }
+}
+
+const snapshotPlatformVaultNames = snapshotPlatformVaultTargets
+
+function findPreexistingLoopbackLeaks(targetsBefore) {
+  if (!targetsBefore.supported || targetsBefore.ok === false) return []
+  return targetsBefore.names.filter(name => {
+    const parsed = parseVaultTargetName(name)
+    return parsed !== null && isLoopbackOrigin(parsed.origin)
+  })
 }
 
 function diffNameSets(before, after) {
@@ -215,6 +241,47 @@ function formatDiff(diff, before, after) {
   return lines.join('\n')
 }
 
+function formatEnumerationFailure(before, after) {
+  const tool = platform() === 'win32' ? 'cmdkey /list' : 'security dump-keychain'
+  const failedOn = before.ok === false ? 'BEFORE' : 'AFTER'
+  return (
+    `the platform vault could not be enumerated, this run proves nothing about it (${tool} failed on the ` +
+    `${failedOn} read). Investigate why the enumeration tool failed on this host, then re-run.`
+  )
+}
+
+function formatTargetDiff(diff) {
+  const lines = [`this host's real OS credential vault entries under the "${VAULT_TARGET_PREFIX}" prefix changed during this test run`]
+  for (const name of diff.added) lines.push(`  + ${name}`)
+  for (const name of diff.removed) lines.push(`  - ${name}`)
+  return lines.join('\n')
+}
+
+function formatPreexistingLoopbackLeaks(leaks) {
+  const noun = leaks.length === 1 ? 'entry' : 'entries'
+  return [
+    `this host's real OS credential vault already held ${leaks.length} loopback-origin "${VAULT_TARGET_PREFIX}" ${noun} BEFORE this run started`,
+    ...leaks.map(name => `  ! ${name}`),
+  ].join('\n')
+}
+
+function classifyGuardResult({ before, after, targetsBefore, targetsAfter }) {
+  const diff = diffSnapshots(before, after)
+  const enumerationFailed = targetsBefore.ok === false || targetsAfter.ok === false
+  const targetsComparable = targetsBefore.supported && targetsAfter.supported && !enumerationFailed
+  const targetDiff = targetsComparable
+    ? diffNameSets(targetsBefore.names, targetsAfter.names)
+    : { added: [], removed: [] }
+  const preexistingLoopbackLeaks = findPreexistingLoopbackLeaks(targetsBefore)
+
+  const messages = []
+  if (enumerationFailed) messages.push(formatEnumerationFailure(targetsBefore, targetsAfter))
+  if (isDrift(diff)) messages.push(formatDiff(diff, before, after))
+  if (targetDiff.added.length > 0 || targetDiff.removed.length > 0) messages.push(formatTargetDiff(targetDiff))
+  if (preexistingLoopbackLeaks.length > 0) messages.push(formatPreexistingLoopbackLeaks(preexistingLoopbackLeaks))
+  return { messages, failed: messages.length > 0 }
+}
+
 /**
  * Runs the whole guarded suite once and returns the exit code it should
  * produce. Pulled out of top-level script code (rather than running
@@ -226,72 +293,22 @@ function formatDiff(diff, before, after) {
 function runGuard(extraTestArgs = []) {
   const vaultDir = join(homedir(), VAULT_DIR_NAME)
   const before = snapshotDir(vaultDir)
-  const platformVaultBefore = snapshotPlatformVaultNames()
-
-  // Checked from the BEFORE snapshot alone, before the test suite even
-  // runs: a stub city server (the only kind this repo's own tests ever
-  // start) is loopback-only, so a loopback-origin `1f3d9:` entry already
-  // sitting in the REAL platform vault before this run started can only be
-  // residue some PAST run leaked in -- this run did not cause it, but it
-  // must not go unreported just because the diff below only compares
-  // before/after within the CURRENT run. Never trips on a real
-  // `1f3d9:https://1f3d9.com:<handle>` entry -- an operator's own resident
-  // identity is expected there and is never drift.
-  const preexistingLoopbackLeak = platformVaultBefore.ok
-    ? platformVaultBefore.names.filter(name => classifyVaultTargetOrigin(name) === 'loopback')
-    : []
+  const targetsBefore = snapshotPlatformVaultTargets()
 
   const result = spawnSync(process.execPath, ['--test', ...extraTestArgs], {
     stdio: 'inherit',
   })
 
   const after = snapshotDir(vaultDir)
-  const diff = diffSnapshots(before, after)
-  const platformVaultAfter = snapshotPlatformVaultNames()
-  const enumerationFailed = !platformVaultBefore.ok || !platformVaultAfter.ok
-  const platformVaultDiff = platformVaultBefore.ok && platformVaultAfter.ok
-    ? diffNameSets(platformVaultBefore.names, platformVaultAfter.names)
-    : { added: [], removed: [] }
-  const platformVaultDrifted = platformVaultDiff.added.length > 0 || platformVaultDiff.removed.length > 0
+  const targetsAfter = snapshotPlatformVaultTargets()
+  const { messages, failed } = classifyGuardResult({ before, after, targetsBefore, targetsAfter })
+
+  for (const message of messages) {
+    console.error(`\nidentity-vault-home-guard: ${message}`)
+  }
 
   let exitCode
-  if (enumerationFailed) {
-    const tool = process.platform === 'win32' ? 'cmdkey /list' : 'security dump-keychain'
-    console.error(
-      '\nidentity-vault-home-guard: the platform vault could not be enumerated, this run proves nothing ' +
-      `about it (${tool} failed on the ${!platformVaultBefore.ok ? 'BEFORE' : 'AFTER'} read). A failed ` +
-      'enumeration is never silently treated as "found nothing" -- doing that could either hide a real leak ' +
-      'or report every pre-existing entry as spurious drift, depending on which call failed. Investigate why ' +
-      'the enumeration tool failed on this host, then re-run.',
-    )
-    exitCode = 1
-  } else if (preexistingLoopbackLeak.length > 0) {
-    console.error(
-      '\nidentity-vault-home-guard: the REAL platform vault already held a loopback-origin `1f3d9:` entry ' +
-      "before this run even started -- a stub city server (the only kind this repo's own tests ever start) " +
-      'is always loopback-only, so this means some PAST test run leaked a real secret into the operator\'s ' +
-      'real vault. Never trips on a real `1f3d9:https://1f3d9.com:<handle>` entry -- an operator\'s own ' +
-      `resident identity is expected there and is never drift. Leaked entries:\n` +
-      preexistingLoopbackLeak.map(name => `  - ${name}`).join('\n'),
-    )
-    exitCode = 1
-  } else if (isDrift(diff) || platformVaultDrifted) {
-    if (isDrift(diff)) console.error(`\nidentity-vault-home-guard: ${formatDiff(diff, before, after)}`)
-    if (platformVaultDrifted) {
-      const lines = [
-        'identity-vault-home-guard: the real platform credential vault ' +
-        `(${process.platform === 'win32' ? 'Windows Credential Manager' : 'macOS Keychain'}) gained or lost a ` +
-        '1f3d9: entry during this test run -- names only, never values:',
-      ]
-      for (const name of platformVaultDiff.added) lines.push(`  + ${name}`)
-      for (const name of platformVaultDiff.removed) lines.push(`  - ${name}`)
-      lines.push(
-        'This is a real secret, not the non-secret vault-index.json the directory snapshot above already ' +
-        'covers -- a temp HOME does not isolate this platform vault. Find the call site (search test/*.test.mjs ' +
-        'for a vault function call missing homeDir) and fix it there.',
-      )
-      console.error(`\n${lines.join('\n')}`)
-    }
+  if (failed) {
     exitCode = 1
   } else if (result.status !== 0) {
     exitCode = result.status ?? 1
@@ -312,4 +329,6 @@ if (isDirectRun) {
 // module never runs the guard itself -- only isDirectRun above does that.
 export {
   classifyVaultTargetOrigin, snapshotPlatformVaultNames, snapshotDir, diffNameSets, diffSnapshots, isDrift, runGuard,
+  findPreexistingLoopbackLeaks, isLoopbackOrigin, parseVaultTargetName,
+  snapshotPlatformVaultTargets, classifyGuardResult,
 }
