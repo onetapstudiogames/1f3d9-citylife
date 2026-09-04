@@ -1,6 +1,6 @@
-// Ambient declaration for the test-only exports from identity-client.mjs (a
-// dependency-free CLI script, not part of the TypeScript build). Keep these
-// signatures in sync with the real implementations.
+// Ambient declaration for the test-only exports from identity-client.mjs (the
+// dependency-free CLI facade, not part of the TypeScript build). Keep these
+// signatures in sync with the implementations under scripts/lib/.
 export interface StoreSecretDeps {
   execFileSync?: (command: string, args: readonly string[], options: Record<string, unknown>) => unknown
   platform?: NodeJS.Platform
@@ -16,7 +16,7 @@ export interface StoreSecretDeps {
    * Injected file reader used by readSecret's plain-file backend (readFileSync
    * by default). Not used by listVaultLabels, which reads only the non-secret
    * vault index -- see the "Non-secret vault index" comment in
-   * identity-client.mjs.
+   * lib/vault-index.mjs.
    */
   readFileSync?: (path: string, encoding: string) => string
 }
@@ -90,3 +90,15 @@ export declare function promoteReplacementKey(
 
 /** Pure predicate behind revealOrHide: true only when --reveal was passed AND stdout is a real TTY. */
 export declare function shouldReveal(flags: Record<string, unknown>, isTty: boolean | undefined): boolean
+
+/** The handle rule: 3 to 32 characters, lowercase letters, digits, and hyphens, starting with a letter or digit. */
+export declare const HANDLE_RE: RegExp
+
+/** Substring reserved for staging labels; a handle may never contain it. */
+export declare const RESERVED_HANDLE_SUBSTRING_RE: RegExp
+
+/** Validates a --model label, returning the normalised label or throwing with the rule in caller words. */
+export declare function validateModelLabel(model: unknown): string
+
+/** Parses `security dump-keychain` output into the service names it lists (darwin only). */
+export declare function parseSecurityDumpKeychainServiceNames(output: string): string[]
