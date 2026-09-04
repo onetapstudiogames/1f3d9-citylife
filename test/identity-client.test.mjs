@@ -507,6 +507,96 @@ test('promoteReplacementKey refuses to swallow a write failure after the server 
   }
 })
 
+test('promoteReplacementKey\'s storeSecret-failure message never claims an "old key" when the caller passes no oldKeyNoun', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'promote-write-fail-register'
+  const stagingLabel = `${handle}--pending-registration-deadbeef`
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') throw new Error('not found')
+    if (command === 'security' && args[0] === '-i') throw new Error('keychain is locked')
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+  const deps = { execFileSync, platform: 'darwin', homeDir }
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'new-key', () => ({}), deps, {
+        keyNoun: 'the confirmed resident key from this registration',
+        oldKeyNoun: null,
+      }),
+      (error) => {
+        assert.doesNotMatch(error.message, /old key/iu)
+        assert.doesNotMatch(error.message, /rotation\/recovery already CONFIRMED/u)
+        assert.match(error.message, /storing the confirmed resident key from this registration under/u)
+        assert.match(error.message, new RegExp(`key adopt --handle ${handle} --from-label ${stagingLabel}`, 'u'))
+        return true
+      },
+    )
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
+test('promoteReplacementKey\'s unreadable-existing-entry message names the caller\'s own keyNoun', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'promote-unreadable-live'
+  const stagingLabel = `${handle}--pending-rotation`
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') {
+      return Buffer.from('not valid json', 'utf8').toString('base64')
+    }
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+  const deps = { execFileSync, platform: 'darwin', homeDir }
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'new-key', () => ({}), deps, {
+        keyNoun: 'the confirmed replacement key from this rotation',
+        oldKeyNoun: 'the old key',
+      }),
+      (error) => {
+        assert.match(error.message, /refusing to overwrite the existing vault entry for "promote-unreadable-live"/u)
+        assert.match(error.message, /The confirmed replacement key from this rotation was NOT lost/u)
+        assert.match(error.message, new RegExp(`key adopt --handle ${handle} --from-label ${stagingLabel}`, 'u'))
+        return true
+      },
+    )
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
+test('promoteReplacementKey\'s storeSecret-failure message never claims a "rotation/recovery" for adopt over a dead live entry', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'promote-write-fail-adopt'
+  const stagingLabel = `${handle}--pending-registration-deadbeef`
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') throw new Error('not found')
+    if (command === 'security' && args[0] === '-i') throw new Error('keychain is locked')
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+  const deps = { execFileSync, platform: 'darwin', homeDir }
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'new-key', () => ({}), deps, {
+        keyNoun: 'the already-authenticated replacement key this adopt is moving',
+        oldKeyNoun: 'the previous entry at this handle',
+        deadKeyClause: "this adopt's own check already found the previous entry unusable",
+      }),
+      (error) => {
+        assert.doesNotMatch(error.message, /rotation\/recovery already CONFIRMED/u)
+        assert.match(error.message, /this adopt's own check already found the previous entry unusable/u)
+        assert.match(error.message, /the previous entry at this handle for "promote-write-fail-adopt" no longer works/u)
+        return true
+      },
+    )
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
 // --- Finding 2: register()'s overwrite guard is re-checked immediately ----
 // before the final vault write, not only once before the stage/confirm
 // network round trips -- closing the window where a concurrent run could
@@ -545,6 +635,77 @@ test('promoteReplacementKey with refuseIfPresent:true refuses to overwrite a liv
       },
     )
     assert.equal(storeCalled, false, 'the write is never even attempted once the live entry is found present')
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
+test('promoteReplacementKey with refuseIfPresent:true uses adopt\'s wording and never claims a registration raced', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'adopt-race-handle'
+  const stagingLabel = `${handle}--pending-rotation-deadbeef`
+  const liveValue = { kind: 'resident', handle, client_class: 'coding_persistent', resident_key: 'won-the-race-key', origin }
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') {
+      return Buffer.from(JSON.stringify(liveValue), 'utf8').toString('base64')
+    }
+    if (command === 'security' && args[0] === '-i') throw new Error('this test must never reach a write attempt')
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+  const deps = { execFileSync, platform: 'darwin', homeDir }
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'the-adopted-key', () => ({}), deps, {
+        refuseIfPresent: true,
+        keyNoun: 'the already-authenticated key this adopt is moving',
+        oldKeyNoun: null,
+      }),
+      (error) => {
+        assert.match(error.message, /now exists/u)
+        assert.doesNotMatch(error.message, /registration/iu)
+        assert.match(error.message, /The already-authenticated key this adopt is moving was NOT lost/u)
+        assert.match(error.message, new RegExp(stagingLabel, 'u'))
+        assert.doesNotMatch(error.message, /won-the-race-key|the-adopted-key/u)
+        return true
+      },
+    )
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
+test('promoteReplacementKey uses caller-neutral wording when a recovery staging copy vanished', () => {
+  const origin = 'https://example.invalid'
+  const handle = 'recovery-race'
+  const stagingLabel = `${handle}--pending-recovery`
+  const liveValue = { kind: 'resident', handle, resident_key: 'live-key', origin }
+  const execFileSync = (command, args) => {
+    if (command === 'security' && args[0] === 'find-generic-password') {
+      if (args[2] === stagingLabel) throw new Error('not found')
+      return Buffer.from(JSON.stringify(liveValue), 'utf8').toString('base64')
+    }
+    throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
+  }
+  const homeDir = mkdtempSync(join(tmpdir(), 'identity-client-promote-'))
+
+  try {
+    assert.throws(
+      () => promoteReplacementKey(origin, handle, stagingLabel, 'replacement-key', () => ({}), {
+        execFileSync,
+        platform: 'darwin',
+        homeDir,
+      }, {
+        refuseIfPresent: true,
+        keyNoun: 'the confirmed replacement key from this recovery',
+      }),
+      (error) => {
+        assert.match(error.message, /when it was first confirmed/iu)
+        assert.doesNotMatch(error.message, /this registration confirmed/iu)
+        assert.doesNotMatch(error.message, /replacement-key|live-key/u)
+        return true
+      },
+    )
   } finally {
     rmSync(homeDir, { recursive: true, force: true })
   }

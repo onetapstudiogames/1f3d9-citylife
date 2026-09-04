@@ -29,11 +29,14 @@ const createRepository = async ({ skill = 'city\n', references = {} } = {}) => {
   await Promise.all([
     mkdir(join(cwd, '.claude-plugin'), { recursive: true }),
     mkdir(join(cwd, '.codex-plugin'), { recursive: true }),
+    mkdir(join(cwd, '.agents/plugins'), { recursive: true }),
     mkdir(join(cwd, 'agents'), { recursive: true }),
     mkdir(join(cwd, 'references'), { recursive: true }),
   ])
   await Promise.all([
     ...manifestPaths.map((path) => writeFile(join(cwd, path), '{"version":"1.0.0"}\n')),
+    writeFile(join(cwd, '.claude-plugin/marketplace.json'), '{"plugins":[{"version":"1.0.0"}]}\n'),
+    writeFile(join(cwd, '.agents/plugins/marketplace.json'), '{"plugins":[{"version":"1.0.0"}]}\n'),
     writeFile(join(cwd, 'SKILL.md'), skill),
     writeFile(join(cwd, 'agents/openai.yaml'), 'interface: {}\n'),
     ...Object.entries(references).map(([path, content]) => writeFile(join(cwd, 'references', path), content)),
@@ -111,5 +114,44 @@ test('added and removed semantic references both require a version advance', asy
   await assert.rejects(
     () => checkRepositoryVersion({ ...fixture, requireBase: true }),
     /must advance past 1\.0\.0/u,
+  )
+})
+
+test('a mismatched marketplace manifest version fails before release comparison', async (t) => {
+  const fixture = await createRepository()
+  t.after(() => rm(fixture.cwd, { recursive: true, force: true }))
+  await writeFile(
+    join(fixture.cwd, '.claude-plugin/marketplace.json'),
+    '{"plugins":[{"version":"1.0.9"}]}\n',
+  )
+
+  await assert.rejects(
+    () => checkRepositoryVersion({ ...fixture, requireBase: true }),
+    /\.claude-plugin\/marketplace\.json version 1\.0\.9 does not match plugin\.json version 1\.0\.0/iu,
+  )
+})
+
+test('a marketplace manifest without plugins[0].version names the missing field', async (t) => {
+  const fixture = await createRepository()
+  t.after(() => rm(fixture.cwd, { recursive: true, force: true }))
+  await writeFile(join(fixture.cwd, '.claude-plugin/marketplace.json'), '{"plugins":[{}]}\n')
+
+  await assert.rejects(
+    () => checkRepositoryVersion({ ...fixture, requireBase: true }),
+    /\.claude-plugin\/marketplace\.json has no plugins\[0\]\.version/iu,
+  )
+})
+
+test('a mismatched agent marketplace version fails before release comparison', async (t) => {
+  const fixture = await createRepository()
+  t.after(() => rm(fixture.cwd, { recursive: true, force: true }))
+  await writeFile(
+    join(fixture.cwd, '.agents/plugins/marketplace.json'),
+    '{"plugins":[{"version":"1.0.9"}]}\n',
+  )
+
+  await assert.rejects(
+    () => checkRepositoryVersion({ ...fixture, requireBase: true }),
+    /\.agents\/plugins\/marketplace\.json version 1\.0\.9 does not match plugin\.json version 1\.0\.0/iu,
   )
 })

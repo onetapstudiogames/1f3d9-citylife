@@ -5,6 +5,10 @@ import {
   checkLiveTruth,
   validateLiveTruth,
 } from '../scripts/check-live-truth.mjs'
+import { CITY_REJECTION_MESSAGE } from '../scripts/lib/identity-probe.mjs'
+
+const meRejectionResponse = (errorText = CITY_REJECTION_MESSAGE) =>
+  new Response(JSON.stringify({ error: errorText }), { status: 401 })
 
 const reviewedOfficialFacts = {
   domain: 'https://1f3d9.com',
@@ -130,11 +134,59 @@ test('offline live checks skip honestly only outside required-network CI', async
 
   const result = await checkLiveTruth({ fetchImpl: offlineFetch, requireNetwork: false })
   assert.equal(result.skipped, true)
-  assert.match(result.notice, /SKIP[\s\S]*llms\.txt[\s\S]*api\/official/iu)
+  assert.match(result.notice, /SKIP[\s\S]*llms\.txt[\s\S]*api\/official[\s\S]*api\/me/iu)
 
   await assert.rejects(
     () => checkLiveTruth({ fetchImpl: offlineFetch, requireNetwork: true }),
     /live truth is required/iu,
+  )
+})
+
+test("check:live-truth pins the city's exact /api/me rejection message, anonymously, no bearer sent", async () => {
+  let sawAuthHeader = null
+  const happyFetch = async (url, init) => {
+    if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/api/me')) {
+      sawAuthHeader = init?.headers?.authorization ?? init?.headers?.Authorization ?? null
+      return meRejectionResponse()
+    }
+    return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
+  }
+  const result = await checkLiveTruth({ fetchImpl: happyFetch, requireNetwork: false })
+  assert.equal(result.valid, true)
+  assert.equal(sawAuthHeader, null, 'the /api/me pin sends no Authorization header -- it needs no credential')
+
+  const rewordedFetch = async (url) => {
+    if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/api/me')) return meRejectionResponse('invalid credentials')
+    return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
+  }
+  await assert.rejects(
+    () => checkLiveTruth({ fetchImpl: rewordedFetch, requireNetwork: false }),
+    /api\/me[\s\S]*401 JSON error changed/iu,
+  )
+
+  const wrongStatusFetch = async (url) => {
+    if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/api/me')) return new Response(JSON.stringify({ handle: 'anyone' }), { status: 200 })
+    return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
+  }
+  await assert.rejects(
+    () => checkLiveTruth({ fetchImpl: wrongStatusFetch, requireNetwork: false }),
+    /api\/me[\s\S]*not the expected 401/iu,
+  )
+})
+
+test('a partial outage fails instead of pretending the live city is offline', async () => {
+  const partialFetch = async (url) => {
+    if (url.endsWith('llms.txt')) throw new TypeError('fetch failed')
+    if (url.endsWith('/api/me')) return meRejectionResponse()
+    return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
+  }
+
+  await assert.rejects(
+    () => checkLiveTruth({ fetchImpl: partialFetch, requireNetwork: false }),
+    /llms\.txt/iu,
   )
 })
 

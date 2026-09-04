@@ -1,9 +1,11 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CITY_REJECTION_MESSAGE } from './lib/identity-probe.mjs'
 
 const endpoints = {
   llms: 'https://1f3d9.com/llms.txt',
   official: 'https://1f3d9.com/api/official',
+  me: 'https://1f3d9.com/api/me',
 }
 
 const reviewed = {
@@ -173,6 +175,42 @@ const fetchText = async (url, fetchImpl) => {
   return response.text()
 }
 
+const fetchMeRejection = async (url, fetchImpl) => {
+  let response
+  try {
+    response = await fetchImpl(url, {
+      method: 'GET',
+      redirect: 'manual',
+      signal: globalThis.AbortSignal.timeout(10_000),
+      headers: { accept: 'application/json' },
+    })
+  } catch (error) {
+    const message = `${url}: ${error?.message || String(error)}`
+    if (isTransportFailure(error)) throw new FetchUnavailableError(message, { cause: error })
+    throw new Error(message, { cause: error })
+  }
+
+  if (response.redirected || (response.url && response.url !== url)) {
+    throw new Error(`${url}: unexpected redirect to ${response.url}`)
+  }
+  if (response.status !== 401) {
+    throw new Error(`${url}: anonymous read answered HTTP ${response.status}, not the expected 401 credential rejection`)
+  }
+  let body
+  try {
+    body = await response.json()
+  } catch (error) {
+    throw new Error(`${url}: 401 body did not parse as JSON (${error.message})`)
+  }
+  if (body?.error !== CITY_REJECTION_MESSAGE) {
+    throw new Error(
+      `${url}: 401 JSON error changed -- expected ${JSON.stringify(CITY_REJECTION_MESSAGE)}, ` +
+      `got ${JSON.stringify(body?.error)}`,
+    )
+  }
+  return true
+}
+
 const failureMessage = (settledResults) => settledResults
   .filter((result) => result.status === 'rejected')
   .map((result) => result.reason.message)
@@ -192,16 +230,17 @@ export const checkLiveTruth = async ({
   const results = await Promise.allSettled([
     fetchText(endpoints.llms, fetchImpl),
     fetchText(endpoints.official, fetchImpl),
+    fetchMeRejection(endpoints.me, fetchImpl),
   ])
   const failures = results.filter((result) => result.status === 'rejected')
 
   if (failures.length > 0) {
-    const bothUnavailable = failures.length === 2
+    const allUnavailable = failures.length === results.length
       && failures.every((result) => result.reason instanceof FetchUnavailableError)
-    if (bothUnavailable && !requireNetwork) {
+    if (allUnavailable && !requireNetwork) {
       return {
         skipped: true,
-        notice: `SKIP live truth: ${endpoints.llms} and ${endpoints.official} are offline (${failureMessage(results)})`,
+        notice: `SKIP live truth: ${endpoints.llms}, ${endpoints.official}, and ${endpoints.me} are offline (${failureMessage(results)})`,
       }
     }
     const prefix = requireNetwork ? 'live truth is required; ' : ''
@@ -223,7 +262,7 @@ const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPat
 if (isDirectRun) {
   try {
     const result = await checkLiveTruth({ requireNetwork: process.env.REQUIRE_LIVE_TRUTH === '1' })
-    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt and /api/official.')
+    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, and anonymous /api/me.')
   } catch (error) {
     console.error(`Live truth check failed: ${error.message}`)
     process.exitCode = 1

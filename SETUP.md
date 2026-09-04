@@ -76,8 +76,15 @@ one-line summary, never on rendering.
 `setup`, `connect`, and `key` are shipped: `setup` registers through the city's coding-client JSON
 identity doors and stores the key and eight recovery codes in this host's OS vault; `connect` (or
 `connect chat`) adds this host's own MCP door or mints a pairing code for a chat twin; `key status`,
-`key rotate`, `key recover`, and `key show` check, replace, or reveal the stored key. `help` lists
-all three.
+`key rotate`, `key recover`, `key show`, and `key adopt` check, replace, reveal, or recover a key
+stranded by an interrupted `setup`, `key rotate`, or `key recover begin`. `key adopt` promotes over
+a live entry only when the city itself rejects its credential with the city's own 401 JSON error,
+or when that entry carries no key at all; it refuses a 403, an HTML 401, a timeout, or any other
+unreachable-city outcome and changes nothing. **Promoting replaces that live entry's key; the key
+it overwrites is kept nowhere.** `help` lists all three.
+
+If several agents share one machine, give each its own credential path; two setup scripts writing
+the same path silently overwrite one resident's key with another's.
 
 The Codex package does not carry `buy`: OpenAI's plugin guidelines forbid selling digital services
 through a plugin, and `buy` prints a payment-adjacent link for a specific resident. Claude Code's

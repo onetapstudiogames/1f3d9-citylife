@@ -1390,7 +1390,7 @@ test('key status reports a mismatch instead of claiming success when the stored 
     }, { homeDir: home.dir })
 
     const result = await runNode(keyPath, ['status', '--origin', stub.origin, '--handle', 'agent-gamma'], { env: home.env })
-    assert.equal(result.status, 0, result.stderr)
+    assert.notEqual(result.status, 0, 'a mismatched resident is not a healthy status')
     assert.match(result.stdout, /agent-gamma/u)
     assert.match(result.stdout, /agent-delta/u)
     assert.doesNotMatch(result.stdout, /works \(one me read succeeded\)/u, 'never claims plain success on a mismatch')
@@ -1974,6 +1974,30 @@ test('key adopt: refuses with a clear message when --from-label names a vault en
   }
 })
 
+test('key adopt: distinguishes a staging entry with no resident_key from a missing staging entry', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-adopt-keyless-label-')
+  const stagingLabel = 'dora-agent--pending-registration-keyless'
+  try {
+    storeSecret(stub.origin, stagingLabel, {
+      kind: 'staging', handle: 'dora-agent', client_class: 'coding_persistent', origin: stub.origin,
+    }, { homeDir: home.dir })
+    const result = await runNode(
+      keyPath,
+      ['adopt', '--origin', stub.origin, '--handle', 'dora-agent', '--from-label', stagingLabel],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0)
+    assert.doesNotMatch(result.stderr, /no vault entry found/u)
+    assert.match(result.stderr, /a vault entry exists for .* but it carries no resident_key field/u)
+    assertNoSecretLeaked(result, 'key adopt keyless staging label')
+  } finally {
+    deleteSecret(stub.origin, stagingLabel, { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
 test('key adopt: --handle and --from-label are both required', async () => {
   const stub = await startStubCityServer()
   const home = makeTempHome('key-adopt-missing-flags-')
@@ -1986,6 +2010,67 @@ test('key adopt: --handle and --from-label are both required', async () => {
     assert.notEqual(noLabel.status, 0)
     assert.match(noLabel.stderr, /--from-label <staging-label> is required/u)
   } finally {
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key adopt: refuses up front, with its own wording, when --from-label equals --handle', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-adopt-same-label-')
+  const residentKey = `1f3d9_sk_${'3'.repeat(48)}`
+  try {
+    stub.residents.set('walk-agent', { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, 'walk-agent', {
+      kind: 'resident', handle: 'walk-agent', client_class: 'coding_persistent', resident_key: residentKey,
+      recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(
+      keyPath,
+      ['adopt', '--origin', stub.origin, '--handle', 'walk-agent', '--from-label', 'walk-agent'],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /--from-label and --handle are both "walk-agent"/u)
+    assert.match(result.stderr, /there is no staging copy to move/u)
+    assert.doesNotMatch(result.stderr, /concurrent run on this host must have won the race/u)
+    assertNoSecretLeaked(result, 'key adopt same-label refusal')
+    assert.equal(readSecret(stub.origin, 'walk-agent', { homeDir: home.dir }).value.resident_key, residentKey)
+  } finally {
+    deleteSecret(stub.origin, 'walk-agent', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('key adopt: refuses in its own words when a different live entry already authenticates as the same handle', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-adopt-live-collision-')
+  const residentKey = `1f3d9_sk_${'4'.repeat(48)}`
+  const stagingLabel = 'eve-agent--pending-registration-abc12345'
+  try {
+    stub.residents.set('eve-agent', { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    const liveValue = {
+      kind: 'resident', handle: 'eve-agent', client_class: 'coding_persistent', resident_key: residentKey,
+      recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }
+    storeSecret(stub.origin, 'eve-agent', liveValue, { homeDir: home.dir })
+    storeSecret(stub.origin, stagingLabel, { ...liveValue, kind: 'staging' }, { homeDir: home.dir })
+
+    const result = await runNode(
+      keyPath,
+      ['adopt', '--origin', stub.origin, '--handle', 'eve-agent', '--from-label', stagingLabel],
+      { env: home.env },
+    )
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /the vault already holds a live entry for "eve-agent"/u)
+    assert.match(result.stderr, /ALSO currently authenticates as that same handle/u)
+    assert.doesNotMatch(result.stderr, /concurrent run on this host must have won the race/u)
+    assertNoSecretLeaked(result, 'key adopt live-collision refusal')
+  } finally {
+    deleteSecret(stub.origin, 'eve-agent', { homeDir: home.dir })
+    deleteSecret(stub.origin, stagingLabel, { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }

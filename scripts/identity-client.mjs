@@ -1027,7 +1027,15 @@ function promoteLockPath(origin, handle, homeDir) {
  * an unlocked re-check would. Same "staging copy kept, caller-worded
  * message" shape as the SecretReadFailure case above.
  */
-function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeFields, deps = {}, { refuseIfPresent = false } = {}) {
+function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeFields, deps = {}, {
+  refuseIfPresent = false,
+  keyNoun = 'the already-confirmed key',
+  oldKeyNoun = 'the old key',
+  deadKeyClause = 'the rotation/recovery already CONFIRMED',
+  concurrentCallersPhrase = 'another registration, rotation, or recovery',
+  expectPreviousKey = undefined,
+} = {}) {
+  const capitalizedKeyNoun = keyNoun.charAt(0).toUpperCase() + keyNoun.slice(1)
   const lockPath = promoteLockPath(origin, handle, deps.homeDir)
   mkdirSync(dirname(lockPath), { recursive: true, mode: 0o700 })
   const result = withFileLock(lockPath, () => {
@@ -1037,10 +1045,50 @@ function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeF
     } catch (error) {
       throw new Error(
         `refusing to overwrite the existing vault entry for "${handle}": ${error.message}. ` +
-        'The already-confirmed replacement key was NOT lost -- it is still stored under the ' +
-        `staging label "${stagingLabel}". Resolve the unreadable entry, read the replacement key back ` +
-        `from "${stagingLabel}", then store it under "${handle}" yourself.`,
+        `${capitalizedKeyNoun} was NOT lost -- it is still stored under the staging label ` +
+        `"${stagingLabel}". Resolve the unreadable entry, then run \`key adopt --handle ${handle} ` +
+        `--from-label ${stagingLabel}\` to move it -- or, if that is not available, read it back from ` +
+        `"${stagingLabel}" yourself and store it under "${handle}" by hand.`,
       )
+    }
+    if (expectPreviousKey !== undefined) {
+      const actualKey = previous.found && typeof previous.value?.resident_key === 'string'
+        ? previous.value.resident_key
+        : null
+      if (actualKey !== expectPreviousKey) {
+        let stagingStillPresent
+        try {
+          stagingStillPresent = readSecret(origin, stagingLabel, deps).found
+        } catch {
+          stagingStillPresent = false
+        }
+        if (!previous.found) {
+          const deletedNote = stagingStillPresent
+            ? `${capitalizedKeyNoun} is still stored under the staging label "${stagingLabel}" and nowhere else.`
+            : `${capitalizedKeyNoun} is NO LONGER at its staging label "${stagingLabel}" either -- it cannot be ` +
+              'recovered from this vault. Check whatever recorded the resident_key when it was first confirmed ' +
+              '(terminal scrollback, a captured --reveal run) before concluding it is gone for good.'
+          throw new Error(
+            `refusing to overwrite the vault entry for "${handle}": the entry that was there when this adopt's ` +
+            'own check ran has since been deleted -- there is nothing left to compare, and nothing was ' +
+            `overwritten. Re-run this exact adopt command to promote ${keyNoun} into the now-empty handle. ` +
+            deletedNote,
+          )
+        }
+        const stagingNote = stagingStillPresent
+          ? `${capitalizedKeyNoun} was NOT lost -- it is still stored under the staging label ` +
+            `"${stagingLabel}" and nowhere else. Work out which of the two entries is the one you actually ` +
+            `want (for example \`key status --handle ${handle}\`), then store the key from "${stagingLabel}" ` +
+            `under "${handle}" yourself if it turns out to be the one that should have won.`
+          : `${capitalizedKeyNoun} is NO LONGER at its staging label "${stagingLabel}" -- it cannot be ` +
+            'recovered from this vault. Check whatever recorded the resident_key when it was first confirmed ' +
+            '(terminal scrollback, a captured --reveal run) before concluding it is gone for good.'
+        throw new Error(
+          `refusing to overwrite the vault entry for "${handle}": it changed between this adopt's own check ` +
+          'and this write -- a concurrent write to this same handle on this host must have landed in between, ' +
+          `so nothing was overwritten. ${stagingNote}`,
+        )
+      }
     }
     if (refuseIfPresent && previous.found) {
       // With the lock above held for this entire read-check-write section,
@@ -1073,17 +1121,17 @@ function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeF
         stagingStillPresent = false
       }
       const stagingNote = stagingStillPresent
-        ? `The confirmed resident key from THIS registration was NOT lost -- it is still stored under the ` +
+        ? `${capitalizedKeyNoun} was NOT lost -- it is still stored under the ` +
           `staging label "${stagingLabel}" and nowhere else. Work out which of the two entries is the one ` +
           `you actually want (for example \`key status --handle ${handle}\`), then store the key from ` +
           `"${stagingLabel}" under "${handle}" yourself if it turns out to be the one that should have won.`
-        : `The confirmed resident key from THIS registration is NO LONGER at its staging label "${stagingLabel}" ` +
-          '-- it cannot be recovered from this vault. Check whatever recorded the resident_key when this ' +
-          'registration confirmed (terminal scrollback, a captured --reveal run) before concluding it is ' +
+        : `${capitalizedKeyNoun} is NO LONGER at its staging label "${stagingLabel}" ` +
+          '-- it cannot be recovered from this vault. Check whatever recorded the resident_key when it was ' +
+          'first confirmed (terminal scrollback, a captured --reveal run) before concluding it is ' +
           'gone for good.'
       throw new Error(
         `refusing to overwrite the vault entry for "${handle}" that now exists: it was not there when this ` +
-        'registration started, so a concurrent run on this host must have won the race for this handle. ' +
+        'call started, so a concurrent write to this same handle on this host must have won the race. ' +
         stagingNote,
       )
     }
@@ -1099,9 +1147,13 @@ function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeF
       }, deps)
     } catch (error) {
       throw new Error(
-        `the rotation/recovery already CONFIRMED, so the old key for "${handle}" no longer works: ${error.message}. ` +
-        `The replacement key is stored under "${stagingLabel}" and nowhere else -- read it back from ` +
-        `"${stagingLabel}", then store it under "${handle}" yourself before doing anything else.`,
+        (oldKeyNoun
+          ? `${deadKeyClause}, so ${oldKeyNoun} for "${handle}" no longer works: ${error.message}. `
+          : `storing ${keyNoun} under "${handle}" failed: ${error.message}. `) +
+        `${capitalizedKeyNoun} is stored under "${stagingLabel}" and nowhere else -- run ` +
+        `\`key adopt --handle ${handle} --from-label ${stagingLabel}\` to move it, or, if that is not ` +
+        `available, read it back from "${stagingLabel}" yourself and store it under "${handle}" before doing ` +
+        'anything else.',
       )
     }
     deleteSecret(origin, stagingLabel, deps)
@@ -1118,10 +1170,12 @@ function promoteReplacementKey(origin, handle, stagingLabel, residentKey, mergeF
     // written anything.
     throw new Error(
       `could not acquire the per-handle vault lock for "${handle}" on this host within ` +
-      `${VAULT_INDEX_LOCK_MAX_WAIT_MS}ms: another registration, rotation, or recovery for the same handle ` +
-      'appears to still be running concurrently on this host. The already-confirmed replacement key was NOT ' +
-      `lost -- it is still stored under the staging label "${stagingLabel}" and nowhere else. Retry once the ` +
-      `other run finishes, or read the key back from "${stagingLabel}" and store it under "${handle}" yourself.`,
+      `${VAULT_INDEX_LOCK_MAX_WAIT_MS}ms: ${concurrentCallersPhrase} for the same handle ` +
+      `appears to still be running concurrently on this host. ${capitalizedKeyNoun} was NOT lost -- it is ` +
+      `still stored under the staging label "${stagingLabel}" and nowhere else. Retry once the other run ` +
+      `finishes -- either the original command, or \`key adopt --handle ${handle} --from-label ` +
+      `${stagingLabel}\` -- or, if that is not available, read the key back from "${stagingLabel}" and store ` +
+      `it under "${handle}" yourself.`,
     )
   }
   return result
@@ -1690,7 +1744,11 @@ async function register(flags) {
   const location = promoteReplacementKey(origin, finalHandle, stagingLabel, staged.resident_key, () => ({
     client_class: clientClass,
     recovery_codes: staged.recovery_codes,
-  }), {}, { refuseIfPresent: !replaceVaultEntry })
+  }), {}, {
+    refuseIfPresent: !replaceVaultEntry,
+    keyNoun: 'the confirmed resident key from this registration',
+    oldKeyNoun: null,
+  })
 
   revealOrHide(flags, 'Resident key', [staged.resident_key])
   revealOrHide(flags, 'Recovery codes (all eight)', staged.recovery_codes)
@@ -1774,7 +1832,10 @@ async function rotate(flags) {
   const location = promoteReplacementKey(origin, staged.handle, stagingLabel, staged.resident_key, previous => ({
     ...(previous?.client_class ? { client_class: previous.client_class } : {}),
     recovery_codes_invalidated_at: new Date().toISOString(),
-  }))
+  }), {}, {
+    keyNoun: 'the confirmed replacement key from this rotation',
+    oldKeyNoun: 'the old key',
+  })
 
   // The replacement key was written under staged.handle -- the label this
   // script validated (HANDLE_RE, reserved-substring check above) BEFORE
@@ -1982,7 +2043,10 @@ async function recoverBegin(flags) {
   const location = promoteReplacementKey(origin, staged.handle, stagingLabel, staged.resident_key, previous => ({
     ...(previous?.client_class ? { client_class: previous.client_class } : {}),
     recovery_codes_invalidated_at: new Date().toISOString(),
-  }))
+  }), {}, {
+    keyNoun: 'the confirmed replacement key from this recovery',
+    oldKeyNoun: 'the old key',
+  })
 
   // Same discipline as rotate() above, and for the same reason: the
   // replacement key was written under staged.handle -- the validated,

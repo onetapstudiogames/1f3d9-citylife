@@ -195,7 +195,7 @@ export async function startStubCityServer({
       if (req.method === 'GET' && req.url === '/api/me') {
         const key = bearerKey(req)
         const found = [...residents.entries()].find(([, value]) => value.resident_key === key)
-        if (!found) return send(res, 401, { error: 'invalid or expired resident key' })
+        if (!found) return send(res, 401, { error: 'resident sign-in failed because Authorization: Bearer is missing or does not contain a current city key; send your saved current key as Authorization: Bearer <key>' })
         return send(res, 200, { handle: found[0] })
       }
 
