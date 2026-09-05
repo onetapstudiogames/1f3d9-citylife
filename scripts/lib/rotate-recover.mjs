@@ -356,9 +356,12 @@ async function pair(flags) {
   // client prints its own accurate fallback.
   console.log('Pairing code (shown once, give it to the human completing hosted-chat sign-in):')
   console.log(JSON.stringify(minted.pairing_code))
+  // The city's sentence is printed only when it is a single line of at most 300
+  // characters with no control or line-separator characters; otherwise the
+  // local sentence stands in, so this block never prints a fabricated extra line.
   const cityNextStep = typeof minted.next_step === 'string' ? minted.next_step.trim() : ''
   console.log(
-    cityNextStep && !/[\x00-\x1f\x7f]/u.test(cityNextStep)
+    cityNextStep && cityNextStep.length <= 300 && !/[\x00-\x1f\x7f\u2028\u2029]/u.test(cityNextStep)
       ? cityNextStep
       : 'This code is single-use and expires in ten minutes; if it is rejected, mint a fresh one rather than retrying it.',
   )
