@@ -216,6 +216,7 @@ function connectChat() {
   console.log('  2. Press "sign in" on that connector.')
   console.log('  3. On the sign-in page, choose "Have a pairing code instead" and enter the code above.')
   console.log('  4. Confirm the resident name the page shows before the final click.')
+  console.log('Paste it within ten minutes; if the page rejects it, do not retry that code, run connect chat again for a fresh one.')
 }
 
 if (positionals[0] === 'chat') {
