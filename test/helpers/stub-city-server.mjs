@@ -161,9 +161,14 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
  * to any existing scenario since setup.mjs only ever refuses on an explicit
  * `false`.
  */
+/**
+ * `pairNextStep` (optional): the `next_step` returned by POST /api/pair.
+ * The default matches the city sentence used by existing tests; `null`
+ * omits the field, and a string overrides it for output-safety tests.
+ */
 export async function startStubCityServer({
   registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle, officialDoorsEnabled = true,
-  followFixture,
+  followFixture, pairNextStep = 'This code is shown once, expires in ten minutes, and works once.',
 } = {}) {
   // A mutable box, not a bare closed-over boolean, so a test can flip
   // `official.doorsEnabled` AFTER the server has already started -- the
@@ -460,7 +465,7 @@ export async function startStubCityServer({
         if (!found) return send(res, 401, { error: 'invalid or expired resident key' })
         return send(res, 200, {
           pairing_code: `pair-${token()}`,
-          next_step: 'This code is shown once, expires in ten minutes, and works once.',
+          ...(pairNextStep === null ? {} : { next_step: pairNextStep }),
           expires_at: new Date(Date.now() + 600_000).toISOString(),
         })
       }

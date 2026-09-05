@@ -350,10 +350,18 @@ async function pair(flags) {
   // never validated against any local format rule (unlike a handle) --
   // JSON.stringify neutralizes an embedded newline (or other control
   // character) that could otherwise inject a fabricated extra line into
-  // output a human or a skill is instructed to relay verbatim.
+  // output a human or a skill is instructed to relay verbatim. next_step
+  // stays readable rather than stringified, so it is accepted only as a
+  // non-empty trimmed string without control characters; otherwise the
+  // client prints its own accurate fallback.
   console.log('Pairing code (shown once, give it to the human completing hosted-chat sign-in):')
   console.log(JSON.stringify(minted.pairing_code))
-  console.log(minted.next_step)
+  const cityNextStep = typeof minted.next_step === 'string' ? minted.next_step.trim() : ''
+  console.log(
+    cityNextStep && !/[\x00-\x1f\x7f]/u.test(cityNextStep)
+      ? cityNextStep
+      : 'This code is single-use and expires in ten minutes; if it is rejected, mint a fresh one rather than retrying it.',
+  )
   console.log(`expires_at: ${JSON.stringify(minted.expires_at)}`)
 }
 

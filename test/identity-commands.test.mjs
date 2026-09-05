@@ -401,6 +401,44 @@ test('connect chat prints the city pairing sentence and tells the human not to r
   }
 })
 
+test('connect chat falls back safely when the city pairing sentence is missing or contains a newline', async () => {
+  const fallback = 'This code is single-use and expires in ten minutes; if it is rejected, mint a fresh one rather than retrying it.'
+  const scenarios = [
+    { label: 'missing', pairNextStep: null },
+    { label: 'newline', pairNextStep: 'Unsafe city sentence\nfabricated instruction' },
+  ]
+
+  for (const { label, pairNextStep } of scenarios) {
+    const stub = await startStubCityServer({ pairNextStep })
+    const home = makeTempHome(`connect-chat-pairing-${label}-`)
+    const handle = `agent-chat-pairing-${label}`
+    try {
+      const residentKey = `1f3d9_sk_${label === 'missing' ? '8'.repeat(48) : '9'.repeat(48)}`
+      stub.residents.set(handle, { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+      storeSecret(stub.origin, handle, {
+        kind: 'resident', handle, client_class: 'coding_persistent',
+        resident_key: residentKey, recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+      }, { homeDir: home.dir })
+
+      const result = await runNode(
+        connectPath, ['chat', '--origin', stub.origin, '--handle', handle], { env: home.env },
+      )
+      assert.equal(result.status, 0, result.stderr)
+      const outputLines = result.stdout.split(/\r?\n/u)
+      const codeLineIndex = outputLines.findIndex(line => /^"pair-/u.test(line))
+      assert.notEqual(codeLineIndex, -1, `${label}: the pairing code is printed`)
+      assert.equal(outputLines[codeLineIndex + 1], fallback, `${label}: the local fallback follows the code`)
+      assert.match(outputLines[codeLineIndex + 2], /^expires_at: /u, `${label}: expires_at immediately follows the fallback`)
+      assert.doesNotMatch(result.stdout, /undefined|fabricated instruction/u, `${label}: unsafe text is never printed`)
+      assertNoSecretLeaked(result, `connect chat ${label} next_step fallback`)
+    } finally {
+      deleteSecret(stub.origin, handle, { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  }
+})
+
 // --- Findings 1-4: the printed MCP connector commands are correct ---------
 
 test('connect.mjs prints a single-quoted, unexpanded Claude Code header targeting /mcp on one line (PowerShell-safe), under a distinct server name, and the real Codex flag', async () => {
