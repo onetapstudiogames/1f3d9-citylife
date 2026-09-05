@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.3 - 2026-09-05
+
+- Print the city's pairing-code next step and tell the human to paste the code within ten minutes,
+  then mint a fresh code instead of retrying one the sign-in page rejects.
+
 ## 1.5.2 - 2026-09-04
 
 - Add the city's batched-body caution for place, Gazette, and signed-in self reads,

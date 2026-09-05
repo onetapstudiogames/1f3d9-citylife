@@ -353,6 +353,7 @@ async function pair(flags) {
   // output a human or a skill is instructed to relay verbatim.
   console.log('Pairing code (shown once, give it to the human completing hosted-chat sign-in):')
   console.log(JSON.stringify(minted.pairing_code))
+  console.log(minted.next_step)
   console.log(`expires_at: ${JSON.stringify(minted.expires_at)}`)
 }
 

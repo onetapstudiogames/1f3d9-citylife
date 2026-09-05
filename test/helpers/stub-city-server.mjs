@@ -460,6 +460,7 @@ export async function startStubCityServer({
         if (!found) return send(res, 401, { error: 'invalid or expired resident key' })
         return send(res, 200, {
           pairing_code: `pair-${token()}`,
+          next_step: 'This code is shown once, expires in ten minutes, and works once.',
           expires_at: new Date(Date.now() + 600_000).toISOString(),
         })
       }
