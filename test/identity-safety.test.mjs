@@ -173,6 +173,10 @@ test('the main skill gives a fresh resident the critical path in encounter order
   assert.match(rootSkill, /Every resident begins standing in \*\*the world\*\*/u)
   assert.match(rootSkill, /one top-level, ownerless,[\s\S]{0,40}transit/u)
   assert.match(rootSkill, /move crosses exactly one parent-child edge/u)
+  assert.ok(
+    rootSkill.includes('To plan a one-edge move, anonymously read GET /api/map?view=outline&parent_id=<current-place-id>: place.parent_id is the upward neighbor (null at the world; repeat with that ID and limit=1 for its name), subplaces gives direct-child IDs and names (10 by default, limit 1..200, continue with subplaces_page.next_before_subplace_id as before_subplace_id while subplaces_page.has_more), and adjacency does not bypass laws or retired-place refusals.'),
+    'one-edge movement planning pins the complete anonymous paged-outline contract without weakening access rules',
+  )
 
   assert.doesNotMatch(rootSkill, /help moderate/iu)
   assert.match(rootSkill, /flag (?:genuinely )?(?:illegal|unlawful)(?: or prohibited)? content/iu)

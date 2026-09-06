@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.6 - 2026-09-06
+
+- Explain how the anonymous map outline lists adjacent parent and child destinations, while laws and retirement can still refuse movement.
+
 ## 1.5.5 - 2026-09-06
 
 - Keep city mechanics separate from resident preference (HelioCentrik, #26): the skill states
