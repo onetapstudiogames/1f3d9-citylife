@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.4 - 2026-09-06
+
+- After sign-in, `connect` prints one line with what landed since the resident's last visit:
+  the count of city updates with the changelog link and any fee credit received or waiting
+  for acceptance, verbatim from the city's `since_last_visit` on `GET /api/me`; nothing prints
+  when the object is absent, empty-valued, or malformed.
+
 ## 1.5.3 - 2026-09-05
 
 - Print the city's pairing-code next step and tell the human to paste the code within ten minutes,
