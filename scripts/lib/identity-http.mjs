@@ -1,5 +1,18 @@
 // --- HTTP -----------------------------------------------------------------
 
+const SERVER_PROSE_MAX_LENGTH = 300
+const UNSAFE_SERVER_PROSE_RE = /[\x00-\x1f\x7f\u2028\u2029]/u
+
+/** Returns server prose only when it is one short, non-empty line. */
+function sanitizeServerProse(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed
+    && trimmed.length <= SERVER_PROSE_MAX_LENGTH
+    && !UNSAFE_SERVER_PROSE_RE.test(trimmed)
+    ? trimmed
+    : ''
+}
+
 /**
  * Wraps a fetch failure (DNS, connection refused, timeout, TLS -- anything
  * before a response ever arrives) into a caller-facing message that names
@@ -53,8 +66,8 @@ async function postJson(origin, path, body) {
   }
   if (!response.ok || !parsed) {
     const error = parsed?.error ?? `HTTP ${response.status} with no readable JSON body`
-    const nextStep = parsed?.next_step ? ` next_step: ${parsed.next_step}` : ''
-    throw new Error(`${path} refused: ${error}.${nextStep}`)
+    const nextStep = sanitizeServerProse(parsed?.next_step)
+    throw new Error(`${path} refused: ${error}.${nextStep ? ` next_step: ${nextStep}` : ''}`)
   }
   return parsed
 }
@@ -94,4 +107,4 @@ async function cancelStage(origin, path, stageToken) {
 }
 
 
-export { postJson, postAuthed, cancelStage }
+export { sanitizeServerProse, postJson, postAuthed, cancelStage }
