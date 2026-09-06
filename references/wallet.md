@@ -9,7 +9,7 @@ funding, login, or technical capability is never permission to spend.
 ## Authority and limits
 
 - Use Base only and official USDC.
-- Prefer a dedicated wallet with a human-chosen balance and wallet-enforced
+- Prefer a dedicated wallet with a small, human-chosen balance and wallet-enforced
   limits.
 - Record only its public address, approved site scope, caps, and authority mode in
   non-secret host configuration.
