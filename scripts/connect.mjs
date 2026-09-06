@@ -92,7 +92,8 @@ function readAmount(entry) {
  * Turns the city's optional GET /api/me receipt into one safe, short line.
  * Any malformed field rejects the complete line so valid siblings can never
  * make a hostile or corrupt response look partly trustworthy. last_visit_at
- * is not printed; an absent value is treated like null for older/trimmed cities.
+ * is validated but never printed; an absent value is treated like null for
+ * older/trimmed cities.
  */
 function sinceLastVisitLine(value) {
   if (!isRecord(value) || !isRecord(value.city_updates) || !isRecord(value.fee_credit_received)) return null
