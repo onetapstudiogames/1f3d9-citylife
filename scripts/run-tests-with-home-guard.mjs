@@ -45,6 +45,7 @@ import { parseSecurityDumpKeychainServiceNames } from './identity-client.mjs'
 
 const VAULT_DIR_NAME = '.1f3d9'
 const VAULT_TARGET_PREFIX = '1f3d9:'
+const FILE_VAULT_LOADER_IMPORT_URL = new URL('../test/helpers/register-file-vault-loader.mjs', import.meta.url).href
 
 /**
  * A deterministic, content-free snapshot of `dir`: every regular file's
@@ -318,6 +319,13 @@ function runGuard(extraTestArgs = []) {
 
   const result = spawnSync(process.execPath, ['--test', ...extraTestArgs], {
     stdio: 'inherit',
+    env: {
+      ...process.env,
+      NODE_OPTIONS: [
+        `--import=${FILE_VAULT_LOADER_IMPORT_URL}`,
+        process.env.NODE_OPTIONS,
+      ].filter(Boolean).join(' '),
+    },
   })
 
   const after = snapshotDir(vaultDir)

@@ -1,14 +1,14 @@
 // Shared plumbing for driving setup.mjs / connect.mjs / key.mjs /
 // identity-client.mjs as real subprocesses against a stub city server and a
-// throwaway per-test HOME, so these tests exercise the actual vault code
-// path (Windows Credential Manager, via the PowerShell CredWrite/CredRead
-// shim, on win32; the plain-file backend on POSIX runners) instead of a
-// mock of it.
+// throwaway per-test HOME. The test-only loader below forces a temp-backed
+// backend on every host, so no child can reach the operator's real OS vault.
 
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+const FILE_VAULT_LOADER_IMPORT_URL = new URL('./register-file-vault-loader.mjs', import.meta.url).href
 
 /**
  * Creates a fresh throwaway "home" directory and returns the env overlay
@@ -93,6 +93,10 @@ export function runNode(scriptPath, args, { input, env = {}, stdio } = {}) {
         ...minimalBaseEnv(),
         NODE_TLS_REJECT_UNAUTHORIZED: '0',
         ...env,
+        NODE_OPTIONS: [
+          `--import=${FILE_VAULT_LOADER_IMPORT_URL}`,
+          env.NODE_OPTIONS,
+        ].filter(Boolean).join(' '),
       },
     })
     let stdout = ''
