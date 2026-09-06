@@ -2157,8 +2157,8 @@ test(
 // --- round-4 finding 5 (part 1): setup.mjs's refusal on an incomplete vault
 // enumeration (KeychainEnumerationIncomplete) has real end-to-end coverage,
 // not just the unit-level listVaultLabels tests in identity-client.test.mjs.
-// CI never runs on darwin (see vault-roundtrip-windows.test.mjs's own header
-// comment -- this repo's matrix is ubuntu-latest/windows-latest only), so
+// CI never runs on darwin (see .github/workflows/ci.yml -- this repo's matrix
+// is ubuntu-latest/windows-latest only), so
 // the real darwin `security dump-keychain` ENOBUFS/ETIMEDOUT path is
 // otherwise unreachable through a real subprocess on any runner this repo
 // actually has. This drives the real setup.mjs subprocess through that

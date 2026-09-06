@@ -31,13 +31,12 @@
 // asserting exit code and absence of the libuv assertion text on stderr
 // instead of only printing them for a human to read.
 //
-// Runs ONLY on win32 (skip honestly everywhere else, matching
-// test/vault-roundtrip-windows.test.mjs's own convention) -- this crash
-// class is specific to Windows' libuv async-handle teardown and cannot
-// reproduce on ubuntu-latest. Listed explicitly in the windows-latest leg
-// of .github/workflows/ci.yml (this repo's full suite otherwise skips the
-// identity-command subprocess tests there for cost reasons -- see that
-// file's own comment).
+// Runs ONLY on win32 (skip honestly everywhere else, matching the
+// windows-latest leg in .github/workflows/ci.yml) -- this crash class is
+// specific to Windows' libuv async-handle teardown and cannot reproduce on
+// ubuntu-latest. This test is listed explicitly in that leg (this repo's
+// full suite otherwise skips the identity-command subprocess tests there for
+// cost reasons -- see that file's own comment).
 
 import assert from 'node:assert/strict'
 import { createServer as createHttpsServer } from 'node:https'

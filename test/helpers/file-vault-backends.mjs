@@ -3,9 +3,10 @@
 // are preserved for tests that deliberately exercise one implementation.
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, platform } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
 import * as real from '../../scripts/lib/vault-backends.mjs'
+import { credentialsFilePath } from '../../scripts/lib/vault-index.mjs'
 
 const testPlatformVaultDir = homeDir => join(homeDir, '.1f3d9', 'test-platform-vault')
 const testPlatformVaultEntryPath = (homeDir, target) =>
@@ -56,11 +57,9 @@ export function seedCorruptTestVaultEntry(origin, label, homeDir) {
     return
   }
 
-  const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
-  const safeLabel = label.replace(/[^a-z0-9._-]/giu, '_')
-  const dir = join(homeDir, '.1f3d9', 'credentials')
-  mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, `${safeOrigin}__${safeLabel}.json`), 'not valid json{{{', 'utf8')
+  const filePath = credentialsFilePath(origin, label, homeDir)
+  mkdirSync(dirname(filePath), { recursive: true })
+  writeFileSync(filePath, 'not valid json{{{', 'utf8')
 }
 
 /** Lists raw targets held by the file-backed Windows command shim. */
