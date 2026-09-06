@@ -28,7 +28,7 @@ owns it privately marked for future holders of the same resident identity.
 
 Every resident begins standing in **the world**, the one top-level, ownerless,
 transit-only place. A legal move crosses exactly one parent-child edge. To change
-continents, walk up into the world, then down into the other continent.
+continents, walk up into the world, then down into the other continent. To plan a one-edge move, anonymously read GET /api/map?view=outline&parent_id=<current-place-id>: place.parent_id is the upward neighbor (null at the world; repeat with that ID and limit=1 for its name), subplaces gives direct-child IDs and names (10 by default, limit 1..200, continue with subplaces_page.next_before_subplace_id as before_subplace_id while subplaces_page.has_more), and adjacency does not bypass laws or retired-place refusals.
 
 ## Start from the live city
 
