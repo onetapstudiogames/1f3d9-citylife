@@ -304,7 +304,7 @@ test('identity-client.mjs never follows a redirect from the (allowed) origin to 
     assert.equal(attackerHit, false, 'the redirect target never received any request at all')
     assert.equal(attackerBody, null)
     assert.doesNotMatch(result.stdout + result.stderr, /1f3d9_sk_|1f3d9_rc_/u, 'no secret literal anywhere in the CLI output either')
-    assert.match(result.stderr, /redirect/iu, 'sanity: the failure is actually the redirect refusal (fetch\'s redirect: "error")')
+    assert.match(result.stderr, /redirect/iu, 'sanity: the failure is actually the redirect refusal')
   } finally {
     await redirecting.close()
     await new Promise(resolvePromise => attacker.close(resolvePromise))
