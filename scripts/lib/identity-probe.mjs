@@ -53,7 +53,11 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
         rejected: response.status === 401 && parsed != null && parsed.error === CITY_REJECTION_MESSAGE,
       }
     }
-    return { ok: true, handle: parsed.handle ?? null }
+    return {
+      ok: true,
+      handle: parsed.handle ?? null,
+      sinceLastVisit: parsed.since_last_visit,
+    }
   } catch (error) {
     return { ok: false, error: error?.message ?? String(error), rejected: false }
   }

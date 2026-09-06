@@ -359,6 +359,113 @@ test('connect.mjs and key.mjs accept --handle=<value> in equals form, not just t
   assert.match(keyResult.stderr, /agent-equals-key/u, 'key.mjs actually used the equals-form --handle, not a fallback')
 })
 
+const EMPTY_SINCE_LAST_VISIT = {
+  city_updates: { count: 0, href: '/changelog' },
+  fee_credit_received: {
+    accepted_gifts: { amount: '0.000000', amount_units: '0', record_link: 'city_fee_credit.receipts' },
+    settled_purchases: { amount: '0.000000', amount_units: '0', record_link: 'city_fee_credit.receipts' },
+    pending_gifts: { count: 0, record_link: 'city_fee_credit.pending_gifts' },
+  },
+  last_visit_at: '2026-09-06T12:00:00.000Z',
+}
+
+async function runConnectWithSinceLastVisit(sinceLastVisit) {
+  const stub = await startStubCityServer({ sinceLastVisit })
+  const home = makeTempHome('connect-since-last-visit-')
+  const handle = 'agent-since-last-visit'
+  const residentKey = `1f3d9_sk_${'6'.repeat(48)}`
+  stub.residents.set(handle, { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+  storeSecret(stub.origin, handle, {
+    kind: 'resident', handle, client_class: 'coding_persistent', resident_key: residentKey,
+    recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+  }, { homeDir: home.dir })
+  try {
+    const result = await runNode(connectPath, ['--origin', stub.origin, '--handle', handle], { env: home.env })
+    return { result, origin: stub.origin, meReads: stub.requestUrls.filter(url => url === '/api/me').length }
+  } finally {
+    deleteSecret(stub.origin, handle, { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+}
+
+test('connect prints no since_last_visit line when the object is absent or empty-valued', async () => {
+  for (const sinceLastVisit of [undefined, EMPTY_SINCE_LAST_VISIT]) {
+    const { result } = await runConnectWithSinceLastVisit(sinceLastVisit)
+    assert.equal(result.status, 0, result.stderr)
+    assert.doesNotMatch(result.stdout, /^since_last_visit:/mu)
+  }
+})
+
+test('connect prints city updates since the last visit with an absolute changelog link', async () => {
+  const sinceLastVisit = {
+    ...EMPTY_SINCE_LAST_VISIT,
+    city_updates: { count: 2, href: '/changelog' },
+  }
+  const { result, origin } = await runConnectWithSinceLastVisit(sinceLastVisit)
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, new RegExp(`^since_last_visit: city_updates=2 ${origin}/changelog$`, 'mu'))
+})
+
+test('connect prints exact non-zero fee-credit fields and their server links', async () => {
+  const sinceLastVisit = {
+    ...EMPTY_SINCE_LAST_VISIT,
+    fee_credit_received: {
+      accepted_gifts: { amount: '4.000000', amount_units: '4000000', record_link: 'city_fee_credit.receipts' },
+      settled_purchases: { amount: '1.250000', amount_units: '1250000', record_link: 'city_fee_credit.receipts' },
+      pending_gifts: { count: 3, record_link: 'city_fee_credit.pending_gifts' },
+    },
+  }
+  const { result } = await runConnectWithSinceLastVisit(sinceLastVisit)
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(
+    result.stdout,
+    /^since_last_visit: accepted_gifts=4\.000000 USDC,settled_purchases=1\.250000 USDC city_fee_credit\.receipts;pending_gifts=3 city_fee_credit\.pending_gifts$/mu,
+  )
+})
+
+test('connect prints updates and fee credit together on one line, exactly once per connect', async () => {
+  const sinceLastVisit = {
+    ...EMPTY_SINCE_LAST_VISIT,
+    city_updates: { count: 2, href: '/changelog' },
+    fee_credit_received: {
+      ...EMPTY_SINCE_LAST_VISIT.fee_credit_received,
+      accepted_gifts: { amount: '4.000000', amount_units: '4000000', record_link: 'city_fee_credit.receipts' },
+    },
+  }
+  const { result, origin, meReads } = await runConnectWithSinceLastVisit(sinceLastVisit)
+  assert.equal(result.status, 0, result.stderr)
+  const expected = `since_last_visit: city_updates=2 ${origin}/changelog;accepted_gifts=4.000000 USDC city_fee_credit.receipts`
+  assert.equal(result.stdout.split(/\r?\n/u).filter(line => line === expected).length, 1)
+  assert.ok(expected.length < 200, 'the complete line stays under 200 characters')
+  assert.equal(meReads, 1, 'one connect performs exactly one GET /api/me read')
+})
+
+test('connect drops the whole since_last_visit line for malformed server values', async () => {
+  const otherwiseVisible = {
+    ...EMPTY_SINCE_LAST_VISIT,
+    city_updates: { count: 2, href: '/changelog' },
+    fee_credit_received: {
+      ...EMPTY_SINCE_LAST_VISIT.fee_credit_received,
+      accepted_gifts: { amount: '4.000000', amount_units: '4000000', record_link: 'city_fee_credit.receipts' },
+    },
+  }
+  const scenarios = [
+    { ...otherwiseVisible, fee_credit_received: { ...otherwiseVisible.fee_credit_received, accepted_gifts: { ...otherwiseVisible.fee_credit_received.accepted_gifts, amount: 4 } } },
+    { ...otherwiseVisible, city_updates: { count: 2, href: '/change\nlog' } },
+    { ...otherwiseVisible, city_updates: { count: 2, href: '/\\evil.example/changelog' } },
+    { ...otherwiseVisible, city_updates: { count: Number.MAX_SAFE_INTEGER + 1, href: '/changelog' } },
+    { ...otherwiseVisible, fee_credit_received: { ...otherwiseVisible.fee_credit_received, accepted_gifts: { ...otherwiseVisible.fee_credit_received.accepted_gifts, amount: `${'9'.repeat(200)}.000000`, amount_units: '9'.repeat(206) } } },
+    { ...otherwiseVisible, last_visit_at: '2026-02-31T12:00:00.000Z' },
+  ]
+  for (const sinceLastVisit of scenarios) {
+    const { result } = await runConnectWithSinceLastVisit(sinceLastVisit)
+    assert.equal(result.status, 0, result.stderr)
+    assert.doesNotMatch(result.stdout, /^since_last_visit:/mu)
+    assert.doesNotMatch(result.stdout, /4\.000000 USDC/u, 'no valid sibling field leaks as a partial line')
+  }
+})
+
 test('connect chat prints the city pairing sentence and tells the human not to retry a rejected code', async () => {
   const stub = await startStubCityServer()
   const home = makeTempHome('connect-chat-pairing-')

@@ -34,6 +34,98 @@ import { probeMe } from './lib/identity-probe.mjs'
 import { readSecret, SecretReadFailure } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
+const UNSAFE_LINE_CHARACTER_RE = /[\x00-\x1f\x7f\u2028\u2029]/u
+const USDC_AMOUNT_RE = /^(?:0|[1-9]\d*)\.\d{6}$/u
+const AMOUNT_UNITS_RE = /^(?:0|[1-9]\d*)$/u
+
+function isRecord(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isSafeServerText(value) {
+  return typeof value === 'string'
+    && value.length > 0
+    && value === value.trim()
+    && !UNSAFE_LINE_CHARACTER_RE.test(value)
+}
+
+function isCount(value) {
+  return Number.isSafeInteger(value) && value >= 0
+}
+
+function readAmount(entry) {
+  if (
+    !isRecord(entry)
+    || !isSafeServerText(entry.amount)
+    || entry.amount.length >= 200
+    || !USDC_AMOUNT_RE.test(entry.amount)
+    || !isSafeServerText(entry.amount_units)
+    || entry.amount_units.length >= 200
+    || !AMOUNT_UNITS_RE.test(entry.amount_units)
+    || !isSafeServerText(entry.record_link)
+  ) return null
+
+  const amountUnits = BigInt(entry.amount.replace('.', '')).toString()
+  if (amountUnits !== entry.amount_units) return null
+  return { amount: entry.amount, recordLink: entry.record_link, nonZero: entry.amount_units !== '0' }
+}
+
+/**
+ * Turns the city's optional GET /api/me receipt into one safe, short line.
+ * Any malformed field rejects the complete line so valid siblings can never
+ * make a hostile or corrupt response look partly trustworthy.
+ */
+function sinceLastVisitLine(value) {
+  if (!isRecord(value) || !isRecord(value.city_updates) || !isRecord(value.fee_credit_received)) return null
+
+  const { city_updates: cityUpdates, fee_credit_received: feeCredit, last_visit_at: lastVisitAt } = value
+  let cityUpdatesUrl
+  try {
+    cityUpdatesUrl = new URL(cityUpdates.href, `${origin}/`)
+  } catch {
+    return null
+  }
+  if (
+    !isCount(cityUpdates.count)
+    || !isSafeServerText(cityUpdates.href)
+    || !cityUpdates.href.startsWith('/')
+    || cityUpdates.href.startsWith('//')
+    || cityUpdates.href.includes('\\')
+    || cityUpdatesUrl.origin !== origin
+    || !(lastVisitAt === null || (
+      isSafeServerText(lastVisitAt)
+      && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(lastVisitAt)
+      && !Number.isNaN(Date.parse(lastVisitAt))
+      && new Date(lastVisitAt).toISOString() === lastVisitAt
+    ))
+  ) return null
+
+  const accepted = readAmount(feeCredit.accepted_gifts)
+  const settled = readAmount(feeCredit.settled_purchases)
+  const pending = feeCredit.pending_gifts
+  if (!accepted || !settled || !isRecord(pending) || !isCount(pending.count) || !isSafeServerText(pending.record_link)) {
+    return null
+  }
+
+  const parts = []
+  if (cityUpdates.count > 0) parts.push(`city_updates=${cityUpdates.count} ${origin}${cityUpdates.href}`)
+
+  const received = [
+    ...(accepted.nonZero ? [{ label: 'accepted_gifts', ...accepted }] : []),
+    ...(settled.nonZero ? [{ label: 'settled_purchases', ...settled }] : []),
+  ]
+  if (received.length === 2 && received[0].recordLink === received[1].recordLink) {
+    parts.push(`${received.map(item => `${item.label}=${item.amount} USDC`).join(',')} ${received[0].recordLink}`)
+  } else {
+    parts.push(...received.map(item => `${item.label}=${item.amount} USDC ${item.recordLink}`))
+  }
+  if (pending.count > 0) parts.push(`pending_gifts=${pending.count} ${pending.record_link}`)
+  if (parts.length === 0) return null
+
+  const line = `since_last_visit: ${parts.join(';')}`
+  return line.length < 200 && !UNSAFE_LINE_CHARACTER_RE.test(line) ? line : null
+}
+
 function parseArgs(argv) {
   const flags = {}
   const positionals = []
@@ -173,6 +265,8 @@ async function connectHost() {
   }
   console.log(`one me read: OK (handle: ${probe.handle ?? handle}) — this read wakes any due timers and`)
   console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read.')
+  const visitLine = sinceLastVisitLine(probe.sinceLastVisit)
+  if (visitLine) console.log(visitLine)
 }
 
 function connectChat() {
