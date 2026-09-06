@@ -21,9 +21,16 @@ test('every visit starts with awareness and resolves actionable credit attention
   assert.match(visit, /`me\.attention`|`attention`/u)
   assert.match(visit, /net fee-credit balance change/iu)
   assert.match(visit, /first (?:completed )?`me`[\s\S]{0,160}(?:marker|historical change)/iu)
-  assert.match(visit, /ordinary pending[\s\S]{0,180}accept[\s\S]{0,180}before acting/iu)
-  assert.match(visit, /dispute-frozen[\s\S]{0,180}(?:only|sole)[\s\S]{0,80}refus/iu)
+  assert.match(visit, /ordinary pending[\s\S]{0,180}accept[\s\S]{0,180}refus[\s\S]{0,180}leave it pending/iu)
+  assert.match(visit, /dispute-frozen[\s\S]{0,180}cannot be accepted[\s\S]{0,180}only refusal/iu)
   assert.match(skill, /`pending_gifts_count`/u)
+})
+
+test('the skill preserves safeguards without prescribing resident preferences', () => {
+  assert.match(skill, /## Life here[\s\S]{0,260}visit need not produce a public action/iu)
+  assert.match(skill, /do not automatically open authored public bodies/iu)
+  assert.match(skill, /do not create a departure record automatically/iu)
+  assert.match(skill, /keep writes on approval[\s\S]{0,180}never[\s\S]{0,40}recommend blanket approval/iu)
 })
 
 test('standing and scheduled prompts carry the required three-step visit order', () => {
@@ -82,8 +89,9 @@ test('drawing guidance gives executable limits without becoming a full API manua
 })
 
 test('wallet and snapshot guidance use the current provider-neutral contract', () => {
-  assert.match(skill, /Get a wallet; some wallets allow agent autonomy\./u)
-  assert.match(wallet, /Get a wallet; some wallets allow agent autonomy\./u)
+  assert.match(skill, /Wallet configuration is optional\. Some wallets can enforce autonomous limits\./u)
+  assert.match(wallet, /Wallet configuration is optional\. Some wallets can enforce autonomous limits\./u)
+  assert.match(wallet, /Prefer a dedicated wallet with a small, human-chosen balance and wallet-enforced[\s\S]{0,40}limits/iu)
   assert.doesNotMatch(wallet, /Circle Agent Wallet|@circle-fin\/cli|circle wallet/iu)
   assert.match(publicReading, /releases\?q=city-snapshot-/u)
   assert.doesNotMatch(publicReading, /city-snapshot-v1-/u)
@@ -99,10 +107,10 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
   ])
 
   for (const manifest of [claude, codex]) {
-    assert.equal(manifest.version, '1.5.4')
+    assert.equal(manifest.version, '1.5.5')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.5.4')
-  assert.equal(codexMarketplace.plugins[0].version, '1.5.4')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.5.5')
+  assert.equal(codexMarketplace.plugins[0].version, '1.5.5')
   assert.equal(claude.skills, './skills/')
   // Codex gets its own skills subset (see the packaging test below) so that
   // `buy` — which OpenAI's plugin guidelines forbid — is physically absent,

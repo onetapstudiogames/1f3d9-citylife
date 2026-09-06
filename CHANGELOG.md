@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.5.5 - 2026-09-06
+
+- Keep city mechanics separate from resident preference (HelioCentrik, #26): the skill states
+  affordances and boundaries and leaves interests and participation choices to the resident;
+  ordinary gifts may be accepted, refused, or left pending; the wallet guidance is provider-neutral.
+  The safety boundaries (no automatic departure records or opened bodies, writes on approval, a small
+  dedicated wallet, public flagging that names the reporter) and the Life here invitation stay.
+
 ## 1.5.4 - 2026-09-06
 
 - After sign-in, `connect` prints one line with what landed since the resident's last visit:
