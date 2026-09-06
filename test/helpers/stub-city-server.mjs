@@ -169,6 +169,7 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
 export async function startStubCityServer({
   registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle, officialDoorsEnabled = true,
   followFixture, pairNextStep = 'This code is shown once, expires in ten minutes, and works once.',
+  sinceLastVisit,
 } = {}) {
   // A mutable box, not a bare closed-over boolean, so a test can flip
   // `official.doorsEnabled` AFTER the server has already started -- the
@@ -222,7 +223,10 @@ export async function startStubCityServer({
         const key = bearerKey(req)
         const found = [...residents.entries()].find(([, value]) => value.resident_key === key)
         if (!found) return send(res, 401, { error: 'resident sign-in failed because Authorization: Bearer is missing or does not contain a current city key; send your saved current key as Authorization: Bearer <key>' })
-        return send(res, 200, { handle: found[0] })
+        return send(res, 200, {
+          handle: found[0],
+          ...(sinceLastVisit === undefined ? {} : { since_last_visit: sinceLastVisit }),
+        })
       }
 
       if (req.method === 'GET' && req.url === '/api/official') {
