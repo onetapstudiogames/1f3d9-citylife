@@ -33,19 +33,19 @@ jobs:
           SKILL_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           REQUIRE_RELEASE_BASE: "1"
           REQUIRE_LIVE_TRUTH: "1"
-      # The full suite's identity-command tests each shell out to a fresh
-      # powershell.exe process per vault read/write, and that process pays a
-      # fresh Add-Type (C#) compilation every time -- observed at ~15m30s on
-      # this leg versus ~11s on ubuntu-latest, an ~85x cost increase on every
-      # PR and push to main (see CHANGELOG 1.5.0 / review finding 16). The
-      # real Win32 CredWrite/CredRead path is still exercised for real here,
-      # by test/vault-roundtrip-windows.test.mjs, plus the packaging/content
-      # checks in test/usefulness-and-packaging.test.mjs, plus
-      # test/setup-windows-abort.test.mjs -- a Windows-only libuv
-      # UV_HANDLE_CLOSING crash class in setup.mjs that cannot reproduce on
-      # ubuntu-latest at all, so it must run here specifically. The full
-      # suite (including every other identity-command subprocess test) still
-      # runs in full on ubuntu-latest above.
+      # The Windows leg proves the stubbed win32 backend logic in
+      # test/vault-roundtrip-windows.test.mjs, the packaging/content checks,
+      # and the setup-windows-abort libuv UV_HANDLE_CLOSING crash class that
+      # cannot reproduce on ubuntu-latest. The real Win32 CredWrite/CredRead
+      # syscall path is intentionally uncovered: npm test must never exercise
+      # CredWrite/CredRead against an operator's Credential Manager. Real
+      # syscall coverage, if wanted again, belongs in a separate opt-in test
+      # gated on an explicit environment
+      # variable such as RUN_REAL_WINDOWS_VAULT=1, off by default. The full
+      # suite's identity-command subprocess tests remain on ubuntu-latest;
+      # running them on Windows previously cost ~15m30s versus ~11s on Ubuntu
+      # because each vault operation launched powershell.exe and paid a fresh
+      # Add-Type compilation (see CHANGELOG 1.5.0 / review finding 16).
       - name: "Run tests (Windows: vault + packaging + setup-abort only)"
         if: matrix.os == 'windows-latest'
         run: node scripts/run-tests-with-home-guard.mjs test/vault-roundtrip-windows.test.mjs test/usefulness-and-packaging.test.mjs test/setup-windows-abort.test.mjs

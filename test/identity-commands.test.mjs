@@ -1,12 +1,12 @@
 // Behavioral coverage for setup.mjs / connect.mjs / key.mjs beyond the
 // file-exists / frontmatter checks in commands.test.mjs — driving them as
 // real subprocesses against a stub city server (test/helpers/stub-city-server.mjs)
-// and a throwaway per-test HOME/USERPROFILE, so the actual vault backend for
-// this platform is exercised end to end: register, rotate, recover, adopt,
-// and the honest two-pass human-approval gate.
+// and a throwaway per-test HOME/USERPROFILE, so the vault integration path is
+// exercised end to end: register, rotate, recover, adopt, and the honest
+// two-pass human-approval gate. The test runner redirects vault access to a
+// throwaway file-backed shim on every platform.
 
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
 import { closeSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,6 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import test from 'node:test'
 
 import { deleteSecret, readSecret, storeSecret } from '../scripts/identity-client.mjs'
+import { listTestPlatformVaultTargets, seedCorruptTestVaultEntry } from './helpers/file-vault-backends.mjs'
 import { startStubCityServer } from './helpers/stub-city-server.mjs'
 import { makeTempHome, runNode } from './helpers/run-identity-cli.mjs'
 
@@ -90,26 +91,14 @@ function listRawVaultLabels(origin, homeDir) {
       .map(entry => (typeof entry === 'string' ? entry : entry?.label))
       .filter(label => typeof label === 'string')
     if (process.platform !== 'win32') return fromIndex
-    // storeSecret's updateVaultIndex is explicitly best-effort (identity-
-    // client.mjs) and deleteSecret on the file backend never touches the
-    // index at all, so a credential that reached Windows Credential Manager
-    // while its index write failed would be invisible to the index alone --
-    // union it with a real `cmdkey /list` scrape, mirroring listVaultLabels'
-    // own win32 union in identity-client.mjs, so this assertion covers the
-    // store the credential actually lives in.
+    // storeSecret's updateVaultIndex is explicitly best-effort, so union the
+    // index with the temp-backed Windows shim's raw files. This catches a
+    // leaked test entry without reading the host's real Credential Manager.
     const prefix = `1f3d9:${origin}:`
-    const fromCmdkey = []
-    try {
-      const output = execFileSync('cmdkey', ['/list'], { encoding: 'utf8' })
-      for (const match of output.matchAll(/Target:\s*(.+)\s*$/gmu)) {
-        const target = match[1].trim()
-        const index = target.indexOf(prefix)
-        if (index !== -1) fromCmdkey.push(target.slice(index + prefix.length))
-      }
-    } catch {
-      // cmdkey unavailable or failed -- fall back to the index alone.
-    }
-    return [...new Set([...fromIndex, ...fromCmdkey])]
+    const fromShim = listTestPlatformVaultTargets(homeDir)
+      .filter(target => target.startsWith(prefix))
+      .map(target => target.slice(prefix.length))
+    return [...new Set([...fromIndex, ...fromShim])]
   }
   const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
   const dir = join(homeDir, '.1f3d9', 'credentials')
@@ -605,12 +594,9 @@ test('setup.mjs: human approval needs two real passes -- a bare or fabricated --
     assert.equal(stub.residents.size, 1, 'a repair pass never creates a second resident')
     assertNoSecretLeaked(repairPass, 'setup.mjs repair pass')
   } finally {
-    // On win32, storeSecret/readSecret always use the real Windows
-    // Credential Manager regardless of `homeDir` -- it is not scoped to the
-    // throwaway per-test home the way the plain-file backend is -- so this
-    // test's CLI-driven `setup` registration must be cleaned up explicitly,
-    // the same way test/vault-roundtrip-windows.test.mjs does for its own
-    // fixture entries.
+    // Clean up through the public vault API before removing the throwaway
+    // home, matching the normal identity lifecycle without touching the
+    // host's credential store.
     deleteSecret(stub.origin, 'agent-one', { homeDir: home.dir })
     home.cleanup()
     await stub.close()
@@ -1353,41 +1339,11 @@ test('key/connect/setup refuse cleanly on a corrupt vault entry, never an uncaug
   const origin = 'https://example.invalid'
   const handle = `corrupt-handle-${Date.now().toString(36)}`
   const STACK_TRACE_LINE = /^\s*at\s+\S+/mu
-
-  if (process.platform === 'win32') {
-    // Seed a genuinely undecodable Windows Credential Manager entry the
-    // same way the finding's own reproduction did: cmdkey can write an
-    // arbitrary password string that CredRead reads back as raw bytes this
-    // script's JSON.parse(Buffer.from(...)) cannot decode.
-    const target = `1f3d9:${origin}:${handle}`
-    execFileSync('cmdkey', [`/generic:${target}`, `/user:${handle}`, '/pass:not-valid-base64-json{{{'], { stdio: 'ignore' })
-    try {
-      for (const [label, scriptPath, args] of [
-        ['key status', keyPath, ['status', '--origin', origin, '--allow-origin', origin, '--handle', handle]],
-        ['key show', keyPath, ['show', '--origin', origin, '--allow-origin', origin, '--handle', handle]],
-        ['connect', connectPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle]],
-        ['setup', setupPath, ['--origin', origin, '--allow-origin', origin, '--handle', handle, '--client-class', 'coding_persistent']],
-      ]) {
-        const result = await runNode(scriptPath, args, { env: NOT_A_REAL_ORIGIN_ENV })
-        assert.notEqual(result.status, 0, `${label}: exits non-zero on a corrupt vault entry`)
-        assert.doesNotMatch(result.stderr, STACK_TRACE_LINE, `${label}: no raw stack trace`)
-        assert.match(result.stderr, /could not be decoded/iu, `${label}: caller-words explanation`)
-      }
-    } finally {
-      execFileSync('cmdkey', [`/delete:${target}`], { stdio: 'ignore' })
-    }
-    return
-  }
-
-  // POSIX file backend: write a corrupt file directly at the deterministic
-  // path storeSecret/readSecret compute, inside a throwaway HOME.
   const home = makeTempHome('corrupt-vault-')
   try {
-    const safeOrigin = origin.replace(/[^a-z0-9.-]/giu, '_')
-    const safeLabel = handle.replace(/[^a-z0-9._-]/giu, '_')
-    const dir = `${home.dir}/.1f3d9/credentials`
-    mkdirSync(dir, { recursive: true })
-    writeFileSync(`${dir}/${safeOrigin}__${safeLabel}.json`, 'not valid json{{{')
+    // Seed the corrupt bytes in the same temp-backed store every CLI child
+    // uses. On Windows this is the command shim, never Credential Manager.
+    seedCorruptTestVaultEntry(origin, handle, home.dir)
 
     for (const [label, scriptPath, args] of [
       ['key status', keyPath, ['status', '--origin', origin, '--allow-origin', origin, '--handle', handle]],
@@ -1398,7 +1354,8 @@ test('key/connect/setup refuse cleanly on a corrupt vault entry, never an uncaug
       const result = await runNode(scriptPath, args, { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } })
       assert.notEqual(result.status, 0, `${label}: exits non-zero on a corrupt vault entry`)
       assert.doesNotMatch(result.stderr, STACK_TRACE_LINE, `${label}: no raw stack trace`)
-      assert.match(result.stderr, /could not be parsed as JSON/iu, `${label}: caller-words explanation`)
+      const explanation = process.platform === 'win32' ? /could not be decoded/iu : /could not be parsed as JSON/iu
+      assert.match(result.stderr, explanation, `${label}: caller-words explanation`)
     }
   } finally {
     home.cleanup()
@@ -2200,8 +2157,8 @@ test(
 // --- round-4 finding 5 (part 1): setup.mjs's refusal on an incomplete vault
 // enumeration (KeychainEnumerationIncomplete) has real end-to-end coverage,
 // not just the unit-level listVaultLabels tests in identity-client.test.mjs.
-// CI never runs on darwin (see vault-roundtrip-windows.test.mjs's own header
-// comment -- this repo's matrix is ubuntu-latest/windows-latest only), so
+// CI never runs on darwin (see .github/workflows/ci.yml -- this repo's matrix
+// is ubuntu-latest/windows-latest only), so
 // the real darwin `security dump-keychain` ENOBUFS/ETIMEDOUT path is
 // otherwise unreachable through a real subprocess on any runner this repo
 // actually has. This drives the real setup.mjs subprocess through that
