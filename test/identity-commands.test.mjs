@@ -407,6 +407,16 @@ test('connect prints city updates since the last visit with an absolute changelo
   assert.match(result.stdout, new RegExp(`^since_last_visit: city_updates=2 ${origin}/changelog$`, 'mu'))
 })
 
+test('connect prints counts when last_visit_at is absent', async () => {
+  const sinceLastVisit = {
+    city_updates: { count: 2, href: '/changelog' },
+    fee_credit_received: EMPTY_SINCE_LAST_VISIT.fee_credit_received,
+  }
+  const { result, origin } = await runConnectWithSinceLastVisit(sinceLastVisit)
+  assert.equal(result.status, 0, result.stderr)
+  assert.match(result.stdout, new RegExp(`^since_last_visit: city_updates=2 ${origin}/changelog$`, 'mu'))
+})
+
 test('connect prints exact non-zero fee-credit fields and their server links', async () => {
   const sinceLastVisit = {
     ...EMPTY_SINCE_LAST_VISIT,
@@ -464,6 +474,55 @@ test('connect drops the whole since_last_visit line for malformed server values'
     assert.doesNotMatch(result.stdout, /^since_last_visit:/mu)
     assert.doesNotMatch(result.stdout, /4\.000000 USDC/u, 'no valid sibling field leaks as a partial line')
   }
+})
+
+test('connect drops the whole since_last_visit line for unsafe record links and hrefs', async () => {
+  const otherwiseVisible = {
+    ...EMPTY_SINCE_LAST_VISIT,
+    city_updates: { count: 2, href: '/changelog' },
+    fee_credit_received: {
+      ...EMPTY_SINCE_LAST_VISIT.fee_credit_received,
+      accepted_gifts: { amount: '4.000000', amount_units: '4000000', record_link: 'city_fee_credit.receipts' },
+    },
+  }
+  const withAcceptedRecordLink = recordLink => ({
+    ...otherwiseVisible,
+    fee_credit_received: {
+      ...otherwiseVisible.fee_credit_received,
+      accepted_gifts: { ...otherwiseVisible.fee_credit_received.accepted_gifts, record_link: recordLink },
+    },
+  })
+  const scenarios = [
+    withAcceptedRecordLink('city_fee_credit.receipts;pending_gifts=99'),
+    withAcceptedRecordLink('city_fee_credit.receipts pending_gifts'),
+    withAcceptedRecordLink('city_fee_credit.receipts=pending_gifts'),
+    withAcceptedRecordLink('https://evil.example/steal?k=1'),
+    { ...otherwiseVisible, city_updates: { count: 2, href: '/c;pending_gifts' } },
+  ]
+  for (const sinceLastVisit of scenarios) {
+    const { result } = await runConnectWithSinceLastVisit(sinceLastVisit)
+    assert.equal(result.status, 0, result.stderr)
+    assert.doesNotMatch(result.stdout, /^since_last_visit:/mu)
+    assert.doesNotMatch(result.stdout, /4\.000000 USDC/u, 'no valid sibling amount leaks as a partial line')
+  }
+})
+
+test('connect drops a valid-field since_last_visit line when the assembled line exceeds 200 characters', async () => {
+  const longRecordLink = `${'a_'.repeat(60)}.receipts`
+  const sinceLastVisit = {
+    ...EMPTY_SINCE_LAST_VISIT,
+    city_updates: { count: 2, href: '/changelog' },
+    fee_credit_received: {
+      ...EMPTY_SINCE_LAST_VISIT.fee_credit_received,
+      accepted_gifts: { amount: '4.000000', amount_units: '4000000', record_link: longRecordLink },
+    },
+  }
+  const { result, origin } = await runConnectWithSinceLastVisit(sinceLastVisit)
+  const assembledLine = `since_last_visit: city_updates=2 ${origin}/changelog;accepted_gifts=4.000000 USDC ${longRecordLink}`
+  assert.ok(assembledLine.length > 200, 'the otherwise-valid assembled line reaches the 200-character guard')
+  assert.equal(result.status, 0, result.stderr)
+  assert.doesNotMatch(result.stdout, /^since_last_visit:/mu)
+  assert.doesNotMatch(result.stdout, /4\.000000 USDC/u, 'no valid sibling amount leaks as a partial line')
 })
 
 test('connect chat prints the city pairing sentence and tells the human not to retry a rejected code', async () => {

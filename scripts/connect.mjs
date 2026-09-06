@@ -35,8 +35,12 @@ import { readSecret, SecretReadFailure } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 
 const UNSAFE_LINE_CHARACTER_RE = /[\x00-\x1f\x7f\u2028\u2029]/u
+const BIDI_CONTROL_RE = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u
 const USDC_AMOUNT_RE = /^(?:0|[1-9]\d*)\.\d{6}$/u
 const AMOUNT_UNITS_RE = /^(?:0|[1-9]\d*)$/u
+const RECORD_LINK_RE = /^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/u
+const HREF_RE = /^\/[A-Za-z0-9._~\/-]*$/u
+const MAX_SERVER_FIELD_LENGTH = 200
 
 function isRecord(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -53,6 +57,20 @@ function isCount(value) {
   return Number.isSafeInteger(value) && value >= 0
 }
 
+function isSafeRecordLink(value) {
+  return isSafeServerText(value)
+    && value.length < MAX_SERVER_FIELD_LENGTH
+    && RECORD_LINK_RE.test(value)
+    && !BIDI_CONTROL_RE.test(value)
+}
+
+function isSafeHref(value) {
+  return isSafeServerText(value)
+    && HREF_RE.test(value)
+    && !value.includes('..')
+    && !BIDI_CONTROL_RE.test(value)
+}
+
 function readAmount(entry) {
   if (
     !isRecord(entry)
@@ -62,7 +80,7 @@ function readAmount(entry) {
     || !isSafeServerText(entry.amount_units)
     || entry.amount_units.length >= 200
     || !AMOUNT_UNITS_RE.test(entry.amount_units)
-    || !isSafeServerText(entry.record_link)
+    || !isSafeRecordLink(entry.record_link)
   ) return null
 
   const amountUnits = BigInt(entry.amount.replace('.', '')).toString()
@@ -73,12 +91,13 @@ function readAmount(entry) {
 /**
  * Turns the city's optional GET /api/me receipt into one safe, short line.
  * Any malformed field rejects the complete line so valid siblings can never
- * make a hostile or corrupt response look partly trustworthy.
+ * make a hostile or corrupt response look partly trustworthy. last_visit_at
+ * is not printed; an absent value is treated like null for older/trimmed cities.
  */
 function sinceLastVisitLine(value) {
   if (!isRecord(value) || !isRecord(value.city_updates) || !isRecord(value.fee_credit_received)) return null
 
-  const { city_updates: cityUpdates, fee_credit_received: feeCredit, last_visit_at: lastVisitAt } = value
+  const { city_updates: cityUpdates, fee_credit_received: feeCredit, last_visit_at: lastVisitAt = null } = value
   let cityUpdatesUrl
   try {
     cityUpdatesUrl = new URL(cityUpdates.href, `${origin}/`)
@@ -87,10 +106,7 @@ function sinceLastVisitLine(value) {
   }
   if (
     !isCount(cityUpdates.count)
-    || !isSafeServerText(cityUpdates.href)
-    || !cityUpdates.href.startsWith('/')
-    || cityUpdates.href.startsWith('//')
-    || cityUpdates.href.includes('\\')
+    || !isSafeHref(cityUpdates.href)
     || cityUpdatesUrl.origin !== origin
     || !(lastVisitAt === null || (
       isSafeServerText(lastVisitAt)
@@ -103,7 +119,7 @@ function sinceLastVisitLine(value) {
   const accepted = readAmount(feeCredit.accepted_gifts)
   const settled = readAmount(feeCredit.settled_purchases)
   const pending = feeCredit.pending_gifts
-  if (!accepted || !settled || !isRecord(pending) || !isCount(pending.count) || !isSafeServerText(pending.record_link)) {
+  if (!accepted || !settled || !isRecord(pending) || !isCount(pending.count) || !isSafeRecordLink(pending.record_link)) {
     return null
   }
 
