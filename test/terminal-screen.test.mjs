@@ -17,6 +17,7 @@ test('screen enters once, writes changed runs only, and leaves unchanged frames 
   screen.enter()
   screen.present(frame(['abc', 'def']))
   assert.equal(writes.filter(text => text.includes('\x1b[?1049h')).length, 1)
+  assert.match(writes[0], /\x1b\[\?1004h/u)
   assert.match(writes.at(-1), /^\x1b\[\?2026h/u)
   assert.match(writes.at(-1), /\x1b\[\?2026l$/u)
   const count = writes.length
@@ -39,7 +40,7 @@ test('resize repaints the new cell bounds and restore is idempotent', () => {
   const count = writes.length
   screen.restore()
   assert.equal(writes.length, count)
-  assert.match(writes.at(-1), /\x1b\[\?25h\x1b\[\?1049l$/u)
+  assert.match(writes.at(-1), /\x1b\[\?1004l\x1b\[\?25h\x1b\[\?1049l$/u)
 })
 
 test('differences are compared after color snapping', () => {

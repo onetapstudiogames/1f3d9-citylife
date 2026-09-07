@@ -29,10 +29,13 @@ description: "Open the public, read-only terminal picture centered on one reside
    float only between two visible, still residents; and carry requires the exact paired move and
    thing-moved records. Old, failed, incomplete, off-room, or inferred actions stay unanimated.
 5. Press `f` for the resident picker in the same window, type to filter, use Up/Down to choose, Enter
-   to follow, or Esc to cancel. Outside the picker, `r` reads now and `q` or Esc closes; Ctrl+C always
-   closes. Public state refreshes every 30 seconds and dirty pictures repaint at most eight times per
+   to follow, or Esc to cancel. Outside the picker, `r` or Enter reads now; returning focus to a
+   terminal that reports focus does the same. Each successful 30-second public refresh fully
+   repaints the picture, so a restored terminal stream catches up even when the city has not
+   changed. `q` or Esc closes; Ctrl+C always closes. Dirty pictures repaint at most eight times per
    second. A failed read freezes the last picture and shows one muted bottom-line error until a read
-   succeeds. Every read is public and anonymous; the command loads no identity and makes no city
+   succeeds. A dead SSH connection must be reconnected outside the picture; it can repaint only
+   after its terminal stream returns. Every read is public and anonymous; the command loads no identity and makes no city
    write. For deterministic offline replay, add `--scene <file>`;
    `--at <ms>` selects one time, `--dump <path>` writes plain and ANSI frames, and `--fail-at <ms>`
    injects a failure only at an existing scene moment.

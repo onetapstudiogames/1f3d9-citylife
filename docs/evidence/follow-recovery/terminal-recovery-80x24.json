@@ -1,0 +1,11 @@
+{
+  "pid": 494036,
+  "requestedSize": "80x24",
+  "columns": 80,
+  "rows": 24,
+  "isTTY": true,
+  "windowsTerminal": true,
+  "at": 62000,
+  "color": "truecolor",
+  "sceneFile": "test/fixtures/live-scene.json"
+}

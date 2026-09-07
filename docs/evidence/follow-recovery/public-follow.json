@@ -1,0 +1,10 @@
+{
+  "recordedAt": "2026-09-07T21:10:28.3392616Z",
+  "command": "node scripts/follow-feed.mjs thog --once --size 80x24 --color 16",
+  "network": "anonymous public GETs only",
+  "handle": "thog",
+  "visiblePlace": "the waystation",
+  "exitCode": 0,
+  "cityWrite": false,
+  "credentialAccess": false
+}

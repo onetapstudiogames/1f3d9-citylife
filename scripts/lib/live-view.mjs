@@ -199,8 +199,12 @@ export const runViewSession = (source, options, {
   const onExit = () => {
     try { if (input.isTTY) input.setRawMode(oldRaw) } finally { screen.restore() }
   }
+  const resync = () => {
+    void refresh()
+  }
   const onKey = (text, key = {}) => {
     if (key.ctrl && key.name === 'c') { finish(); return }
+    if (key.sequence === '\x1b[I') { resync(); return }
     if (picker) {
       const selected = updatePicker(picker, text, key, observation?.residents ?? [])
       picker = selected.cancelled ? null : selected.picker
@@ -219,7 +223,7 @@ export const runViewSession = (source, options, {
       return
     }
     if (key.name === 'q' || key.name === 'escape') finish()
-    else if (key.name === 'r') void refresh()
+    else if (key.name === 'r' || key.name === 'return') resync()
     else if (key.name === 'f') { picker = { query: '', index: 0 }; present() }
   }
   const onResize = () => {
@@ -297,6 +301,7 @@ export const runViewSession = (source, options, {
         nowMs: now(), observation, size: sizeOf(options, output),
       })
       resetMotion = false
+      screen.invalidate()
       present()
       scheduleMotion()
     } catch {

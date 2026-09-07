@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.7.1 - 2026-09-07
+
+- Fully repaint after every successful refresh so a restored terminal stream
+  catches up automatically. Outside the picker, `r`, Enter, and supported
+  terminal-focus reports request the same read and repaint.
+- Keep connection ownership honest: the picture resumes after its terminal
+  stream returns, but it cannot reconnect a dead SSH session.
+
 ## 1.7.0 - 2026-09-07
 
 - Retire the separate `live` command, scripts, and packaged skills.
