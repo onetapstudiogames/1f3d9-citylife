@@ -80,12 +80,22 @@ const overlayPixels = (grid, x, y, pixels, opacity = 1) => {
   }
 }
 
-const paintRoomBase = (grid, room, box, placements) => {
+const paintRoomBase = (grid, room, box, placements, carriedThingIds = new Set()) => {
   grid.fill(box.x, box.y, box.width, box.height, DARK.room)
+  if (room.quiet === true) {
+    for (let y = box.y + 1; y < box.y + box.height - 1; y += 1) {
+      for (let x = box.x + 1; x < box.x + box.width - 1; x += 1) {
+        grid.put(x, y, (x + y) % 2 === 0 ? '▒' : '░', DARK.muted, DARK.room)
+      }
+    }
+    drawRoomBox(grid, room, box, DARK.muted)
+    return
+  }
   paintFloor(grid, room, box)
   drawRoomBox(grid, room, box, wallTone(room.drawing, DARK.muted))
 
   for (const placement of placements.things) {
+    if (carriedThingIds.has(String(placement.item?.id))) continue
     overlayPixels(grid, placement.x, placement.y, placement.item.drawing
       ? shrinkDrawingPixels(placement.item.drawing)
       : THING_STANDIN_PIXELS)
@@ -93,9 +103,78 @@ const paintRoomBase = (grid, room, box, placements) => {
   for (const dot of placements.overflowDots) grid.put(dot.x, dot.y, '·', DARK.muted)
 }
 
-const residentPixels = (resident) => resident?.drawing
-  ? drawingPixels(resident.drawing)
-  : standInPixels(DARK.muted)
+const rotatePixels = (pixels) => Array.from({ length: 8 }, (_, row) =>
+  Array.from({ length: 8 }, (_, column) => pixels[7 - column]?.[row] ?? null))
+
+const residentPixels = (resident, sleepEnabled) => {
+  const pixels = resident?.drawing ? drawingPixels(resident.drawing) : standInPixels(DARK.muted)
+  return sleepEnabled && resident?.asleep === true ? rotatePixels(pixels) : pixels
+}
+
+const thingPixels = (thing) => thing?.drawing ? shrinkDrawingPixels(thing.drawing) : THING_STANDIN_PIXELS
+
+const effectAnchor = (effect, roomStates) => {
+  if (effect.anchor) return effect.anchor
+  const state = roomStates.find(({ room }) => sameId(room.id, effect.roomId))
+  return state?.plan.things.find((placement) => sameId(placement.item?.id, effect.thingId)) ?? null
+}
+
+const residentPose = (poses, residentId) => poses.find((pose) => sameId(pose.resident?.id, residentId))
+
+const paintSpark = (grid, anchor, character) => {
+  const points = [
+    [anchor.x - 1, anchor.y],
+    [anchor.x + anchor.width, anchor.y],
+    [anchor.x - 1, anchor.y + anchor.height - 1],
+    [anchor.x + anchor.width, anchor.y + anchor.height - 1],
+  ]
+  for (const [x, y] of points) grid.put(x, y, character, DARK.hi)
+}
+
+const paintEffects = (grid, effects, roomStates, poses) => {
+  for (const effect of effects ?? []) {
+    if (effect.type === 'carry') {
+      const carrier = residentPose(poses, effect.carrierResidentId)
+      const state = carrier && roomStates.find(({ room }) => sameId(room.id, carrier.roomId))
+      if (!carrier || !state || state.room.quiet === true) continue
+      const x = Math.max(state.box.x + 1, Math.min(carrier.x + carrier.width - 2, state.box.x + state.box.width - 5))
+      const y = Math.max(state.box.y + 1, Math.min(carrier.y + 1, state.box.y + state.box.height - 3))
+      overlayPixels(grid, x, y, thingPixels(effect.thing), 0.9)
+      continue
+    }
+    const state = roomStates.find(({ room }) => sameId(room.id, effect.roomId))
+    if (!state || state.room.quiet === true) continue
+    if (effect.type === 'glow' || effect.type === 'puff' || effect.type === 'crumbs') {
+      const anchor = effectAnchor(effect, roomStates)
+      if (!anchor) continue
+      paintSpark(grid, anchor, effect.type === 'crumbs' ? '·' : effect.type === 'puff' ? '✦' : '•')
+      continue
+    }
+    if (effect.type !== 'gift' && effect.type !== 'transfer') continue
+    const from = residentPose(poses, effect.fromResidentId)
+    const to = residentPose(poses, effect.toResidentId)
+    if (!from || !to || !sameId(from.roomId, state.room.id) || !sameId(to.roomId, state.room.id)) continue
+    const progress = Math.max(0, Math.min(1, Number(effect.progress) || 0))
+    const rawX = Math.round((from.x + (from.width / 2)) + (((to.x + (to.width / 2)) - (from.x + (from.width / 2))) * progress) - 2)
+    const rawY = Math.round((from.y + 1) + ((to.y - from.y) * progress) - (Math.sin(Math.PI * progress) * 2))
+    const x = Math.max(state.box.x + 1, Math.min(rawX, state.box.x + state.box.width - 5))
+    const y = Math.max(state.box.y + 2, Math.min(rawY, state.box.y + state.box.height - 3))
+    overlayPixels(grid, x, y, thingPixels(effect.thing), 0.9)
+    if (effect.type === 'gift') grid.put(x + 1, y - 1, '♥', DARK.hi)
+  }
+}
+
+const paintFocus = (grid, focus, poses, roomStates) => {
+  if (!focus) return
+  const pose = residentPose(poses, focus.id)
+  const state = pose && roomStates.find(({ room }) => sameId(room.id, pose.roomId))
+  if (!pose || !state || state.room.quiet === true) return
+  const left = Math.max(state.box.x + 1, Math.min(pose.x - 1, state.box.x + state.box.width - 2))
+  const right = Math.max(state.box.x + 1, Math.min(pose.x + pose.width, state.box.x + state.box.width - 2))
+  const y = Math.max(state.box.y + 1, Math.min(pose.y + 1, state.box.y + state.box.height - 2))
+  grid.put(left, y, '›', DARK.hi)
+  grid.put(right, y, '‹', DARK.hi)
+}
 
 const openDoor = (grid, door) => {
   const sourceX = door.side === 'left' ? door.x + 1 : door.x - 1
@@ -191,9 +270,6 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
     return { room, box, plan: framePlan ?? planRoomPlacements(room, box) }
   })
 
-  roomStates.forEach(({ room, box, plan }) => paintRoomBase(grid, room, box, plan))
-  for (const door of motionFrame?.doors ?? []) openDoor(grid, door)
-
   const poses = framed
     ? (motionFrame.residents ?? [])
     : roomStates.flatMap(({ room, plan }) => plan.residents.map((placement) => ({
@@ -205,14 +281,40 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
       height: placement.height,
       opacity: 1,
     })))
-  for (const pose of poses) overlayPixels(grid, pose.x, pose.y, residentPixels(pose.resident), pose.opacity ?? 1)
+  const visiblePoses = poses.filter((pose) => roomStates.find(({ room }) => sameId(room.id, pose.roomId))?.room.quiet !== true)
+  const carriedByRoom = new Map()
+  for (const effect of motionFrame?.effects ?? []) {
+    if (effect.type !== 'carry') continue
+    const carrier = residentPose(visiblePoses, effect.carrierResidentId)
+    if (!carrier) continue
+    const room = String(carrier.roomId)
+    const ids = carriedByRoom.get(room) ?? new Set()
+    ids.add(String(effect.thingId))
+    carriedByRoom.set(room, ids)
+  }
+
+  roomStates.forEach(({ room, box, plan }) => paintRoomBase(grid, room, box, plan, carriedByRoom.get(String(room.id))))
+  for (const door of motionFrame?.doors ?? []) {
+    const state = roomStates.find(({ room }) => sameId(room.id, door.roomId))
+    if (state?.room.quiet !== true) openDoor(grid, door)
+  }
+
+  for (const pose of visiblePoses) {
+    const walkingFocus = sameId(pose.resident?.id, observation?.focus?.id) &&
+      (pose.walking === true || (motionFrame?.doors?.length ?? 0) > 0)
+    const sleeping = Boolean(observation?.focus) && !walkingFocus
+    overlayPixels(grid, pose.x, pose.y, residentPixels(pose.resident, sleeping), pose.opacity ?? 1)
+  }
+
+  paintEffects(grid, motionFrame?.effects, roomStates, visiblePoses)
+  paintFocus(grid, observation?.focus, visiblePoses, roomStates)
 
   const bubbleRects = []
   for (const bubble of motionFrame?.bubbles ?? []) {
-    const author = poses.find((pose) => sameId(pose.roomId, bubble.roomId) && sameId(pose.resident?.id, bubble.residentId))
+    const author = visiblePoses.find((pose) => sameId(pose.roomId, bubble.roomId) && sameId(pose.resident?.id, bubble.residentId))
     const state = roomStates.find(({ room }) => sameId(room.id, bubble.roomId))
-    if (!author || !state) continue
-    const portraitRects = poses.filter((pose) => sameId(pose.roomId, bubble.roomId))
+    if (!author || !state || state.room.quiet === true) continue
+    const portraitRects = visiblePoses.filter((pose) => sameId(pose.roomId, bubble.roomId))
     const rectangle = drawBubble(grid, bubble, author, state.box, [...portraitRects, ...state.plan.things, ...bubbleRects])
     if (rectangle) bubbleRects.push(rectangle)
   }

@@ -121,20 +121,20 @@ const walkingObservation = (roomId, events = []) => ({
   notes: [],
 })
 
-test('view arguments keep scene, size, and color explicit and reject typos', () => {
-  assert.equal(parseViewArgs(['--scene', 'scene.json', '--fail-at', '30000']).failAt, 30000)
-  assert.throws(() => parseViewArgs(['--fail-at', '30000']), /scene/u)
-  assert.deepEqual(parseViewArgs(['first town', '--scene', 'scene.json', '--size', '80x24', '--color', '256']), {
-    placeArg: 'first town', sceneFile: 'scene.json', columns: 80, rows: 24, color: '256',
+test('follow view arguments require one handle and keep replay options explicit', () => {
+  assert.equal(parseViewArgs(['thog', '--scene', 'scene.json', '--fail-at', '30000']).failAt, 30000)
+  assert.throws(() => parseViewArgs(['thog', '--fail-at', '30000']), /scene/u)
+  assert.deepEqual(parseViewArgs(['thog', '--scene', 'scene.json', '--size', '80x24', '--color', '256']), {
+    followHandle: 'thog', sceneFile: 'scene.json', columns: 80, rows: 24, color: '256',
   })
-  assert.equal(parseViewArgs(['dpl', '--scene', 'scene.json'], 'follow').followHandle, 'dpl')
-  assert.deepEqual(parseViewArgs(['--once', '--scene', 'scene.json', '--at', '30000']), {
-    once: true, sceneFile: 'scene.json', at: 30000,
+  assert.deepEqual(parseViewArgs(['thog', '--once', '--scene', 'scene.json', '--at', '30000']), {
+    followHandle: 'thog', once: true, sceneFile: 'scene.json', at: 30000,
   })
   for (const args of [['--unknown'], ['--scene'], ['--size', '0x24'], ['--color', '8'], ['--at', '1'], ['one', 'two']]) {
     assert.throws(() => parseViewArgs(args), /view|scene|size|color|argument/u)
   }
-  assert.throws(() => parseViewArgs([], 'follow'), /resident handle/u)
+  assert.throws(() => parseViewArgs([]), /resident handle/u)
+  assert.throws(() => parseViewArgs(['--scene', 'scene.json']), /resident handle/u)
 })
 
 test('the real fixture produces byte-identical plain and ANSI dumps without networking', async () => {
@@ -217,12 +217,13 @@ test('replay reads source moments only and expires a note bubble after six secon
   }
 })
 
-test('--once CLI renders the real fixture as plain text offline', async () => {
+test('follow-feed --once renders one recorded resident room as plain text offline', async () => {
   const { stdout, stderr } = await execFileAsync(process.execPath, [
-    fileURLToPath(new URL('../scripts/live.mjs', import.meta.url)),
-    '--once', '--scene', fileURLToPath(sceneFile), '--size', '80x24', '--at', '30000',
+    fileURLToPath(new URL('../scripts/follow-feed.mjs', import.meta.url)),
+    'thog', '--once', '--scene', fileURLToPath(sceneFile), '--size', '80x24', '--at', '32000',
   ], { timeout: 5000, maxBuffer: 1024 * 1024 })
-  assert.match(stdout, /first town/u)
+  assert.match(stdout, /the first town fair/u)
+  assert.equal(stdout.match(/╭─/gu)?.length, 1)
   assert.doesNotMatch(stdout, /\x1b/u)
   assert.equal(stderr, '')
 })

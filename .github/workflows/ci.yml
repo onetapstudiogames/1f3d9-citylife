@@ -14,7 +14,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out the source
@@ -27,12 +27,15 @@ jobs:
         with:
           node-version: 24
       - name: Run tests
-        if: matrix.os != 'windows-latest'
+        if: matrix.os == 'ubuntu-latest'
         run: npm test
         env:
           SKILL_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           REQUIRE_RELEASE_BASE: "1"
           REQUIRE_LIVE_TRUTH: "1"
+      - name: Run follow and terminal checks on macOS
+        if: matrix.os == 'macos-latest'
+        run: node --test test/follow-*.test.mjs test/live-*.test.mjs test/terminal-*.test.mjs test/legacy-console.test.mjs
       # The Windows leg proves the stubbed win32 backend logic in
       # test/vault-roundtrip-windows.test.mjs, the packaging/content checks,
       # and the setup-windows-abort libuv UV_HANDLE_CLOSING crash class that
@@ -46,9 +49,9 @@ jobs:
       # running them on Windows previously cost ~15m30s versus ~11s on Ubuntu
       # because each vault operation launched powershell.exe and paid a fresh
       # Add-Type compilation (see CHANGELOG 1.5.0 / review finding 16).
-      - name: "Run tests (Windows: vault + packaging + setup-abort only)"
+      - name: "Run tests (Windows: vault, packaging, setup-abort, and follow)"
         if: matrix.os == 'windows-latest'
-        run: node scripts/run-tests-with-home-guard.mjs test/vault-roundtrip-windows.test.mjs test/usefulness-and-packaging.test.mjs test/setup-windows-abort.test.mjs
+        run: node scripts/run-tests-with-home-guard.mjs test/vault-roundtrip-windows.test.mjs test/usefulness-and-packaging.test.mjs test/setup-windows-abort.test.mjs test/follow-*.test.mjs test/live-*.test.mjs test/terminal-*.test.mjs test/legacy-console.test.mjs
         env:
           SKILL_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           REQUIRE_RELEASE_BASE: "1"

@@ -26,22 +26,19 @@ import { buildLegacyConsoleLaunch } from './legacy-console.mjs'
 const describeCommand = (command, args) => [command, ...args.map(value => JSON.stringify(String(value)))].join(' ')
 
 /**
- * Spawns `command` detached and resolves as soon as the outcome is actually
- * known — never on a timed guess:
+ * Spawns `command` detached and resolves as soon as the selected launcher's
+ * outcome is known, without a timed guess:
  *  - a synchronous spawn failure (bad binary, permission error) throws and
  *    is caught immediately;
  *  - an asynchronous spawn failure (ENOENT resolved by libuv, missing
  *    binary on PATH) arrives as an 'error' event, always before Node's next
  *    macrotask;
- *  - a launcher that exits with code 0 handed off successfully (`wt.exe`,
- *    `cmd /c start`, and macOS `open -a`/`osascript` all exit 0 right after
- *    opening the real window — that is success, not failure); a non-zero
- *    exit is a genuine failure;
- *  - a launcher that is still running with no error once we reach the next
- *    macrotask (a long-lived terminal emulator such as `xterm`) is treated
- *    as opened, using its real PID.
+ *  - short-lived handoff launchers (`wt.exe`, `cmd /c start`, and macOS
+ *    `osascript`) must exit with code 0;
+ *  - a long-lived terminal emulator such as `xterm` is treated as opened
+ *    when Node emits its successful `spawn` event, using its real PID.
  */
-const trySpawn = (command, args, options = {}, spawnImpl = spawn) =>
+const trySpawn = (command, args, options = {}, spawnImpl = spawn, waitForExit = false) =>
   new Promise((resolvePromise) => {
     let settled = false
     const settle = (result) => {
@@ -62,19 +59,22 @@ const trySpawn = (command, args, options = {}, spawnImpl = spawn) =>
       return
     }
     child.once('error', (error) => settle({ opened: false, reason: error?.message || String(error) }))
-    child.once('exit', (code) => {
-      settle(code === 0 || code === null ? { opened: true, pid: child.pid } : { opened: false, reason: `exited with code ${code}` })
-    })
-    setImmediate(() => {
-      if (settled) return
+    child.once('spawn', () => {
+      if (waitForExit) return
       const { pid } = child
       child.unref()
       settle({ opened: true, pid })
     })
+    child.once('exit', (code, signal) => {
+      if (!waitForExit) return
+      settle(code === 0
+        ? { opened: true, pid: child.pid }
+        : { opened: false, reason: Number.isInteger(code) ? `exited with code ${code}` : `terminated by ${signal ?? 'unknown signal'}` })
+    })
   })
 
-const attempt = async (command, args, options, spawnImpl) => {
-  const result = await trySpawn(command, args, options, spawnImpl)
+const attempt = async (command, args, options, spawnImpl, waitForExit = false) => {
+  const result = await trySpawn(command, args, options, spawnImpl, waitForExit)
   return { ...result, commandLine: describeCommand(command, args) }
 }
 
@@ -90,18 +90,17 @@ const attempt = async (command, args, options, spawnImpl) => {
  * about the launch itself failed.
  */
 export const openTerminalRunning = async (scriptPath, args = [], {
-  title = '1F3D9 live',
   platform = process.platform,
   executable = process.execPath,
   env = process.env,
   spawnImpl = spawn,
 } = {}) => {
   const nodeArgs = [scriptPath, ...args]
+  const title = '1F3D9 follow'
 
   if (platform === 'win32') {
-    const safeTitle = title === '1F3D9 follow' ? '1F3D9 follow' : '1F3D9 live'
-    const wtArgs = ['new-tab', '--title', safeTitle, executable, ...nodeArgs]
-    const wt = await attempt('wt.exe', wtArgs, { env }, spawnImpl)
+    const wtArgs = ['new-tab', '--title', title, executable, ...nodeArgs]
+    const wt = await attempt('wt.exe', wtArgs, { env }, spawnImpl, true)
     if (wt.opened) return wt
 
     // No Windows Terminal on PATH (or it failed to start): fall back to a
@@ -114,19 +113,19 @@ export const openTerminalRunning = async (scriptPath, args = [], {
     // are carried as base64 JSON in memory and never become PowerShell source.
     const legacy = buildLegacyConsoleLaunch({ executable, argv: nodeArgs, keepOpen: true, env })
     const cmd = win32.join(env.SystemRoot || env.WINDIR || 'C:\\Windows', 'System32', 'cmd.exe')
-    const cmdArgs = ['/d', '/s', '/c', 'start', safeTitle, legacy.command, ...legacy.args]
-    const fallback = await trySpawn(cmd, cmdArgs, { env: legacy.options.env }, spawnImpl)
-    const readableCommandLine = `${cmd} /d /s /c start ${JSON.stringify(safeTitle)} ${legacy.command} -NoLogo -NoProfile -NoExit -EncodedCommand <encoded>`
+    const cmdArgs = ['/d', '/s', '/c', 'start', title, legacy.command, ...legacy.args]
+    const fallback = await trySpawn(cmd, cmdArgs, { env: legacy.options.env }, spawnImpl, true)
+    const readableCommandLine = `${cmd} /d /s /c start ${JSON.stringify(title)} ${legacy.command} -NoLogo -NoProfile -NoExit -EncodedCommand <encoded>`
     if (fallback.opened) return { ...fallback, commandLine: readableCommandLine }
     return { opened: false, commandLine: readableCommandLine, reason: `wt.exe: ${wt.reason}; cmd.exe start powershell: ${fallback.reason}` }
   }
 
   if (platform === 'darwin') {
     const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`
-    const command = `exec ${[executable, ...nodeArgs].map(shellQuote).join(' ')}`
+    const command = `exec ${[executable, ...nodeArgs].map(shellQuote).join(' ')} < /dev/tty`
     const payload = Buffer.from(command, 'utf8').toString('base64')
-    const script = `tell application "Terminal" to do script "/bin/echo ${payload} | /usr/bin/base64 -D | /bin/sh"`
-    return attempt('osascript', ['-e', script], { env }, spawnImpl)
+    const script = `tell application "Terminal"\nactivate\ndo script "/bin/echo ${payload} | /usr/bin/base64 -D | /bin/sh"\nend tell`
+    return attempt('osascript', ['-e', script], { env }, spawnImpl, true)
   }
 
   // Linux and other Unix-likes: try common emulators in rough popularity order.

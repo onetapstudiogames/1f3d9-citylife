@@ -1,0 +1,297 @@
+{
+  "recordedAt": "2026-09-07T19:29:10.426726+00:00",
+  "fixture": "test/fixtures/live-scene.json",
+  "networkUsed": false,
+  "terminal": "Windows Terminal",
+  "inputMethod": "WriteConsoleInputW after AttachConsole to the exact Node client PID",
+  "globalInputUsed": false,
+  "foregroundApiUsed": false,
+  "sessions": [
+    {
+      "name": "keys",
+      "keys": [
+        {
+          "key": "r",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "f",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "d",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "r",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "y",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "-",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "r",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "u",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "n",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "enter",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "q",
+          "ok": true,
+          "recordsWritten": 1
+        }
+      ],
+      "console": {
+        "inputCodePage": 437,
+        "outputCodePage": 437,
+        "virtualTerminalProcessing": true
+      },
+      "launchForegroundUnchanged": true,
+      "isTTY": true,
+      "windowsTerminal": true,
+      "atMs": null,
+      "closed": {
+        "ok": true
+      },
+      "rawModes": [
+        true,
+        false
+      ],
+      "closeCalls": 1,
+      "events": [
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "room": 2,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "room": 2,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "select",
+          "handle": "dry-run",
+          "result": {
+            "ok": true,
+            "changed": true
+          }
+        },
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "room": 34,
+          "focus": "dry-run",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "room": 34,
+          "focus": "dry-run",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "room": 34,
+          "focus": "dry-run",
+          "roomCount": 1
+        }
+      ],
+      "nodeExited": true,
+      "error": null
+    },
+    {
+      "name": "escape",
+      "keys": [
+        {
+          "key": "f",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "escape",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "escape",
+          "ok": true,
+          "recordsWritten": 1
+        }
+      ],
+      "console": {
+        "inputCodePage": 437,
+        "outputCodePage": 437,
+        "virtualTerminalProcessing": true
+      },
+      "launchForegroundUnchanged": true,
+      "isTTY": true,
+      "windowsTerminal": true,
+      "atMs": null,
+      "closed": {
+        "ok": true
+      },
+      "rawModes": [
+        true,
+        false
+      ],
+      "closeCalls": 1,
+      "events": [
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "room": 2,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        }
+      ],
+      "nodeExited": true,
+      "error": null
+    },
+    {
+      "name": "ctrl-c",
+      "keys": [
+        {
+          "key": "f",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "ctrl-c",
+          "ok": true,
+          "recordsWritten": 1
+        }
+      ],
+      "console": {
+        "inputCodePage": 437,
+        "outputCodePage": 437,
+        "virtualTerminalProcessing": true
+      },
+      "launchForegroundUnchanged": true,
+      "isTTY": true,
+      "windowsTerminal": true,
+      "atMs": null,
+      "closed": {
+        "ok": true
+      },
+      "rawModes": [
+        true,
+        false
+      ],
+      "closeCalls": 1,
+      "events": [
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "room": 2,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "room": 34,
+          "focus": "thog",
+          "roomCount": 1
+        }
+      ],
+      "nodeExited": true,
+      "error": null
+    }
+  ]
+}

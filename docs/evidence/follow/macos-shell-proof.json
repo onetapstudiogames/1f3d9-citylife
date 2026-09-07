@@ -1,0 +1,10 @@
+{
+  "nativeMacAvailable": false,
+  "nativeMacTerminalVerified": false,
+  "testHost": "Windows with an available POSIX shell under a PTY",
+  "mechanism": "A shell reads its exec command from a pipe; a constant /dev/tty redirection gives the child Node process terminal keyboard input.",
+  "command": "$sourceLine = 'exec /usr/bin/node -e ''process.stdout.write(String(Boolean(process.stdin.isTTY)))'' < /dev/tty'; $sourceLine | bash -lc \"tr -d '\\r' | /bin/sh\"",
+  "stdout": "true",
+  "exitCode": 0,
+  "limits": "This checks the POSIX stdin mechanism. It does not verify AppleScript, native Terminal.app, or macOS window controls."
+}

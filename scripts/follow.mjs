@@ -1,3 +1,3 @@
 #!/usr/bin/env node
 import { viewCommand } from './lib/live-view.mjs'
-await viewCommand('follow', process.argv.slice(2))
+await viewCommand(process.argv.slice(2))

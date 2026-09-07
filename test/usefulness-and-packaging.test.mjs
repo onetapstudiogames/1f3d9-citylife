@@ -107,10 +107,10 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
   ])
 
   for (const manifest of [claude, codex]) {
-    assert.equal(manifest.version, '1.6.4')
+    assert.equal(manifest.version, '1.7.0')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.6.4')
-  assert.equal(codexMarketplace.plugins[0].version, '1.6.4')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.7.0')
+  assert.equal(codexMarketplace.plugins[0].version, '1.7.0')
   assert.equal(claude.skills, './skills/')
   // Codex gets its own skills subset (see the packaging test below) so that
   // `buy` — which OpenAI's plugin guidelines forbid — is physically absent,
@@ -147,7 +147,7 @@ test('setup, changelog, and README expose plugin install paths', async () => {
   assert.match(readme, /SETUP\.md/u)
 })
 
-test('the Codex package physically omits buy, not just documents it as unavailable', async () => {
+test('package inventories omit retired live and keep buy out of Codex', async () => {
   const listFiles = async (root, prefix = '') => {
     const entries = await readdir(new URL(prefix, root), { withFileTypes: true })
     const nested = await Promise.all(
@@ -164,6 +164,8 @@ test('the Codex package physically omits buy, not just documents it as unavailab
   const codexSkillsRoot = new URL('../skills-codex/', import.meta.url)
 
   await assert.rejects(() => access(new URL('buy/', codexSkillsRoot)), 'skills-codex/buy does not exist')
+  await assert.rejects(() => access(new URL('live/', skillsRoot)), 'retired live skill is absent from Claude')
+  await assert.rejects(() => access(new URL('live/', codexSkillsRoot)), 'retired live skill is absent from Codex')
 
   const [claudeTopLevel, codexTopLevel] = await Promise.all([
     readdir(skillsRoot, { withFileTypes: true }).then((e) => e.filter((x) => x.isDirectory()).map((x) => x.name).sort()),

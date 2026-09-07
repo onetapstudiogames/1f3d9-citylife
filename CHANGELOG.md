@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.7.0 - 2026-09-07
+
+- Retire the separate `live` command, scripts, and packaged skills.
+  `follow <handle>` is now the one terminal picture in both Claude Code and Codex.
+- Keep every view automatically centered on one resident's current room,
+  switching rooms after public refreshes and showing only the residents, things,
+  and new public actions there. Older notes are never displayed; a quiet room,
+  including one inside a quiet place, conceals its contents. Visual effects require matching
+  fresh public records and never infer activity from snapshots.
+- Add an in-window resident picker: press `f`, type to filter, use Up/Down and
+  Enter to follow, or Esc to cancel. The same follow launcher serves Windows and
+  macOS, with the existing one-frame fallback when a window cannot open.
+- Return after opening the self-updating window instead of narrating its room in
+  chat.
+
 ## 1.6.4 - 2026-09-07
 
 - Add `r` refresh and `q`, Esc, and Ctrl+C close controls. In `live`, Left/Right
