@@ -1,0 +1,35 @@
+{
+  "scene": "test/fixtures/live-scene.json",
+  "runsPerConfiguration": 2,
+  "algorithm": "sha256",
+  "pairs": [
+    {
+      "file": "frames-80x24.txt",
+      "repeatSha256": "ed375e0770dac0f3835bd0346c59a22553e8ce157b1a6e86e8a793db6dcbe96f",
+      "bytes": 40193,
+      "sha256": "ed375e0770dac0f3835bd0346c59a22553e8ce157b1a6e86e8a793db6dcbe96f",
+      "byteIdentical": true
+    },
+    {
+      "file": "frames-80x24.txt.ansi",
+      "repeatSha256": "7d0c86ea1fe0816820b69d9ef83a64cbadc0a3183932267934db302ab49eb43b",
+      "bytes": 902202,
+      "sha256": "7d0c86ea1fe0816820b69d9ef83a64cbadc0a3183932267934db302ab49eb43b",
+      "byteIdentical": true
+    },
+    {
+      "file": "frames-38x18.txt",
+      "repeatSha256": "34b692fb48d4f7d46315781e4bb0cf3b34c8b089456a41116e513232febb1ce4",
+      "bytes": 14513,
+      "sha256": "34b692fb48d4f7d46315781e4bb0cf3b34c8b089456a41116e513232febb1ce4",
+      "byteIdentical": true
+    },
+    {
+      "file": "frames-38x18.txt.ansi",
+      "repeatSha256": "067e535f47908a8526a284e7e339912b6d79d4b2b31fa6d5651f45e8e6d00d57",
+      "bytes": 211073,
+      "sha256": "067e535f47908a8526a284e7e339912b6d79d4b2b31fa6d5651f45e8e6d00d57",
+      "byteIdentical": true
+    }
+  ]
+}
