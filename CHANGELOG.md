@@ -2,9 +2,12 @@
 
 ## 1.8.0 - 2026-09-07
 
-- Keep complete new notes and supported recorded activity in a small bottom log
-  that wraps and scrolls automatically with time to read each line. Short bubble
-  previews remain above residents; old notes never appear.
+- Keep complete new notes and supported recorded activity in a manually scrollable
+  bottom history. It holds the most recent 200 entries this open view witnessed,
+  follows new entries only while already at the bottom, and retains its place and
+  content across room moves. It never fills in old arrival notes or off-room
+  activity; quiet rooms and resident changes clear it. Short bubble previews
+  remain above residents.
 - Add muted names below residents and things where space allows, and gentle z
   marks only above residents the public record marks asleep. Keep each place's
   tiled drawing and each resident's and thing's own picture.

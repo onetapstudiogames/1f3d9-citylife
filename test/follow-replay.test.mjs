@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { createLiveSource } from '../scripts/lib/live-source.mjs'
 import { createReplay, dumpReplay } from '../scripts/lib/live-view.mjs'
 import { toPlainText } from '../scripts/lib/grid.mjs'
+import { stepFollowMotion } from '../scripts/lib/follow-motion.mjs'
 
 const sceneFile = new URL('./fixtures/live-scene.json', import.meta.url)
 const size = { columns: 80, rows: 24 }
@@ -93,7 +94,7 @@ test('labelled action extensions replay create, use, gift, removal, and both exa
   }
 })
 
-test('the full scrolling scene has identical paced and direct pictures at narrow and normal widths', async () => {
+test('the witnessed chat scene has identical paced and direct pictures and readable scrollback', async () => {
   for (const bounds of [{ columns: 38, rows: 18 }, size]) {
     const options = {
       mode: 'follow-room', followHandle: 'thog', fetchImpl: offline,
@@ -111,8 +112,17 @@ test('the full scrolling scene has identical paced and direct pictures at narrow
           assert.equal(toPlainText(result.frame), toPlainText((await direct.at(time)).frame), `${bounds.columns} columns at ${time}`)
         }
       }
-      assert.match(rendered.at(-1), /THE LANTERN IS HOME/)
-      assert.match(rendered.join('\n'), /created|used|carried/)
+      let shown = (await paced.at(150000)).motion
+      const history = []
+      shown = stepFollowMotion(shown.state, { nowMs: 150000, size: bounds, scroll: 'home' })
+      for (let index = 0; index < 200; index++) {
+        history.push(shown.frame.activity.join(' '))
+        if (shown.frame.activityScroll.offset === 0) break
+        shown = stepFollowMotion(shown.state, { nowMs: 150000, size: bounds, scroll: 'down' })
+      }
+      assert.match(history.join(' '), /THE LANTERN IS(?: thog:)? HOME/)
+      assert.match(history.join(' '), /first town fair/, 'witnessed prior-room activity remains in scrollback')
+      assert.match(history.join(' '), /created|used|carried/)
     } finally {
       sources.forEach(source => source.close())
     }

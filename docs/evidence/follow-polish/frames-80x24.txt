@@ -175,9 +175,9 @@ frame 031000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
+                                                                                
+                                                                                
   thog moved to the first town fair.                                            
-                                                                                
-                                                                                
                                                                                 
 
 frame 032000 ms | 80x24
@@ -201,9 +201,9 @@ frame 032000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
+                                                                                
+                                                                                
   thog moved to the first town fair.                                            
-                                                                                
-                                                                                
                                                                                 
 
 frame 060000 ms | 80x24
@@ -227,9 +227,9 @@ frame 060000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
+                                                                                
   thog moved to the first town fair.                                            
   thog: The fair grass remembers every small arrival.                           
-                                                                                
                                                                                 
 
 frame 062000 ms | 80x24
@@ -253,9 +253,9 @@ frame 062000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
+                                                                                
   thog moved to the first town fair.                                            
   thog: The fair grass remembers every small arrival.                           
-                                                                                
                                                                                 
 
 frame 065999 ms | 80x24
@@ -279,9 +279,9 @@ frame 065999 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
+                                                                                
   thog moved to the first town fair.                                            
   thog: The fair grass remembers every small arrival.                           
-                                                                                
                                                                                 
 
 frame 066000 ms | 80x24
@@ -305,9 +305,9 @@ frame 066000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
+                                                                                
   thog moved to the first town fair.                                            
   thog: The fair grass remembers every small arrival.                           
-                                                                                
                                                                                 
 
 frame 068000 ms | 80x24
@@ -331,9 +331,9 @@ frame 068000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
+                                                                                
   thog moved to the first town fair.                                            
   thog: The fair grass remembers every small arrival.                           
-                                                                                
                                                                                 
 
 frame 070000 ms | 80x24
@@ -461,9 +461,9 @@ frame 072000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog: The fair grass remembers every small arrival.                         │ 
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  ▪ 
                                                                                 
 
 frame 072250 ms | 80x24
@@ -487,9 +487,9 @@ frame 072250 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog: The fair grass remembers every small arrival.                         │ 
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  ▪ 
                                                                                 
 
 frame 072600 ms | 80x24
@@ -513,9 +513,9 @@ frame 072600 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog: The fair grass remembers every small arrival.                         │ 
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  ▪ 
                                                                                 
 
 frame 073000 ms | 80x24
@@ -539,9 +539,9 @@ frame 073000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog: The fair grass remembers every small arrival.                         │ 
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  ▪ 
                                                                                 
 
 frame 074000 ms | 80x24
@@ -565,9 +565,9 @@ frame 074000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                ▪ 
                                                                                 
 
 frame 074250 ms | 80x24
@@ -591,9 +591,9 @@ frame 074250 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                ▪ 
                                                                                 
 
 frame 074500 ms | 80x24
@@ -617,9 +617,9 @@ frame 074500 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                ▪ 
                                                                                 
 
 frame 075000 ms | 80x24
@@ -643,9 +643,9 @@ frame 075000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog moved to the first town fair.                                            
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
+  thog created scene-only little keepsake.                                    │ 
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                ▪ 
                                                                                 
 
 frame 076000 ms | 80x24
@@ -669,9 +669,9 @@ frame 076000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
-  thog used me thog want to sign guest book.                                    
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   ▪ 
                                                                                 
 
 frame 076250 ms | 80x24
@@ -695,9 +695,9 @@ frame 076250 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
-  thog used me thog want to sign guest book.                                    
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   ▪ 
                                                                                 
 
 frame 076600 ms | 80x24
@@ -721,9 +721,9 @@ frame 076600 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
-  thog used me thog want to sign guest book.                                    
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   ▪ 
                                                                                 
 
 frame 077000 ms | 80x24
@@ -747,9 +747,9 @@ frame 077000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
-  thog used me thog want to sign guest book.                                    
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   ▪ 
                                                                                 
 
 frame 078000 ms | 80x24
@@ -773,9 +773,9 @@ frame 078000 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
-  thog used me thog want to sign guest book.                                    
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   ▪ 
                                                                                 
 
 frame 078500 ms | 80x24
@@ -799,9 +799,9 @@ frame 078500 ms | 80x24
  │                                ···········                                 │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog: The fair grass remembers every small arrival.                           
-  thog created scene-only little keepsake.                                      
-  thog used me thog want to sign guest book.                                    
+  thog used me thog want to sign guest book.                                  │ 
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   ▪ 
                                                                                 
 
 frame 079000 ms | 80x24
@@ -825,9 +825,9 @@ frame 079000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-                                                                                
-                                                                                
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   │ 
+  thog carried me thog want to sign guest book to first town.                 ▪ 
                                                                                 
 
 frame 079500 ms | 80x24
@@ -851,9 +851,9 @@ frame 079500 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-                                                                                
-                                                                                
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   │ 
+  thog carried me thog want to sign guest book to first town.                 ▪ 
                                                                                 
 
 frame 080000 ms | 80x24
@@ -877,9 +877,9 @@ frame 080000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-                                                                                
-                                                                                
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   │ 
+  thog carried me thog want to sign guest book to first town.                 ▪ 
                                                                                 
 
 frame 081000 ms | 80x24
@@ -903,9 +903,9 @@ frame 081000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-                                                                                
-                                                                                
+  thog gave a song about meanwhile to dry-run.                                │ 
+  thog withdrew scene-only little keepsake.                                   │ 
+  thog carried me thog want to sign guest book to first town.                 ▪ 
                                                                                 
 
 frame 084000 ms | 80x24
@@ -929,9 +929,9 @@ frame 084000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-                                                                                
-                                                                                
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 084250 ms | 80x24
@@ -955,9 +955,9 @@ frame 084250 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-                                                                                
-                                                                                
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 084500 ms | 80x24
@@ -981,9 +981,9 @@ frame 084500 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-                                                                                
-                                                                                
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 085000 ms | 80x24
@@ -1007,9 +1007,9 @@ frame 085000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-  thog: I followed the lantern home through the first town, keeping every       
-                                                                                
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 087000 ms | 80x24
@@ -1033,9 +1033,9 @@ frame 087000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-  thog: I followed the lantern home through the first town, keeping every       
-                                                                                
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 089500 ms | 80x24
@@ -1059,9 +1059,9 @@ frame 089500 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog carried me thog want to sign guest book to first town.                   
-  thog: I followed the lantern home through the first town, keeping every       
-  recorded name and every careful detail in view. The narrow window may take    
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 092000 ms | 80x24
@@ -1085,9 +1085,9 @@ frame 092000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  thog: I followed the lantern home through the first town, keeping every       
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 094500 ms | 80x24
@@ -1111,9 +1111,9 @@ frame 094500 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 097000 ms | 80x24
@@ -1137,9 +1137,9 @@ frame 097000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 099500 ms | 80x24
@@ -1163,9 +1163,9 @@ frame 099500 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 102000 ms | 80x24
@@ -1189,9 +1189,9 @@ frame 102000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 104500 ms | 80x24
@@ -1215,9 +1215,9 @@ frame 104500 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 107000 ms | 80x24
@@ -1241,9 +1241,9 @@ frame 107000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 109500 ms | 80x24
@@ -1267,9 +1267,9 @@ frame 109500 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 112000 ms | 80x24
@@ -1293,9 +1293,9 @@ frame 112000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 115000 ms | 80x24
@@ -1319,9 +1319,9 @@ frame 115000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 120000 ms | 80x24
@@ -1345,9 +1345,9 @@ frame 120000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 126000 ms | 80x24
@@ -1371,9 +1371,9 @@ frame 126000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 134000 ms | 80x24
@@ -1397,9 +1397,9 @@ frame 134000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 144000 ms | 80x24
@@ -1423,9 +1423,9 @@ frame 144000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 
 
 frame 150000 ms | 80x24
@@ -1449,7 +1449,7 @@ frame 150000 ms | 80x24
  │ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀   ▀▀ ▄▀ │ 
  ╰────────────────────────────────────────────────────────────────────────────╯ 
                                                                                 
-  recorded name and every careful detail in view. The narrow window may take    
-  longer to read, but it must keep the whole message, continue at a calm pace,  
-  and leave these final words visible: THE LANTERN IS HOME.                     
+  thog: recorded name and every careful detail in view. The narrow window may │ 
+  thog: take longer to read, but it must keep the whole message, continue at a│ 
+  thog: calm pace, and leave these final words visible: THE LANTERN IS HOME.  ▪ 
                                                                                 

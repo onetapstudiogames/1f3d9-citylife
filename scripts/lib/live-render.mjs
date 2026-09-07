@@ -318,7 +318,20 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
   if (observation?.focus && rooms[0]?.quiet !== true) {
     const count = followActivityRows(viewSize)
     const lines = (motionFrame?.activity ?? []).slice(-count)
-    if (count) lines.forEach((line, index) => grid.put(2, grid.height - 1 - count + index, line, DARK.muted, DARK.bg, Math.max(0, grid.width - 4)))
+    if (count) {
+      lines.forEach((line, index) => grid.put(2, grid.height - 1 - lines.length + index, line, DARK.muted, DARK.bg, Math.max(0, grid.width - 4)))
+      const { offset = 0, maximum = 0 } = motionFrame?.activityScroll ?? {}
+      if (maximum > 0) {
+        const x = grid.width - 2
+        const top = grid.height - 1 - count
+        if (count === 1) grid.put(x, top, offset === 0 ? '↑' : offset >= maximum ? '↓' : '↕', DARK.muted, DARK.bg, 1)
+        else {
+          for (let row = 0; row < count; row++) grid.put(x, top + row, '│', DARK.muted, DARK.bg, 1)
+          const thumb = Math.round((1 - Math.min(1, offset / maximum)) * (count - 1))
+          grid.put(x, top + thumb, '▪', DARK.ink, DARK.bg, 1)
+        }
+      }
+    }
   }
   return grid
 }

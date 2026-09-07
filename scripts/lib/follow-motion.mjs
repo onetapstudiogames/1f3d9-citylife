@@ -140,7 +140,7 @@ const phaseFrame = (state, nowMs) => {
 }
 
 /** A single-room camera that follows recorded resident moves, never snapshots. */
-export const stepFollowMotion = (previous, { nowMs, observation, size, reset = false } = {}) => {
+export const stepFollowMotion = (previous, { nowMs, observation, size, scroll, reset = false } = {}) => {
   if (!Number.isFinite(nowMs) || nowMs < 0) throw new TypeError('follow time must be finite and non-negative')
   if (previous && nowMs < previous.nowMs) throw new RangeError('follow time must move forward')
   const nextSize = size ?? previous?.size
@@ -184,7 +184,7 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, reset = f
       ? { roomId: state.transition.destination.focus.placeId, atMs: state.transition.startMs + LEG_MS } : undefined,
   })
   const activity = stepActivity(activityState, {
-    nowMs,
+    nowMs, scroll,
     // The departure picture borrows a future move to draw its door leg. Only
     // ingest that record when the camera reaches its real destination.
     observation: state.transition && shown.observation === state.transition.source ? undefined : shown.observation,
@@ -193,6 +193,7 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, reset = f
   const sleeping = shown.motion.frame.residents.some(pose => pose.resident?.asleep === true)
   const frame = {
     ...shown.motion.frame, effects: effects.effects, activity: activity.lines,
+    activityScroll: { offset: activity.scrollOffset, maximum: activity.maxScroll },
     sleepPhase: sleeping ? Math.floor(nowMs / 1500) % 3 : 0,
   }
   const signature = JSON.stringify([shown.observation.target.id, frame])

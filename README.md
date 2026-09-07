@@ -61,10 +61,15 @@ the remaining space, the followed resident gets first placement; crowded rooms
 may omit other resident marks. Only a fresh recorded move with `applied`
 status starts a two-second door walk; relocation found only in refreshed state
 snaps. Fresh notes have a short bubble preview for six seconds. Their full text,
-and short descriptions of recorded activity, appear in a small bottom log that
-scrolls automatically. It waits three seconds before scrolling, then two and a
-half seconds per line, and three seconds on the final line; a one-line message
-stays for six seconds. The log clears when the room or followed resident changes.
+and short descriptions of recorded activity, appear in a small bottom history
+that you scroll yourself. Outside the picker, Up/Down moves one line,
+PageUp/PageDown moves one page, Home goes to the oldest entry, and End goes to
+the newest. New entries follow the bottom only when you were already there;
+while you read older entries, the same text stays in view. Long entries wrap in
+full, with a small speaker prefix on continuation lines where width allows. The history keeps the
+most recent 200 entries seen since this view opened, in memory only, and stays
+across room moves. It never fills in old arrival notes or activity from another
+room. A quiet room or a change of followed resident clears it.
 Small names appear below residents and things where space allows. Sleeping
 residents have gently changing z marks when the public record says they are asleep.
 Short creation, use, removal, gift, transfer, and carry effects
@@ -72,13 +77,16 @@ appear only when matching fresh public records prove them. Old, failed,
 incomplete, off-room, or inferred actions stay unanimated.
 
 Press `f` to open the resident picker in the same window, type to filter, use
-Up/Down to choose, Enter to follow, or Esc to cancel. Outside the picker, `r`
-or Enter reads now; returning focus to a terminal that reports focus does the
-same. Each successful 30-second public refresh fully repaints the picture, so a
+Up/Down to choose, Enter to follow, or Esc to cancel. Outside the picker, use
+the history keys above; `r` or Enter reads now, and returning focus to a terminal
+that reports focus does the same. Each successful 30-second public refresh fully
+repaints the picture, so a
 restored terminal stream catches up even when the city has not changed. `q` or
 Esc closes; Ctrl+C always closes. Dirty pictures repaint at most eight times per second. A
 failed read freezes the last picture and adds one muted bottom-line error until
-a read succeeds. A dead SSH connection must be reconnected outside the picture;
+a read succeeds. Choosing another resident clears the old picture and history
+immediately; if that read fails, the error appears on the cleared view and the
+picker still offers the last known public resident list. A dead SSH connection must be reconnected outside the picture;
 the picture can repaint only after its terminal stream returns. Claude Code and Codex use the same
 launcher on Windows and macOS. It opens a new window when possible and otherwise
 prints one plain frame inline. Classic Windows Console uses UTF-8 and VT with

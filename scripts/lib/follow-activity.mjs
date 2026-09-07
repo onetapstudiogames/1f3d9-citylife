@@ -1,10 +1,6 @@
-import { sanitizeBubbleText, wrapBubbleText } from './bubble-text.mjs'
+import { bubbleTextWidth, sanitizeBubbleText, wrapBubbleText } from './bubble-text.mjs'
 
-const FIRST_LINE_MS = 3_000
-const LINE_MS = 2_500
-const LAST_LINE_MS = 3_000
-const SHORT_MESSAGE_MS = 6_000
-const COMPLETED_LIMIT = 20
+const HISTORY_LIMIT = 200
 
 const key = (value) => String(value ?? '')
 const positiveId = (value) => {
@@ -144,68 +140,89 @@ const freshEntries = (state, observation, known, roomId, switchedResident, moved
   return [...fromEvents, ...noteOnly]
 }
 
-const prepare = (entry, columns, startedAtMs) => {
-  const wrapped = wrapBubbleText(entry.text, columns)
-  return {
-    ...entry,
-    wrapped,
-    lineIndex: 0,
-    startedAtMs,
-    nextAtMs: startedAtMs + (wrapped.length <= 1 ? SHORT_MESSAGE_MS : FIRST_LINE_MS),
+const lineOffsets = (body, lines) => {
+  let cursor = 0
+  return lines.map((text) => {
+    const found = body.indexOf(text, cursor)
+    const sourceOffset = found < 0 ? cursor : found
+    cursor = sourceOffset + text.length
+    while (body[cursor] === ' ') cursor += 1
+    return { text, sourceOffset }
+  })
+}
+
+const entryParts = (entry) => {
+  if (entry.source === 'note') {
+    const separator = entry.text.indexOf(': ')
+    if (separator > 0) return { actor: entry.text.slice(0, separator), action: '', body: entry.text.slice(separator + 2) }
+  } else {
+    const match = /^(\S+)\s+(\S+)\s+(.+)$/u.exec(entry.text)
+    if (match) return { actor: match[1], action: match[2], body: match[3] }
   }
+  return null
 }
 
-const readingDelay = (current) => {
-  if (current.wrapped.length <= 1) return SHORT_MESSAGE_MS
-  if (current.lineIndex === 0) return FIRST_LINE_MS
-  return current.lineIndex === current.wrapped.length - 1 ? LAST_LINE_MS : LINE_MS
+const fittingPrefix = ({ actor, action }, columns) => {
+  const full = `${actor}${action ? ` ${action}` : ''}:`
+  if (bubbleTextWidth(full) + 5 <= columns) return full
+  const actorInitial = [...actor][0] ?? '?'
+  const compact = action ? `${actorInitial} ${[...action][0] ?? '?'}:` : `${actorInitial}:`
+  return bubbleTextWidth(compact) + 5 <= columns ? compact : ''
 }
 
-const completeCurrent = (state, atMs) => {
-  const [current, ...rest] = state.queue
-  const completed = [...state.completed, { id: current.id, source: current.source, text: current.text, wrapped: current.wrapped }]
-    .slice(-COMPLETED_LIMIT)
-  return {
-    ...state,
-    completed,
-    queue: rest.length ? [prepare(rest[0], state.columns, atMs), ...rest.slice(1)] : [],
+const wrapEntry = (entry, columns) => {
+  const direct = wrapBubbleText(entry.text, columns)
+  if (direct.length <= 1) return lineOffsets(entry.text, direct)
+  const parts = entryParts(entry)
+  if (!parts) return lineOffsets(entry.text, direct)
+  const prefix = fittingPrefix(parts, columns)
+  if (!prefix) return lineOffsets(parts.body, wrapBubbleText(parts.body, columns))
+  const bodyWidth = columns - bubbleTextWidth(prefix) - 1
+  return lineOffsets(parts.body, wrapBubbleText(parts.body, bodyWidth))
+    .map((line) => ({ ...line, text: `${prefix} ${line.text}` }))
+}
+
+const flatten = (history, columns) => history.flatMap((entry) =>
+  wrapEntry(entry, columns).map((line) => ({ entryId: entry.id, ...line })))
+
+const topAnchor = (state, lines) => {
+  const maximum = Math.max(0, lines.length - state.rows)
+  const offset = Math.min(state.scrollOffset, maximum)
+  return lines[Math.max(0, lines.length - state.rows - offset)] ?? null
+}
+
+const anchoredOffset = (anchor, lines, rows, fallback) => {
+  const maximum = Math.max(0, lines.length - rows)
+  if (!anchor) return Math.min(fallback, maximum)
+  let index = -1
+  for (let candidate = 0; candidate < lines.length; candidate += 1) {
+    const line = lines[candidate]
+    if (line.entryId === anchor.entryId && line.sourceOffset <= anchor.sourceOffset) index = candidate
   }
+  if (index < 0) index = lines.findIndex((line) => line.entryId === anchor.entryId)
+  return index < 0 ? Math.min(fallback, maximum) : Math.min(maximum, Math.max(0, lines.length - rows - index))
 }
 
-const advance = (input, nowMs) => {
-  let state = input
-  while (state.queue[0]?.nextAtMs <= nowMs) {
-    const current = state.queue[0]
-    if (current.lineIndex >= current.wrapped.length - 1) {
-      state = completeCurrent(state, current.nextAtMs)
-      continue
-    }
-    const lineIndex = current.lineIndex + 1
-    const finalLine = lineIndex === current.wrapped.length - 1
-    const advanced = { ...current, lineIndex, nextAtMs: current.nextAtMs + (finalLine ? LAST_LINE_MS : LINE_MS) }
-    state = { ...state, queue: [advanced, ...state.queue.slice(1)] }
-  }
-  return state
+const scrollBy = (offset, maximum, rows, command) => {
+  if (command === 'home') return maximum
+  if (command === 'end') return 0
+  if (command === 'up') return Math.min(maximum, offset + 1)
+  if (command === 'down') return Math.max(0, offset - 1)
+  if (command === 'pageup') return Math.min(maximum, offset + rows)
+  if (command === 'pagedown') return Math.max(0, offset - rows)
+  return offset
 }
 
-const reflow = (state, columns, nowMs) => ({
-  ...state,
-  columns,
-  completed: state.completed.map((entry) => ({ ...entry, wrapped: wrapBubbleText(entry.text, columns) })),
-  queue: state.queue.length
-    ? [prepare(state.queue[0], columns, nowMs), ...state.queue.slice(1).map((entry) => ({ ...entry, wrapped: undefined }))]
-    : [],
-})
-
-const visibleLines = (state) => {
-  if (state.rows === 0) return []
-  const completed = state.completed.flatMap((entry) => entry.wrapped)
-  const current = state.queue[0]?.wrapped.slice(0, state.queue[0].lineIndex + 1) ?? []
-  return [...completed, ...current].slice(-state.rows)
+const result = (state) => {
+  const all = state.wrappedLines
+  const maxScroll = Math.max(0, all.length - state.rows)
+  const scrollOffset = Math.min(state.scrollOffset, maxScroll)
+  const end = all.length - scrollOffset
+  return { state: { ...state, scrollOffset }, lines: state.rows ? all.slice(Math.max(0, end - state.rows), end).map(({ text }) => text) : [], nextAtMs: null, scrollOffset, maxScroll }
 }
 
 /** Pure, deterministic reducer for the small bottom activity log. */
-export const stepActivity = (previous, { nowMs, observation, columns, rows = 3 } = {}) => {
+export const stepActivity = (previous, { nowMs, observation, columns, rows = 3, scroll } = {}) => {
   const time = Number(nowMs)
   if (!Number.isFinite(time) || time < 0) throw new TypeError('activity time must be finite and non-negative')
   if (previous && time < previous.nowMs) throw new RangeError('activity time must move forward')
@@ -225,44 +242,50 @@ export const stepActivity = (previous, { nowMs, observation, columns, rows = 3 }
   if (!previous) {
     const state = {
       nowMs: time, columns: width, rows: height, roomId, residentId, quiet,
-      cursor: observedCursor, noteCursor: observedNoteCursor, seenNoteIds: rememberedNoteIds, known, queue: [], completed: [],
+      cursor: observedCursor, noteCursor: observedNoteCursor, seenNoteIds: rememberedNoteIds, known,
+      history: [], wrappedLines: [], scrollOffset: 0,
     }
-    return { state, lines: [], nextAtMs: null }
+    return result(state)
   }
 
   const movedRoom = observation && key(roomId) !== key(previous.roomId)
   const switchedResident = observation && key(residentId) !== key(previous.residentId)
-  let state = { ...previous, nowMs: time, rows: height, roomId, residentId, quiet, known }
+  const previousLines = previous.wrappedLines ?? flatten(previous.history, previous.columns)
+  const anchor = previous.scrollOffset > 0 || width !== previous.columns || height !== previous.rows
+    ? topAnchor(previous, previousLines) : null
+  let state = { ...previous, wrappedLines: previousLines, nowMs: time, columns: width, rows: height, roomId, residentId, quiet, known }
   if (quiet || switchedResident || (previous.quiet && observation)) {
     state = {
       ...state, columns: width, cursor: Math.max(previous.cursor, observedCursor),
-      noteCursor: Math.max(previous.noteCursor ?? 0, observedNoteCursor), seenNoteIds: rememberedNoteIds, queue: [], completed: [],
+      noteCursor: Math.max(previous.noteCursor ?? 0, observedNoteCursor), seenNoteIds: rememberedNoteIds,
+      history: [], wrappedLines: [], scrollOffset: 0,
     }
-    return { state, lines: [], nextAtMs: null }
+    return result(state)
   }
-  if (movedRoom) state = { ...state, queue: [], completed: [] }
-  if (width !== state.columns) state = reflow(state, width, time)
-  if (height > 0 && previous.rows === 0 && state.queue[0]) {
-    state = {
-      ...state,
-      queue: [{ ...state.queue[0], nextAtMs: time + readingDelay(state.queue[0]) }, ...state.queue.slice(1)],
-    }
-  }
-  if (height > 0) state = advance(state, time)
 
   const additions = freshEntries(state, observation, known, roomId, switchedResident, movedRoom)
+  let enriched = []
   if (additions.length) {
-    const queued = state.queue.length ? additions : [prepare(additions[0], width, time), ...additions.slice(1)]
-    state = {
-      ...state,
-      queue: [...state.queue, ...queued],
-    }
+    const roomName = safeName(roomValue?.name) || knownValue(known.places, roomId)
+    enriched = additions.map((entry) => ({ ...entry, roomId, roomName }))
+    state = { ...state, history: [...state.history, ...enriched].slice(-HISTORY_LIMIT) }
   }
+  if (width !== previous.columns) {
+    state = { ...state, wrappedLines: flatten(state.history, width) }
+  } else if (enriched.length) {
+    const retainedIds = new Set(state.history.map((entry) => entry.id))
+    const retainedLines = state.wrappedLines.filter((line) => retainedIds.has(line.entryId))
+    const appendedEntries = enriched.filter((entry) => retainedIds.has(entry.id))
+    state = { ...state, wrappedLines: [...retainedLines, ...flatten(appendedEntries, width)] }
+  }
+  state = { ...state, scrollOffset: anchoredOffset(anchor, state.wrappedLines, height, previous.scrollOffset) }
+  const maximum = Math.max(0, state.wrappedLines.length - height)
+  state = { ...state, scrollOffset: scrollBy(state.scrollOffset, maximum, height, scroll) }
   state = {
     ...state,
     cursor: Math.max(state.cursor, observedCursor),
     noteCursor: Math.max(state.noteCursor ?? 0, observedNoteCursor),
     seenNoteIds: rememberedNoteIds,
   }
-  return { state, lines: visibleLines(state), nextAtMs: height > 0 ? state.queue[0]?.nextAtMs ?? null : null }
+  return result(state)
 }

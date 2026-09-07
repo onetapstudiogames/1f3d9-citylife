@@ -19,37 +19,41 @@ const start = size => {
 }
 
 for (const size of [{ columns: 80, rows: 24 }, { columns: 38, rows: 18 }]) {
-  test(`long note retains its full body and every word is readable at ${size.columns} columns`, () => {
+  test(`long note stays still and every word is readable with chat keys at ${size.columns} columns`, () => {
     let result = start(size)
-    assert.equal(result.state.activity.queue[0].text, `reader: ${body}`)
-    const ending = 120000
-    assert.ok(ending > 7000, 'a long note has more than six seconds to read')
+    assert.equal(result.state.activity.history[0].text, `reader: ${body}`)
+    const newest = result.frame.activity
+    result = stepFollowMotion(result.state, { nowMs: 10000, size })
+    assert.deepEqual(result.frame.activity, newest, 'time alone never scrolls the chat')
+    assert.match(newest.join(' '), /THE END/)
+    result = stepFollowMotion(result.state, { nowMs: 10000, size, scroll: 'home' })
     const frames = []
-    for (let time = 1000; time < ending; time += 500) {
-      result = stepFollowMotion(result.state, { nowMs: time, size })
+    for (let index = 0; index < 200; index++) {
       const grid = paintLiveView(result.observation, size, result.frame)
-      frames.push(toPlainText(grid))
+      frames.push(result.frame.activity.join(' '))
       assert.equal(grid.cells.at(-1).map(cell => cell[0]).join('').trim(), '')
       for (const pose of result.frame.residents) {
         for (let y = pose.y; y < pose.y + pose.height; y++) {
           for (let x = pose.x; x < pose.x + pose.width; x++) assert.notEqual(grid.cells[y][x][2], DARK.bubble)
         }
       }
+      if (result.frame.activityScroll.offset === 0) break
+      result = stepFollowMotion(result.state, { nowMs: 10000 + index * 125, size, scroll: 'down' })
     }
-    assert.match(frames[0], /BEGIN/)
-    for (let i = 0; i < 60; i++) assert.match(frames.join('\n'), new RegExp(`word${String(i).padStart(3, '0')}`))
+    assert.match(frames[0], /reader.*BEGIN/)
+    for (let i = 0; i < 60; i++) assert.match(frames.join(' '), new RegExp(`word${String(i).padStart(3, '0')}`))
     assert.match(frames.at(-1), /THE END/)
-    assert.notEqual(frames[0], frames.at(-1), 'the text actually advances')
+    assert.ok(frames.every(frame => frame.includes('reader')), 'the speaker is identifiable on every page')
   })
 }
 
-test('resize preserves the reading log and reflows its full ending', () => {
+test('resize retains complete history and End reaches its full ending', () => {
   let result = start({ columns: 80, rows: 24 })
+  result = stepFollowMotion(result.state, { nowMs: 4000, size: { columns: 80, rows: 24 }, scroll: 'home' })
   result = stepFollowMotion(result.state, { nowMs: 4000, size: { columns: 38, rows: 18 } })
-  assert.equal(result.state.activity.queue[0]?.text, `reader: ${body}`)
-  const ending = 120000
-  result = stepFollowMotion(result.state, { nowMs: ending - 1, size: { columns: 38, rows: 18 } })
-  assert.match(toPlainText(paintLiveView(result.observation, { columns: 38, rows: 18 }, result.frame)), /THE END/)
+  assert.equal(result.state.activity.history[0]?.text, `reader: ${body}`)
+  result = stepFollowMotion(result.state, { nowMs: 4000, size: { columns: 38, rows: 18 }, scroll: 'end' })
+  assert.match(result.frame.activity.join(' '), /THE END/)
 })
 
 test('long notes stay hidden when a room becomes quiet', () => {
