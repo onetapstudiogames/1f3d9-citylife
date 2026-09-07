@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.3 - 2026-09-07
+
+- Drift each resident deterministically within a two-cell radius every two to
+  four seconds. Only a fresh public move event that was applied starts a
+  two-second door walk; a room change seen only in a snapshot snaps into place.
+- Show notes for six seconds, limited to 24 graphemes, with a separate queue
+  for each room.
+- Keep `live` and `follow` on the same picture. `follow` uses the same stable
+  room boxes and includes the resident's current room. Public snapshots and
+  events refresh independently every 30 seconds, while a dirty picture repaints
+  at most eight times per second.
+
 ## 1.6.2 - 2026-09-07
 
 - Tile each room floor with its 8x8 drawing, blending each painted pixel halfway

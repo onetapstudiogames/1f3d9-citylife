@@ -151,6 +151,7 @@ test('recorded replay stays offline and chooses the three exact moments', async 
   })
 
   assert.deepEqual(source.frameTimes, [0, 2000, 4000, 30000, 30250, 30500, 31000, 32000, 60000, 62000, 65999, 66000, 68000])
+  assert.deepEqual(source.momentTimes, [0, 30000, 60000])
   assert.equal(source.durationMs, 68000)
   const baseline = await source.read(0, { maxRooms: 9 })
   const moved = await source.read(30000, { maxRooms: 9 })
@@ -183,6 +184,7 @@ test('scene validation accepts three ordered moments with fixture-independent ti
   await withSceneFile(validScene(), async (sceneFile) => {
     const source = await createLiveSource({ sceneFile, fetchImpl: async () => { throw new Error('network') } })
     assert.deepEqual(source.frameTimes, [0, 25, 50, 60])
+    assert.deepEqual(source.momentTimes, [0, 25, 50])
     assert.equal(source.durationMs, 60)
     const changed = await source.read(25, { maxRooms: 1 })
     assert.equal(changed.ok, true)
@@ -260,8 +262,8 @@ test('replay applies follow and place selection to recorded moments without netw
   assert.equal(before.target.id, 2)
   assert.deepEqual(before.rooms.map((room) => room.id), [2, 34, 35])
   assert.equal(after.target.id, 34)
-  assert.deepEqual(after.rooms.map((room) => room.id), [34, 2, 35])
-  assert.equal(after.rooms[0].residents.some((resident) => resident.handle === 'thog'), true)
+  assert.deepEqual(after.rooms.map((room) => room.id), [2, 34, 35])
+  assert.equal(after.rooms.find((room) => room.id === 34).residents.some((resident) => resident.handle === 'thog'), true)
 
   const placed = await createLiveSource({ sceneFile, placeArg: 'the first town fair', fetchImpl: offline })
   const fair = await placed.read(0, { maxRooms: 3 })
@@ -295,15 +297,45 @@ test('live reads use only fixed-origin anonymous GETs and cache complete and und
   assert.equal(paths.filter((path) => path.startsWith('/api/drawing/thing/')).length, 6, 'only five things per room, cached after first success')
 })
 
-test('follow starts with the resident actual room and includes stable-id nearby siblings', async () => {
+test('follow includes the resident actual room and local scope in stable numeric boxes', async () => {
   const { fetchImpl } = makeFetch()
   const source = await createLiveSource({ followHandle: 'moss', fetchImpl })
   const result = await source.read(0, { maxRooms: 2 })
 
   assert.equal(result.ok, true)
   assert.equal(result.target.id, 3)
-  assert.deepEqual(result.rooms.map((room) => room.id), [3, 2])
-  assert.equal(result.rooms[0].residents.some((resident) => resident.handle === 'moss'), true)
+  assert.deepEqual(result.rooms.map((room) => room.id), [1, 3])
+  assert.equal(result.rooms.find((room) => room.id === 3).residents.some((resident) => resident.handle === 'moss'), true)
+})
+
+test('follow keeps a town as scope when its parent is a continent', async () => {
+  const base = makeFetch()
+  const fetchImpl = async (input, init) => {
+    const url = new URL(String(input))
+    const path = `${url.pathname}${url.search}`
+    if (path === '/api/window?view=outline') {
+      return jsonResponse({
+        view: 'outline',
+        places: [{ id: 99, parent_id: null, name: 'world', children: [{ id: 1, parent_id: 99, name: 'continent', children: [] }] }],
+        residents: [],
+      })
+    }
+    if (path === '/api/map?view=outline&parent_id=3&subplace_limit=200') {
+      return jsonResponse({ view: 'outline', place: { id: 3, parent_id: 1, name: 'blue room' }, subplaces: [] })
+    }
+    if (path === '/api/window?collection=notes&within_place_id=3&limit=100') return jsonResponse({ notes: [] })
+    if (path === '/api/events?within_place_id=3&limit=100') return jsonResponse({ events: [] })
+    return base.fetchImpl(input, init)
+  }
+  const source = await createLiveSource({ followHandle: 'moss', fetchImpl })
+
+  const result = await source.read(0, { maxRooms: 2 })
+
+  assert.equal(result.ok, true)
+  assert.equal(result.target.id, 3)
+  assert.deepEqual(result.rooms.map((room) => room.id), [3])
+  const paths = base.calls.map(({ url }) => `${new URL(url).pathname}${new URL(url).search}`)
+  assert.equal(paths.some(path => path.includes('within_place_id=1')), false)
 })
 
 test('follow target uses the focused presence response over a stale paged presence row', async () => {
@@ -323,7 +355,8 @@ test('follow target uses the focused presence response over a stale paged presen
 
   assert.equal(result.ok, true)
   assert.equal(result.target.id, 2)
-  assert.equal(result.rooms[0].residents.some((resident) => resident.handle === 'moss'), true)
+  assert.deepEqual(result.rooms.map((room) => room.id), [1, 2])
+  assert.equal(result.rooms.find((room) => room.id === 2).residents.some((resident) => resident.handle === 'moss'), true)
 })
 
 test('a zero-room live read returns its title without room or drawing requests', async () => {

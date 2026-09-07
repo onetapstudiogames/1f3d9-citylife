@@ -7,8 +7,9 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
+import { toPlainText } from '../scripts/lib/grid.mjs'
 import { createLiveSource } from '../scripts/lib/live-source.mjs'
-import { dumpReplay, parseViewArgs, runViewSession } from '../scripts/lib/live-view.mjs'
+import { createReplay, dumpReplay, parseViewArgs, runViewSession } from '../scripts/lib/live-view.mjs'
 
 const observation = { ok: true, target: { id: 1, name: 'home' }, rooms: [] }
 const sceneFile = new URL('./fixtures/live-scene.json', import.meta.url)
@@ -50,6 +51,49 @@ const makeSessionHarness = ({ isTTY = true } = {}) => {
   return { input, output, host, writes, rawModes }
 }
 
+const makeFakeClock = (startMs = 0) => {
+  let nowMs = startMs
+  let nextId = 1
+  const timers = new Map()
+  const fired = []
+  const clock = {
+    now: () => nowMs,
+    setTimeout: (callback, delay = 0) => {
+      const id = nextId
+      nextId += 1
+      timers.set(id, { atMs: nowMs + Math.max(0, Number(delay)), callback, delay: Number(delay) })
+      return id
+    },
+    clearTimeout: id => timers.delete(id),
+  }
+  const advance = async (elapsedMs) => {
+    const targetMs = nowMs + elapsedMs
+    while (true) {
+      const next = [...timers.entries()]
+        .filter(([, timer]) => timer.atMs <= targetMs)
+        .sort((left, right) => left[1].atMs - right[1].atMs || left[0] - right[0])[0]
+      if (!next) break
+      const [id, timer] = next
+      timers.delete(id)
+      nowMs = timer.atMs
+      fired.push({ atMs: nowMs, delay: timer.delay })
+      timer.callback()
+      await new Promise(resolve => setImmediate(resolve))
+    }
+    nowMs = targetMs
+    await new Promise(resolve => setImmediate(resolve))
+  }
+  return { clock, advance, fired, pending: () => timers.size }
+}
+
+const frameFromDump = (text, timeMs) => {
+  const marker = `frame ${String(timeMs).padStart(6, '0')} ms | `
+  const start = text.indexOf(marker)
+  if (start < 0) return null
+  const next = text.indexOf('\nframe ', start + marker.length)
+  return text.slice(start, next < 0 ? undefined : next)
+}
+
 const roomObservation = (count) => ({
   ok: true,
   target: { id: 1, name: 'first town' },
@@ -58,6 +102,23 @@ const roomObservation = (count) => ({
     name: `room ${String.fromCharCode(97 + index)}`,
     residents: [],
   })),
+})
+
+const walkingObservation = (roomId, events = []) => ({
+  ok: true,
+  target: { id: 1, name: 'first town' },
+  rooms: [1, 2].map(id => ({
+    id,
+    name: `room ${id}`,
+    things: [],
+    thingsCount: 0,
+    notes: [],
+    residents: id === roomId
+      ? [{ id: 7, handle: 'walker', current_place_id: roomId, drawing: null }]
+      : [],
+  })),
+  events,
+  notes: [],
 })
 
 test('view arguments keep scene, size, and color explicit and reject typos', () => {
@@ -102,6 +163,58 @@ test('the real fixture produces byte-identical plain and ANSI dumps without netw
   }
 })
 
+test('--at replays earlier polls before rendering an animation frame', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'city-view-at-'))
+  const sources = []
+  try {
+    const dump = async (name, at) => {
+      const source = await createLiveSource({ sceneFile, fetchImpl: async () => { throw new Error('network') } })
+      sources.push(source)
+      const path = join(directory, `${name}.txt`)
+      await dumpReplay(source, { columns: 120, rows: 40, dump: path, ...(at === undefined ? {} : { at }) })
+      return readFile(path, 'utf8')
+    }
+    const full = await dump('full')
+    const at30500 = await dump('at-30500', 30500)
+    const at32000 = await dump('at-32000', 32000)
+
+    assert.equal(frameFromDump(at30500, 30500), frameFromDump(full, 30500))
+    assert.notEqual(frameFromDump(at30500, 30500)?.split('\n').slice(1).join('\n'), frameFromDump(at32000, 32000)?.split('\n').slice(1).join('\n'))
+  } finally {
+    for (const source of sources) source.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('replay reads source moments only and expires a note bubble after six seconds', async () => {
+  const source = await createLiveSource({ sceneFile, fetchImpl: async () => { throw new Error('network') } })
+  const reads = []
+  const originalRead = source.read.bind(source)
+  source.read = async (timeMs, options) => {
+    reads.push(timeMs)
+    return originalRead(timeMs, options)
+  }
+  try {
+    const replay = createReplay(source, { columns: 120, rows: 40 })
+    const at0 = await replay.at(0)
+    const at30000 = await replay.at(30000)
+    const at60000 = await replay.at(60000)
+    const at65999 = await replay.at(65999)
+    const at66000 = await replay.at(66000)
+
+    assert.deepEqual(reads, [0, 30000, 60000])
+    assert.doesNotMatch(toPlainText(at0.frame), /The fair grass remembers/u)
+    assert.doesNotMatch(toPlainText(at30000.frame), /The fair grass remembers/u)
+    assert.match(toPlainText(at60000.frame), /The fair grass remembers/u)
+    assert.doesNotMatch(toPlainText(at60000.frame), /every small arrival/u)
+    assert.match(toPlainText(at65999.frame), /The fair grass remembers/u)
+    assert.doesNotMatch(toPlainText(at66000.frame), /The fair grass remembers/u)
+    await assert.rejects(() => replay.at(source.durationMs + 1), /duration|scene time/iu)
+  } finally {
+    source.close()
+  }
+})
+
 test('--once CLI renders the real fixture as plain text offline', async () => {
   const { stdout, stderr } = await execFileAsync(process.execPath, [
     fileURLToPath(new URL('../scripts/live.mjs', import.meta.url)),
@@ -124,6 +237,53 @@ test('q during a pending read restores the terminal and aborts the source', asyn
   assert.equal(host.listenerCount('SIGINT'), 0)
   assert.match(writes.join(''), /\x1b\[\?25h\x1b\[\?1049l/u)
   assert.match(writes.at(-1), /View closed\./u)
+})
+
+test('interactive timing separates public reads from bounded unchanged paints and q clears timers', async () => {
+  const { input, output, host, writes } = makeSessionHarness()
+  const fake = makeFakeClock(10_000)
+  const reads = []
+  const source = {
+    read: async (timeMs) => {
+      reads.push({ atMs: fake.clock.now(), timeMs })
+      return reads.length === 1
+        ? walkingObservation(1)
+        : walkingObservation(2, [{
+          id: 1,
+          kind: 'action',
+          actor: 'walker',
+          detail: { action: 'move', status: 'applied', from_place_id: 1, to_place_id: 2 },
+        }])
+    },
+    close: () => {},
+  }
+  const closed = runViewSession(source, { color: '16' }, {
+    input, output, host, env: {}, platform: 'win32', clock: fake.clock,
+  })
+  await waitFor(() => reads.length === 1)
+  await new Promise(resolve => setImmediate(resolve))
+  const unchangedBytes = writes.join('').length
+
+  await fake.advance(1_000)
+  assert.equal(reads.length, 1, 'animation ticks do not read public state')
+  assert.equal(writes.join('').length, unchangedBytes, 'an unchanged frame writes no terminal bytes')
+  const animationFirings = fake.fired.filter(timer => timer.delay < 30_000)
+  assert.ok(animationFirings.length <= 8, `animation painted ${animationFirings.length} times in one second`)
+
+  await fake.advance(28_999)
+  assert.equal(reads.length, 1)
+  await fake.advance(1)
+  assert.equal(reads.length, 2)
+  assert.deepEqual(reads.map(read => read.atMs), [10_000, 40_000])
+
+  const writesBeforeWalk = writes.length
+  await fake.advance(1_000)
+  const walkWrites = writes.length - writesBeforeWalk
+  assert.ok(walkWrites > 0 && walkWrites <= 8, `active animation wrote ${walkWrites} frames in one second`)
+
+  input.emit('keypress', 'q', { name: 'q' })
+  assert.deepEqual(await closed, { ok: true })
+  assert.equal(fake.pending(), 0)
 })
 
 test('q pauses a pristine stdin but preserves an input that was already flowing', async (t) => {
@@ -152,6 +312,7 @@ test('q pauses a pristine stdin but preserves an input that was already flowing'
 
 test('resizes during a pending read coalesce and repaint at the current dimensions', async () => {
   const { input, output, host, writes } = makeSessionHarness()
+  const fake = makeFakeClock()
   const firstRead = deferred()
   const requests = []
   const source = {
@@ -163,7 +324,7 @@ test('resizes during a pending read coalesce and repaint at the current dimensio
     },
     close: () => {},
   }
-  const closed = runViewSession(source, { color: '16' }, { input, output, host, env: {}, platform: 'win32' })
+  const closed = runViewSession(source, { color: '16' }, { input, output, host, env: {}, platform: 'win32', clock: fake.clock })
 
   output.columns = 100
   output.rows = 30
@@ -172,7 +333,9 @@ test('resizes during a pending read coalesce and repaint at the current dimensio
   output.rows = 40
   output.emit('resize')
   firstRead.resolve(roomObservation(2))
-  await waitFor(() => requests.length === 2 && writes.join('').includes('room c'))
+  await waitFor(() => requests.length === 2)
+  await fake.advance(125)
+  assert.match(writes.join(''), /room c/u)
 
   input.emit('keypress', 'q', { name: 'q' })
   await closed
