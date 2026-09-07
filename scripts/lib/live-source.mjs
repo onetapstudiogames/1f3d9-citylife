@@ -372,6 +372,9 @@ const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [] }) => {
       const named = things.find((thing) => Number(thing.id) === thingId)
       return { ...event, thing: { id: thingId, name: named?.name ?? null, drawing: drawings.get(drawingKey('thing', thingId)) ?? null } }
     })
+  const displayedEvents = new Map(relevant.map(event => [String(event.id), event]))
+  const contextEvents = hidden ? [] : [...(raw.contextEvents?.events ?? raw.events?.events ?? [])].sort(byId)
+    .map(event => displayedEvents.get(String(event.id)) ?? event)
   const roomResidents = hidden ? [] : residents
     .filter((resident) => Number(resident.current_place_id) === placeId)
     .sort(byId)
@@ -393,6 +396,7 @@ const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [] }) => {
       quiet: hidden,
     }],
     events: relevant,
+    contextEvents,
     notes,
     directory: raw.directory,
   }
@@ -582,7 +586,6 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
   if (typeof fetchImpl !== 'function') throw new TypeError('live source requires a fetch implementation')
   const controller = new AbortController()
   const sourceFetch = (url, init) => fetchImpl(url, { ...init, signal: AbortSignal.any([init.signal, controller.signal]) })
-  const drawingCache = new Map()
   const eventIds = new Map()
   const noteCache = new Map()
   const knownThings = new Map()
@@ -657,6 +660,7 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
       const roomThingIds = new Set((roomResponse.things ?? []).map((thing) => Number(thing.id)))
       const priorThingIds = new Set([...(knownThings.get(placeId) ?? []), ...roomThingIds])
       const orderedChanges = [...new Map(publicChanges.sort(comparePublicChanges).map(change => [change.change_id, change])).values()]
+      const contextEvents = hidden ? [] : orderedChanges.map((change) => ({ ...change, id: eventId(change.change_id), at: change.created_at }))
       const changeWindow = hidden ? { events: [], thingIds: new Set() } : relevantChanges(orderedChanges, focus, placeId, priorThingIds)
       const changes = changeWindow.events
       const events = changes.map((change) => ({ ...change, id: eventId(change.change_id), at: change.created_at }))
@@ -665,12 +669,13 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
       const notes = hidden ? [] : mergeNotes(history, freshNotes.notes)
       const residentLimit = size ? residentDrawingLimit(size, 1) : Number.MAX_SAFE_INTEGER
       const roomRows = hidden ? [] : [{ placeId, result: { body: roomResponse } }]
+      const drawingCache = new Map()
       const drawings = await buildDrawingResponses(sourceFetch, drawingCache, roomRows, residents, residentLimit, focus.id)
       const extraThingIds = hidden ? [] : [...new Set(events.map(eventThingId).filter((id) => id !== null && !roomThingIds.has(id)))]
       drawings.push(...await mapWithConcurrency(extraThingIds, 8, (id) => eventDrawing(sourceFetch, drawingCache, id)))
       const failedDrawing = drawings.find((entry) => entry.response.status < 200 || entry.response.status >= 300)
       if (failedDrawing) return { ok: false, error: `drawing ${failedDrawing.key}: ${failedDrawing.response.error ?? `HTTP ${failedDrawing.response.status}`}` }
-      const raw = { directory, presence: { pages: presenceResult.pages }, rooms: hidden ? [] : [{ placeId, response: roomResponse }], notes: { notes }, events: { events }, drawings }
+      const raw = { directory, presence: { pages: presenceResult.pages }, rooms: hidden ? [] : [{ placeId, response: roomResponse }], notes: { notes }, events: { events }, contextEvents: { events: contextEvents }, drawings }
       const result = normalizedFollowRoom({ raw, selectedHandle: readHandle, knownThingIds: priorThingIds })
       if (readGeneration === generation && result.ok) {
         latestResidents = residents
@@ -738,7 +743,6 @@ export async function createLiveSource({ mode, placeArg, followHandle, sceneFile
     ...init,
     signal: AbortSignal.any([init.signal, controller.signal]),
   })
-  const drawingCache = new Map()
   const navigate = navigatorFor({
     followHandle,
     scene: false,
@@ -755,7 +759,7 @@ export async function createLiveSource({ mode, placeArg, followHandle, sceneFile
     read: async (_nowMs, { maxRooms = 9, size } = {}) => {
       const readGeneration = selectionGeneration
       const readPlace = selectedPlace
-      const collected = await collectPublicRaw({ placeArg: readPlace, followHandle, fetchImpl: sourceFetch, drawingCache, maxRooms, size })
+      const collected = await collectPublicRaw({ placeArg: readPlace, followHandle, fetchImpl: sourceFetch, drawingCache: new Map(), maxRooms, size })
       if (!collected.ok) return collected
       const result = normalizeRaw(collected.raw, maxRooms)
       if (result.ok && readGeneration === selectionGeneration) {

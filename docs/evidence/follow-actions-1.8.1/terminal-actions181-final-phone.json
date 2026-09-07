@@ -1,0 +1,12 @@
+{
+  "pid": 12364,
+  "requestedSize": "38x18",
+  "columns": 38,
+  "rows": 18,
+  "isTTY": true,
+  "windowsTerminal": true,
+  "at": 214250,
+  "color": "256",
+  "sceneFile": "docs\\evidence\\follow-actions-1.8.1\\follow-actions-scene.json",
+  "historyKey": null
+}

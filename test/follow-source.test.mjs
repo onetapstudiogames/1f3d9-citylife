@@ -157,6 +157,33 @@ test('follow-room reads one focused room, a minimal picker, baseline notes, and 
   }
 })
 
+test('follow-room refreshes resident, thing, and place drawings on every poll', async () => {
+  const fake = makeFollowFetch()
+  let revision = 0
+  const fetchImpl = async (input, init) => {
+    const url = new URL(String(input))
+    const match = /^\/api\/drawing\/(place|resident|thing)\/(\d+)$/u.exec(url.pathname)
+    if (!match) return fake.fetchImpl(input, init)
+    const [type, id] = [match[1], Number(match[2])]
+    const firstPollUndrawnThing = revision === 0 && type === 'thing'
+    return json(firstPollUndrawnThing
+      ? { ...drawing(type, id), drawing: null }
+      : { ...drawing(type, id), drawing: { palette: [revision === 0 ? '#111111' : '#abcdef'], indices: Array(64).fill(0) } })
+  }
+  const source = await createLiveSource({ mode: 'follow-room', followHandle: 'alpha', fetchImpl })
+
+  const first = await source.read(0, { size: { columns: 80, rows: 24 } })
+  revision = 1
+  const second = await source.read(1, { size: { columns: 80, rows: 24 } })
+
+  assert.equal(first.rooms[0].drawing.palette[0], '#111111')
+  assert.equal(first.rooms[0].residents.find(resident => resident.id === alpha.id).drawing.palette[0], '#111111')
+  assert.equal(first.rooms[0].things[0].drawing, null)
+  assert.equal(second.rooms[0].drawing.palette[0], '#abcdef')
+  assert.equal(second.rooms[0].residents.find(resident => resident.id === alpha.id).drawing.palette[0], '#abcdef')
+  assert.equal(second.rooms[0].things[0].drawing.palette[0], '#abcdef')
+})
+
 test('selection is synchronous, performs no I/O, and an in-flight old selection cannot win', async () => {
   const fake = makeFollowFetch({ gateRoom: 10 })
   const source = await createLiveSource({ mode: 'follow-room', followHandle: 'alpha', fetchImpl: fake.fetchImpl })
@@ -243,6 +270,25 @@ test('changes continue oldest-first across pages, keep the followed move chain, 
   const settled = await source.read(60_000, { size: { columns: 120, rows: 40 } })
   assert.deepEqual(settled.events, [])
   assert.ok(fake.calls.some(({ path }) => path === '/api/changes?since=21&limit=200'))
+})
+
+test('follow-room exposes ordered public changes as context without widening rendered events', async () => {
+  const contextOnly = {
+    change_id: '11', kind: 'effect_resolved', actor: 'beta', detail: { effect_id: 77 }, created_at: '2026-09-07T00:00:11Z',
+  }
+  const fake = makeFollowFetch({
+    presenceReads: [[alpha, beta], [alpha, beta]],
+    changePages: {
+      10: { change_marker: '11', changes: [contextOnly], returned_items: 1, unchanged: false, has_more: false, next_since: '11' },
+    },
+  })
+  const source = await createLiveSource({ mode: 'follow-room', followHandle: 'alpha', fetchImpl: fake.fetchImpl })
+  await source.read(0, { size: { columns: 80, rows: 24 } })
+
+  const changed = await source.read(1, { size: { columns: 80, rows: 24 } })
+
+  assert.deepEqual(changed.events, [])
+  assert.deepEqual(changed.contextEvents, [{ ...contextOnly, id: 1, at: contextOnly.created_at }])
 })
 
 test('changes reject decreasing, malformed, and repeated continuation markers', async () => {
@@ -399,6 +445,8 @@ test('follow-room replay is immutable and offline, tracks the selected room, and
   assert.equal(moved.rooms.length, 1)
   assert.equal(moved.target.id, 34)
   assert.ok(moved.residents.some((resident) => resident.handle === 'hermes-agent'))
+  assert.ok(moved.contextEvents.length >= moved.events.length)
+  assert.ok(moved.events.every(event => moved.contextEvents.some(context => context.change_id === event.change_id)))
 
   assert.deepEqual(source.selectResident('hermes-agent'), { ok: true, changed: true })
   const missingRoom = await source.read(60_000, { size: { columns: 80, rows: 24 } })

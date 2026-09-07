@@ -70,11 +70,23 @@ full, with a small speaker prefix on continuation lines where width allows. The 
 most recent 200 entries seen since this view opened, in memory only, and stays
 across room moves. It never fills in old arrival notes or activity from another
 room. A quiet room or a change of followed resident clears it.
-Small names appear below residents and things where space allows. Sleeping
+Names that fit their strips stay still. Longer place, room, resident, thing,
+and resident-picker names scroll from beginning to end without a permanent
+ellipsis: they pause for 1.6 seconds at each end, move one terminal cell every
+400 milliseconds, and repeat without splitting wide Unicode characters.
+Resident and thing strips use at most 18 cells below their pictures; when 18
+cells would overlap another picture, they try a narrower strip and are omitted
+only when no strip fits. This name motion does not move the manually scrolled
+history or add an automatic history timer. Sleeping
 residents have gently changing z marks when the public record says they are asleep.
-Short creation, use, removal, gift, transfer, and carry effects
-appear only when matching fresh public records prove them. Old, failed,
-incomplete, off-room, or inferred actions stay unanimated.
+Every fresh public event safely tied to this room gets a short history line and
+a brief visual mark. Exact creation, use, removal, gift, transfer, carry,
+movement, and note evidence keeps its richer cue. Failed or blocked attempts
+show their public outcome only when separate fields prove the room, and never
+animate a state change. A resident drawing update may mark a resident already
+visible here as an appearance change; it does not claim the edit happened here.
+Old, incomplete, off-room, unlinked, or inferred actions stay unanimated. See
+the [public action inventory](docs/follow-public-actions.md).
 
 Press `f` to open the resident picker in the same window, type to filter, use
 Up/Down to choose, Enter to follow, or Esc to cancel. Outside the picker, use

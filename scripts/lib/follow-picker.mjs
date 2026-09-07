@@ -1,4 +1,5 @@
 import { DARK, Grid } from './grid.mjs';
+import { paintScrollingName } from './scrolling-name.mjs';
 
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 const unsafeText = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
@@ -83,6 +84,7 @@ export const updatePicker = (picker, text, key = {}, residents = []) => {
 
 const cloneGrid = (frame) => {
   const clone = new Grid(frame?.width, frame?.height, DARK.bg);
+  if (Number.isFinite(frame?.nextNameAtMs)) clone.nextNameAtMs = frame.nextNameAtMs;
   for (let row = 0; row < clone.height; row += 1) {
     for (let column = 0; column < clone.width; column += 1) {
       const cell = frame?.cells?.[row]?.[column];
@@ -98,7 +100,7 @@ const overlaySize = (size, preferred, roomyThreshold) => {
 };
 
 /** Paint a resident picker onto a cloned frame without writing to the terminal. */
-export const paintPicker = (frame, picker, residents = [], currentHandle) => {
+export const paintPicker = (frame, picker, residents = [], currentHandle, nowMs = 0) => {
   const grid = cloneGrid(frame);
   if (grid.width === 0 || grid.height === 0) return grid;
 
@@ -157,7 +159,8 @@ export const paintPicker = (frame, picker, residents = [], currentHandle) => {
     const current = resident.handle === currentHandle;
     const marker = selected ? '›' : current ? '•' : ' ';
     const foreground = selected ? DARK.hi : current ? DARK.ink : DARK.muted;
-    grid.put(contentLeft, listTop + offset, `${marker} ${resident.handle}`, foreground, DARK.bubble, contentWidth);
+    grid.put(contentLeft, listTop + offset, `${marker} `, foreground, DARK.bubble, contentWidth);
+    paintScrollingName(grid, contentLeft + 2, listTop + offset, resident.handle, foreground, DARK.bubble, contentWidth - 2, nowMs);
   }
 
   return grid;

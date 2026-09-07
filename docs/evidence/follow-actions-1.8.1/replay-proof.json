@@ -1,0 +1,31 @@
+{
+  "scene": "follow-actions-scene.json",
+  "framesPerDump": 143,
+  "runs": 2,
+  "comparisons": [
+    {
+      "file": "frames-80x24.txt",
+      "sha256": "b9f8b17e1af56d3ff69048ddcb2a0ac099817739d57ed2a2b948968dc1e81955",
+      "bytes": 454196,
+      "identical": true
+    },
+    {
+      "file": "frames-80x24.txt.ansi",
+      "sha256": "6ab8aa15cd39c574743791cbd699b75368a080e1a8e9f0f0daa1e4f8a44e10de",
+      "bytes": 9891050,
+      "identical": true
+    },
+    {
+      "file": "frames-38x18.txt",
+      "sha256": "38289ca609e912e5c72a04c21461cfbbaafcf46585fef3d82792d88aa4c44c6c",
+      "bytes": 170532,
+      "identical": true
+    },
+    {
+      "file": "frames-38x18.txt.ansi",
+      "sha256": "34ceca2ca1a63ee2116042067fb3bffdee004bc5c9a399321549e7c3846e2979",
+      "bytes": 2332006,
+      "identical": true
+    }
+  ]
+}

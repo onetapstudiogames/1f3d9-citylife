@@ -40,6 +40,36 @@ test('a recorded selected-resident move leaves one room, changes the camera, and
   assert.equal(settled.frame.residents.find(pose => pose.resident.id === 999).roomId, 2)
 })
 
+test('a recorded go_home uses the same two door legs and attributed arrival as move', () => {
+  const first = at(null, 0, room(1))
+  const record = { ...move(1, 1, 2), detail: { ...move(1, 1, 2).detail, action: 'go_home' } }
+  const leaving = at(first, 1000, room(2, { events: [record] }))
+  assert.deepEqual(leaving.frame.doors.map(door => door.roomId), [1])
+  const arriving = at(leaving, 2000)
+  assert.deepEqual(arriving.frame.doors.map(door => door.roomId), [2])
+  assert.match(arriving.state.activity.history[0].text, /walker went home to room 2/u)
+  assert.equal(at(arriving, 3000).frame.doors.length, 0)
+})
+
+test('a newly observed room activity gets its cue through the controller and expires', () => {
+  let shown = at(null, 0, room(1))
+  shown = at(shown, 1000, room(1, { contextEvents: [{ id: 1, actor: 'walker', kind: 'resident_edited', detail: { resident_id: 999 } }] }))
+  assert.match(shown.state.activity.history[0].text, /walker changed their drawing/u)
+  assert.equal(shown.frame.effects.find(effect => effect.type === 'activity').cue, 'change')
+  assert.equal(at(shown, 4000).frame.effects.length, 0)
+})
+
+test('a witnessed note still gets a paper mark when its author is no longer pictured', () => {
+  const seed = at(null, 0, room(1))
+  const shown = at(seed, 1000, room(1, {
+    notes: [{ id: 10, author: 'a-departed-neighbor', place_id: 1, body: 'I left a note.' }],
+    events: [{ id: 1, actor: 'a-departed-neighbor', kind: 'note', detail: { note_id: 10, place_id: 1 } }],
+  }))
+  assert.equal(shown.frame.bubbles.length, 0)
+  assert.match(shown.state.activity.history[0].text, /a-departed-neighbor: I left a note/u)
+  assert.match(text(shown), /≡/u)
+})
+
 test('snapshot-only relocation and a broken move chain switch rooms without an invented walk', () => {
   const first = at(null, 0, room(1))
   for (const events of [[], [move(1, 3, 2)]]) {

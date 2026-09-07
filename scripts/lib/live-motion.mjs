@@ -133,7 +133,7 @@ const validMove = (event, cursor) => {
   const from = numberId(event?.detail?.from_place_id)
   const to = numberId(event?.detail?.to_place_id)
   return id !== null && id > cursor && event.kind === 'action' &&
-    event.detail?.action === 'move' && event.detail?.status === 'applied' &&
+    ['move', 'go_home'].includes(event.detail?.action) && event.detail?.status === 'applied' &&
     typeof event.actor === 'string' && event.actor.length > 0 &&
     from !== null && to !== null && from !== to
 }

@@ -312,7 +312,7 @@ test('replay applies follow and place selection to recorded moments without netw
   assert.deepEqual(fair.rooms.map((room) => room.id), [34])
 })
 
-test('live reads use only fixed-origin anonymous GETs and cache complete and undrawn drawings', async () => {
+test('live reads use only fixed-origin anonymous GETs and refresh complete and undrawn drawings', async () => {
   const { fetchImpl, calls } = makeFetch({ transientResident: true })
   const source = await createLiveSource({ placeArg: 'first town', fetchImpl })
 
@@ -332,10 +332,10 @@ test('live reads use only fixed-origin anonymous GETs and cache complete and und
     assert.equal(init.credentials, undefined)
   }
   const paths = calls.map(({ url }) => new URL(url).pathname)
-  assert.equal(paths.filter((path) => path === '/api/drawing/place/1').length, 1, 'complete drawing cached')
-  assert.equal(paths.filter((path) => path === '/api/drawing/place/2').length, 1, 'genuine undrawn cached')
+  assert.equal(paths.filter((path) => path === '/api/drawing/place/1').length, 2, 'complete drawing refreshed')
+  assert.equal(paths.filter((path) => path === '/api/drawing/place/2').length, 2, 'undrawn state refreshed')
   assert.equal(paths.filter((path) => path === '/api/drawing/resident/12').length, 2, 'transient drawing failure retried')
-  assert.equal(paths.filter((path) => path.startsWith('/api/drawing/thing/')).length, 6, 'only five things per room, cached after first success')
+  assert.equal(paths.filter((path) => path.startsWith('/api/drawing/thing/')).length, 12, 'only five things per room, refreshed on the next poll')
 })
 
 test('follow includes the resident actual room and local scope in stable numeric boxes', async () => {
@@ -400,7 +400,7 @@ test('follow target uses the focused presence response over a stale paged presen
   assert.equal(result.rooms.find((room) => room.id === 2).residents.some((resident) => resident.handle === 'moss'), true)
 })
 
-test('live navigation ascends nested places, wraps numeric towns, performs no I/O, and keeps drawing cache', async () => {
+test('live navigation ascends nested places, wraps numeric towns, performs no I/O, and refreshes drawings', async () => {
   const { fetchImpl, calls } = makeNavigationFetch({ nested: true })
   const source = await createLiveSource({ placeArg: 'small house', fetchImpl })
   const house = await source.read(0, { maxRooms: 1 })
@@ -424,7 +424,7 @@ test('live navigation ascends nested places, wraps numeric towns, performs no I/
     assert.equal(init.headers.authorization, undefined)
   }
   const drawingPaths = calls.map(({ url }) => new URL(url).pathname)
-  assert.equal(drawingPaths.filter(path => path === '/api/drawing/place/3').length, 1, 'returning to a town reuses its drawing')
+  assert.equal(drawingPaths.filter(path => path === '/api/drawing/place/3').length, 2, 'returning to a town refreshes its drawing')
 })
 
 test('a stale in-flight town read cannot undo a later navigation', async () => {
