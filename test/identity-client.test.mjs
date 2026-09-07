@@ -333,12 +333,10 @@ test('probeMe never follows a redirect from the origin to another host', async (
   try {
     const probe = await probeMe(redirecting.origin, `1f3d9_sk_${'a'.repeat(48)}`)
     assert.equal(probe.ok, false, 'probeMe reports failure rather than following the redirect')
-    // The definitive proof this is the redirect refusal (not, say, an
-    // unrelated network hiccup): the redirect target genuinely never saw a
-    // request. probe.error's exact text is not asserted here -- undici
-    // reports a redirect-mode-error failure only as a bare "fetch failed" at
-    // this level, with the real reason one level deeper in error.cause,
-    // which probeMe's catch (unlike fetchOrExplain's) does not unwrap.
+    assert.equal(
+      probe.error,
+      `the city answered with a redirect to http://127.0.0.1:${attackerPort}; the key was not sent on; the probe did not happen`,
+    )
     assert.equal(attackerHit, false, 'the redirect target never received the bearer-authenticated request')
   } finally {
     if (previousTlsSetting === undefined) delete process.env.NODE_TLS_REJECT_UNAUTHORIZED

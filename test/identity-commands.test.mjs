@@ -1924,6 +1924,8 @@ test('setup.mjs refuses a fresh registration while a registration staging label 
       { env: home.env },
     )
     assert.notEqual(result.status, 0, 'refuses rather than guessing whether the staging entry was ever confirmed')
+    assert.match(result.stderr, /confirmation may or may not have completed/u)
+    assert.doesNotMatch(result.stderr, /confirm already succeeded|probe the confirmed key/u)
     // Never the ORDINARY "already holds ... entries under a different
     // label" wording -- this is the more specific registration-staging
     // refusal, checked separately below.

@@ -4,7 +4,7 @@ import {
 } from './identity-input.mjs'
 import { cancelStage, postJson } from './identity-http.mjs'
 import { promoteReplacementKey } from './promote.mjs'
-import { deleteSecret, readSecret, storeSecret } from './vault-backends.mjs'
+import { readSecret, storeSecret } from './vault-backends.mjs'
 import { pendingLabel } from './vault-index.mjs'
 
 async function register(flags) {
@@ -124,18 +124,13 @@ async function register(flags) {
     stored_at: new Date().toISOString(),
   })
 
-  let confirmed
-  try {
-    confirmed = await postJson(origin, '/api/register', {
-      action: 'confirm',
-      stage_token: staged.stage_token,
-      resident_key: staged.resident_key,
-    })
-  } catch (error) {
-    deleteSecret(origin, stagingLabel)
-    await cancelStage(origin, '/api/register', staged.stage_token)
-    throw error
-  }
+  // An unconfirmed response leaves this entry intact: the request may have
+  // completed server-side, and this can be the only recoverable key copy.
+  const confirmed = await postJson(origin, '/api/register', {
+    action: 'confirm',
+    stage_token: staged.stage_token,
+    resident_key: staged.resident_key,
+  })
 
   // The identity of record is the city's CONFIRMED answer, falling back to
   // the staged one only if the response is somehow missing it -- never the

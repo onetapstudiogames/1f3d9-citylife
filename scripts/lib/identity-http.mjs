@@ -16,8 +16,7 @@ function sanitizeServerProse(value) {
 /**
  * Wraps a fetch failure (DNS, connection refused, timeout, TLS -- anything
  * before a response ever arrives) into a caller-facing message that names
- * the origin, says nothing was created, and suggests a next step, instead of
- * letting the bare engine error ("fetch failed") escape unexplained.
+ * the origin, explains the action-specific outcome, and suggests a next step.
  * Redirect refusals follow the city's reference client's wording.
  */
 async function fetchOrExplain(url, init) {
@@ -27,22 +26,33 @@ async function fetchOrExplain(url, init) {
     // may be forwarded, even when the destination has the same origin.
     response = await fetch(url, { ...init, redirect: 'manual' })
   } catch (error) {
-    // Node's fetch wraps the real failure in `error.cause`, which for a
-    // connection failure is itself an AggregateError with an EMPTY top-level
-    // message and the useful text one level deeper in `.errors[0].message`
-    // (or just a `.code` like ECONNREFUSED/ENOTFOUND when even that is
-    // absent) -- so fall through several levels rather than printing a bare
-    // "(network error: )" with nothing after the colon.
-    const cause = error?.cause
-    const detail =
-      cause?.message
-      || cause?.errors?.[0]?.message
-      || cause?.code
-      || error?.message
-      || String(error)
+    const causes = [error, error?.cause, ...(error?.cause?.errors ?? [])]
+    const code = causes.find(cause => cause?.code)?.code
+    const detail = code === 'ECONNREFUSED' ? 'connection refused'
+      : code === 'ENOTFOUND' ? 'the server address could not be found'
+      : code === 'EAI_AGAIN' ? 'the server address could not be looked up right now'
+      : ['ETIMEDOUT', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT'].includes(code)
+        ? 'the connection timed out'
+        : 'the connection ended before a response arrived'
+    const notSent = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN'].includes(code)
+    const path = new URL(url).pathname
+    const body = JSON.parse(init.body ?? '{}') ?? {}
+    const outcomes = {
+      '/api/register': [
+        body.action === 'confirm'
+          ? 'no resident was created; a staged credential entry was written locally and remains stored'
+          : 'nothing was created',
+        'registration could not be confirmed',
+      ],
+      '/api/rotate': ['the key was not rotated', 'key rotation could not be confirmed'],
+      '/api/recovery': ['no recovery was performed', 'recovery could not be confirmed'],
+      '/api/pair': ['no pairing code was created', 'pairing code creation could not be confirmed'],
+    }
+    const outcome = (outcomes[path] ?? ['the request was not sent', 'the result could not be confirmed'])[notSent ? 0 : 1]
     throw new Error(
-      `could not reach ${url} (network error: ${detail}); nothing was created -- check the address and ` +
-      'your connection, then retry',
+      `could not reach ${url} (network error: ${detail}); ${outcome}; ` +
+      (notSent ? 'check the address and your connection, then retry'
+        : 'check whether the action completed before retrying'),
     )
   }
   if ([301, 302, 303, 307, 308].includes(response.status)) {
