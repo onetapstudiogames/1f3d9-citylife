@@ -1,0 +1,14 @@
+{
+  "pid": 410708,
+  "columns": 122,
+  "rows": 30,
+  "isTTY": true,
+  "windowsTerminal": false,
+  "legacy": {
+    "mode": "ansi",
+    "legacy": true,
+    "relaunched": false,
+    "synchronized": false
+  },
+  "color": "256"
+}

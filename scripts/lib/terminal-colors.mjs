@@ -74,6 +74,7 @@ export const chooseColorMode = ({ env = process.env, platform = process.platform
   if (platform === 'win32' && env.ONEF3D9_LEGACY_CONSOLE_MODE === 'ansi') {
     return colorTerm.includes('truecolor') || colorTerm.includes('24bit') ? 'truecolor' : '256'
   }
+  if (env.WT_SESSION) return 'truecolor'
   if (String(env.TERM ?? '').toLowerCase() === 'dumb') return '16'
 
   const termProgram = String(env.TERM_PROGRAM ?? '').toLowerCase()
@@ -81,7 +82,6 @@ export const chooseColorMode = ({ env = process.env, platform = process.platform
   if (
     colorTerm.includes('truecolor') ||
     colorTerm.includes('24bit') ||
-    Boolean(env.WT_SESSION) ||
     termProgram.includes('iterm') ||
     lcTerminal.includes('iterm')
   ) return 'truecolor'

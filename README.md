@@ -50,7 +50,7 @@ Claude Code only.
 
 `live [place]` and `follow <handle>` open the same quiet terminal picture. It
 fits stable rounded room boxes to the current window. Floors use their own 8x8
-tiles, residents use 8x4 drawings, and things use 4x2 marks. The city supplies
+tiles, resident drawings occupy 8 columns by 4 lines, and things use 4x2 marks. The city supplies
 real room membership; positions inside each room and deterministic drift are
 invented for appearance, and the screen stays quiet about that distinction.
 Only a fresh recorded public move with `applied` status starts a two-second door
@@ -71,7 +71,7 @@ commands load no identity and make no city write.
 For deterministic offline replay, pass `--scene <file>`. `--at <ms>` selects a
 time, `--dump <path>` writes plain and ANSI frames, and `--fail-at <ms>` injects
 a read failure only at an existing scene moment. Scene navigation refuses towns
-that were not recorded. See the [terminal-view evidence](docs/evidence/pr1/README.md).
+that were not recorded. See the [terminal-view evidence](docs/evidence/pr4/README.md).
 
 ## Links
 

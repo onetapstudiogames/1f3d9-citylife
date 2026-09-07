@@ -1,0 +1,207 @@
+{
+  "recordedAt": "2026-09-07T16:37:33.735497+00:00",
+  "fixture": "test/fixtures/live-scene.json",
+  "networkUsed": false,
+  "terminal": "Windows Terminal",
+  "inputMethod": "WriteConsoleInputW after AttachConsole to the exact Node client PID",
+  "globalInputUsed": false,
+  "foregroundApiUsed": false,
+  "sessions": [
+    {
+      "name": "keys",
+      "keys": [
+        {
+          "key": "r",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "left",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "right",
+          "ok": true,
+          "recordsWritten": 1
+        },
+        {
+          "key": "q",
+          "ok": true,
+          "recordsWritten": 1
+        }
+      ],
+      "console": {
+        "inputCodePage": 437,
+        "outputCodePage": 437,
+        "virtualTerminalProcessing": true
+      },
+      "launchForegroundUnchanged": true,
+      "isTTY": true,
+      "windowsTerminal": true,
+      "atMs": 62000,
+      "closed": {
+        "ok": true
+      },
+      "rawModes": [
+        true,
+        false
+      ],
+      "closeCalls": 1,
+      "events": [
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "navigate",
+          "direction": "left",
+          "result": {
+            "ok": false,
+            "error": "This scene does not include that town."
+          }
+        },
+        {
+          "type": "navigate",
+          "direction": "right",
+          "result": {
+            "ok": false,
+            "error": "This scene does not include that town."
+          }
+        }
+      ],
+      "nodeExited": true,
+      "error": null
+    },
+    {
+      "name": "escape",
+      "keys": [
+        {
+          "key": "escape",
+          "ok": true,
+          "recordsWritten": 1
+        }
+      ],
+      "console": {
+        "inputCodePage": 437,
+        "outputCodePage": 437,
+        "virtualTerminalProcessing": true
+      },
+      "launchForegroundUnchanged": true,
+      "isTTY": true,
+      "windowsTerminal": true,
+      "atMs": 62000,
+      "closed": {
+        "ok": true
+      },
+      "rawModes": [
+        true,
+        false
+      ],
+      "closeCalls": 1,
+      "events": [
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "targetId": 2
+        }
+      ],
+      "nodeExited": true,
+      "error": null
+    },
+    {
+      "name": "ctrl-c",
+      "keys": [
+        {
+          "key": "ctrl-c",
+          "ok": true,
+          "recordsWritten": 1
+        }
+      ],
+      "console": {
+        "inputCodePage": 437,
+        "outputCodePage": 437,
+        "virtualTerminalProcessing": true
+      },
+      "launchForegroundUnchanged": true,
+      "isTTY": true,
+      "windowsTerminal": true,
+      "atMs": 62000,
+      "closed": {
+        "ok": true
+      },
+      "rawModes": [
+        true,
+        false
+      ],
+      "closeCalls": 1,
+      "events": [
+        {
+          "type": "read",
+          "atMs": 0,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 30000,
+          "ok": true,
+          "targetId": 2
+        },
+        {
+          "type": "read",
+          "atMs": 60000,
+          "ok": true,
+          "targetId": 2
+        }
+      ],
+      "nodeExited": true,
+      "error": null
+    }
+  ]
+}

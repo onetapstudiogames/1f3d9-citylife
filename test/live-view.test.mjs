@@ -227,6 +227,14 @@ test('--once CLI renders the real fixture as plain text offline', async () => {
   assert.equal(stderr, '')
 })
 
+test('the reviewed 120x40 note frame matches its plain text snapshot', async () => {
+  const source = await createLiveSource({ sceneFile })
+  try {
+    const result = await createReplay(source, { columns: 120, rows: 40 }).at(62000)
+    assert.equal(toPlainText(result.frame), await readFile(new URL('./fixtures/live-frame-120x40.txt', import.meta.url), 'utf8'))
+  } finally { source.close() }
+})
+
 test('replay failure freezes the picture, recovers at the next moment, and ignores requested frame cadence', async () => {
   const fixture = await createLiveSource({ sceneFile })
   const source = {

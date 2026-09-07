@@ -21,7 +21,7 @@ test('terminal colors: a tty falls back through xterm 256 to basic 16', () => {
     platform: 'win32',
     isTTY: true,
   }), 'truecolor')
-  assert.equal(chooseColorMode({ env: { WT_SESSION: 'abc', TERM: 'dumb' }, platform: 'win32', isTTY: true }), '16')
+  assert.equal(chooseColorMode({ env: { WT_SESSION: 'abc', TERM: 'dumb' }, platform: 'win32', isTTY: true }), 'truecolor')
   assert.equal(chooseColorMode({ env: { COLORTERM: 'truecolor', TERM: 'dumb' }, platform: 'linux', isTTY: true }), '16')
   assert.equal(chooseColorMode({ env: { TERM: 'xterm-256color' }, platform: 'linux', isTTY: true }), '256')
   assert.equal(chooseColorMode({ env: { TERM: 'dumb' }, platform: 'linux', isTTY: true }), '16')

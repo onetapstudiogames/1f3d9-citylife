@@ -2,3 +2,4 @@
 docs/evidence/**/frames-*.txt -text whitespace=-blank-at-eol,-blank-at-eof
 docs/evidence/**/frames-*.ansi -text -diff
 docs/evidence/**/public-*-once.txt -text whitespace=-blank-at-eol,-blank-at-eof
+test/fixtures/live-frame-*.txt -text whitespace=-blank-at-eol,-blank-at-eof

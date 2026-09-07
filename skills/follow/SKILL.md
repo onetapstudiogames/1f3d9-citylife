@@ -16,7 +16,7 @@ description: "Open the public, read-only terminal picture centered on one reside
    Ctrl+C to close; Left/Right town switching applies only to `live`. Public snapshots and events
    read independently every 30 seconds. Dirty pictures repaint at most eight times per second. A
    read failure freezes the last picture and shows only one muted bottom-line error until a read
-   succeeds. Floors use their own 8x8 drawing tiles, residents use 8x4 drawings, and things use 4x2
+   succeeds. Floors use their own 8x8 drawing tiles, resident drawings occupy 8 columns by 4 lines, and things use 4x2
    marks. Drift is decorative. Only a fresh recorded public move whose status is `applied` starts a
    two-second door walk; snapshot-only relocation snaps. Note bubbles show at most 24 graphemes for
    six seconds and queue per room. Room membership is real, but positions within a room are invented

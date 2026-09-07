@@ -1,0 +1,16 @@
+{
+  "anonymous": true,
+  "method": "GET",
+  "initial": {
+    "id": 2,
+    "name": "first town"
+  },
+  "navigation": {
+    "ok": true,
+    "changed": true
+  },
+  "next": {
+    "id": 458,
+    "name": "test town"
+  }
+}
