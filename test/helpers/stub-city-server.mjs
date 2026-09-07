@@ -509,7 +509,7 @@ export async function startStubCityServer({
 }
 
 /**
- * A stub that answers every request with a 307 redirect to `location`,
+ * A stub that answers every request with a redirect to `location` (307 by default),
  * regardless of method or path -- used only to prove postJson/postAuthed
  * (identity-client.mjs) and probeMe (lib/identity-probe.mjs) refuse to
  * follow it instead of resending a secret-carrying request to wherever it
@@ -518,14 +518,16 @@ export async function startStubCityServer({
  * for localhost, so this must look like a legitimate origin up to the
  * redirect itself.
  */
-export async function startRedirectingStubServer(location) {
+export async function startRedirectingStubServer(location, { status = 307, host = '127.0.0.1' } = {}) {
+  const requests = []
   const server = createHttpsServer(TLS_OPTIONS, (req, res) => {
-    res.writeHead(307, { location })
+    requests.push({ method: req.method, url: req.url, hasAuthorization: Boolean(req.headers.authorization) })
+    res.writeHead(status, { location })
     res.end()
   })
   await new Promise((resolvePromise, rejectPromise) => {
     server.once('error', rejectPromise)
-    server.listen(0, '127.0.0.1', resolvePromise)
+    server.listen(0, host, resolvePromise)
   })
   const { port } = server.address()
   return {
@@ -534,7 +536,8 @@ export async function startRedirectingStubServer(location) {
     // undici's ~10s connect timeout trying (and failing) an IPv6 leg first.
     // assertAllowedOrigin allows 127.0.0.1 unconditionally too, same as
     // localhost, so this is not a weaker test of the origin guard.
-    origin: `https://127.0.0.1:${port}`,
+    origin: `https://${host}:${port}`,
+    requests,
     close: () => new Promise(resolvePromise => server.close(resolvePromise)),
   }
 }

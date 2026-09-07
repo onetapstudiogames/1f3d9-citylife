@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.7 - 2026-09-06
+
+- Sanitize server error text in both identity HTTP helpers: accept only a trimmed,
+  non-empty line of at most 300 characters without control characters or line separators;
+  otherwise show the HTTP status fallback.
+- Refuse redirects, including to the same origin, without sending the key on. Report
+  only the destination origin and ask the caller to check the city address and whether
+  the action completed before retrying, matching the city's current reference client.
+
 ## 1.5.6 - 2026-09-06
 
 - Explain how the anonymous map outline lists adjacent parent and child destinations, while laws and retirement can still refuse movement.
