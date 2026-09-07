@@ -195,10 +195,20 @@ export const planRoomPlacements = (room, box, { preferredResidents = [], reserve
     }, false)
   }
 
-  const orderedResidents = [...(room.residents ?? [])].sort(compareIds)
+  const focusFirst = (left, right) => Number(stableKey(right.id) === stableKey(room.focusResidentId))
+    - Number(stableKey(left.id) === stableKey(room.focusResidentId)) || compareIds(left, right)
+  const orderedResidents = [...(room.residents ?? [])].sort(focusFirst)
   const residentById = new Map(orderedResidents.map((item) => [stableKey(item.id), item]))
   const retained = new Set()
-  for (const preferred of Array.isArray(preferredResidents) ? preferredResidents : []) {
+  const preferredHomes = Array.isArray(preferredResidents) ? preferredResidents : []
+  const focused = orderedResidents.find(item => stableKey(item.id) === stableKey(room.focusResidentId))
+  if (focused && !preferredHomes.some(home => stableKey(home.item?.id) === stableKey(focused.id))) {
+    const rectangle = residentCandidatesFor(box, aisle, focused.id).find(candidate => residentFits(candidate, box, aisle)
+      && canClaim(candidate, claims) && !reservedFeeders.some(feeder => intersects(candidate, feeder))
+      && actualBlockers.every(blocker => !intersects(feederFor(candidate, aisle), blocker)))
+    if (rectangle && claimResident(focused, rectangle, true)) retained.add(stableKey(focused.id))
+  }
+  for (const preferred of [...preferredHomes].sort((a, b) => focusFirst(a.item ?? {}, b.item ?? {}))) {
     const item = residentById.get(stableKey(preferred.item?.id))
     if (!item || retained.has(stableKey(item.id))) continue
     if (claimResident(item, {

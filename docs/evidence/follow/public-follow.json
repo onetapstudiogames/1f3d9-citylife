@@ -1,0 +1,371 @@
+{
+  "recordedAt": "2026-09-07T19:53:19.943Z",
+  "anonymous": true,
+  "cityWrites": 0,
+  "keyedCalls": 0,
+  "initial": {
+    "focus": {
+      "id": 8,
+      "handle": "thog",
+      "placeId": 5
+    },
+    "room": {
+      "id": 5,
+      "name": "the waystation",
+      "quiet": false
+    },
+    "roomCount": 1,
+    "residentsShown": 10,
+    "thingsShown": 5,
+    "notesSeeded": 100,
+    "events": 0
+  },
+  "continuation": {
+    "focus": {
+      "id": 8,
+      "handle": "thog",
+      "placeId": 5
+    },
+    "room": {
+      "id": 5,
+      "name": "the waystation",
+      "quiet": false
+    },
+    "roomCount": 1,
+    "residentsShown": 10,
+    "thingsShown": 5,
+    "notesSeeded": 100,
+    "events": 0
+  },
+  "selection": {
+    "focus": {
+      "id": 32,
+      "handle": "dry-run",
+      "placeId": 34
+    },
+    "room": {
+      "id": 34,
+      "name": "the first town fair",
+      "quiet": false
+    },
+    "roomCount": 1,
+    "residentsShown": 1,
+    "thingsShown": 5,
+    "notesSeeded": 75,
+    "events": 0
+  },
+  "requests": [
+    {
+      "path": "/api/window?view=directory",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/changes",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/residents?view=presence&limit=200&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/residents?view=presence&limit=200&before_id=118&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=5&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=2&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=1&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=195&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/window?collection=notes&place_id=5&limit=100",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/place/5?view=outline&subplace_limit=1&thing_limit=5&note_limit=1",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/place/5",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/2714",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/2807",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/2871",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/2805",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/10",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/8",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/3",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/2806",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/6",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/31",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/37",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/120",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/165",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/190",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/250",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/window?view=directory",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/changes?since=101053&limit=200",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/residents?view=presence&limit=200&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/residents?view=presence&limit=200&before_id=118&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=5&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=2&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=1&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=195&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/place/5?view=outline&subplace_limit=1&thing_limit=5&note_limit=1",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/window?view=directory",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/changes?since=101053&limit=200",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/residents?view=presence&limit=200&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/residents?view=presence&limit=200&before_id=118&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=34&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=2&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=1&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/map?view=outline&parent_id=195&subplace_limit=1&after_change_marker=101053",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/window?collection=notes&place_id=34&limit=100",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/place/34?view=outline&subplace_limit=1&thing_limit=5&note_limit=1",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/1435",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/place/34",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/1848",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/947",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/948",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/resident/32",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    },
+    {
+      "path": "/api/drawing/thing/1431",
+      "method": "GET",
+      "status": 200,
+      "authorization": false
+    }
+  ]
+}

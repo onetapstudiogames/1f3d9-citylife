@@ -5,6 +5,8 @@ import { DARK, Grid, toAnsi, toPlainText } from './grid.mjs'
 import { paintLiveView, visibleRoomLimit } from './live-render.mjs'
 import { createLiveSource } from './live-source.mjs'
 import { stepMotion } from './live-motion.mjs'
+import { stepFollowMotion } from './follow-motion.mjs'
+import { paintPicker, updatePicker } from './follow-picker.mjs'
 import { chooseColorMode } from './terminal-colors.mjs'
 import { TerminalScreen } from './terminal-screen.mjs'
 import { openTerminalRunning } from './terminal.mjs'
@@ -16,7 +18,7 @@ const FRAME_MS = 125
 const READ_ERROR = 'Could not read the city.'
 const realClock = { now: () => performance.now(), setTimeout, clearTimeout }
 
-export const parseViewArgs = (args, kind = 'live') => {
+export const parseViewArgs = (args) => {
   const options = {}
   const positionals = []
   for (let index = 0; index < args.length; index += 1) {
@@ -43,14 +45,18 @@ export const parseViewArgs = (args, kind = 'live') => {
       options[arg === '--at' ? 'at' : 'failAt'] = Number(value)
     }
   }
-  if (positionals.length > 1) throw new Error('view accepts one place or resident argument')
+  if (positionals.length > 1) throw new Error('follow view accepts one resident argument')
   if ((options.dump || options.at !== undefined || options.failAt !== undefined) && !options.sceneFile) throw new Error('--dump, --at, and --fail-at require --scene')
-  if (kind === 'follow') {
-    if (!positionals[0]) throw new Error('follow view needs a resident handle')
-    options.followHandle = positionals[0]
-  } else if (positionals[0]) options.placeArg = positionals[0]
+  if (!positionals[0]) throw new Error('follow view needs a resident handle')
+  options.followHandle = positionals[0]
   return options
 }
+
+const stepViewMotion = (previous, options) => options.observation?.focus || previous?.observation?.focus
+  ? stepFollowMotion(previous, options)
+  : stepMotion(previous, options)
+
+const paintMotion = (observation, size, motion) => paintLiveView(motion?.observation ?? observation, size, motion?.frame)
 
 const sizeOf = (options, output) => ({
   columns: options.columns ?? output.columns ?? 80,
@@ -89,22 +95,22 @@ export const createReplay = (source, size) => {
       while (index < moments.length && moments[index] <= nowMs) {
         const time = moments[index++]
         if (state && !error) {
-          const advanced = stepMotion(state, { nowMs: time, size })
+          const advanced = stepViewMotion(state, { nowMs: time, size })
           state = advanced.state
-          picture = paintLiveView(observation, size, advanced.frame)
+          picture = paintMotion(observation, size, advanced)
         }
         try {
           observation = await readObservation(source, time, size)
-          state = stepMotion(state, { nowMs: time, observation, size }).state
+          state = stepViewMotion(state, { nowMs: time, observation, size }).state
           error = null
         } catch {
           error = READ_ERROR
         }
       }
-      const motion = !error && state ? stepMotion(state, { nowMs, size }) : null
+      const motion = !error && state ? stepViewMotion(state, { nowMs, size }) : null
       if (motion) {
         state = motion.state
-        picture = paintLiveView(observation, size, motion.frame)
+        picture = paintMotion(observation, size, motion)
       }
       previousTime = nowMs
       return { observation, motion, error, frame: error ? quietFrame(picture, size, error) : picture }
@@ -155,6 +161,7 @@ export const runViewSession = (source, options, {
   let quietError = null
   let generation = 0
   let resetMotion = false
+  let picker = null
   const startedAt = clock.now()
   const now = () => options.at ?? Math.min(clock.now() - startedAt, source.durationMs ?? Infinity)
   const oldRaw = Boolean(input.isRaw)
@@ -192,17 +199,28 @@ export const runViewSession = (source, options, {
   const onExit = () => {
     try { if (input.isTTY) input.setRawMode(oldRaw) } finally { screen.restore() }
   }
-  const onKey = (_text, key = {}) => {
-    if (key.name === 'q' || key.name === 'escape' || (key.ctrl && key.name === 'c')) finish()
-    else if (key.name === 'r') void refresh()
-    else if (key.name === 'left' || key.name === 'right') {
-      const result = source.navigate?.(key.name)
-      if (result?.ok && result.changed) {
-        generation += 1
-        resetMotion = true
-        void refresh()
-      } else if (result?.ok === false) showError(options.sceneFile ? 'This scene does not include that town.' : READ_ERROR)
+  const onKey = (text, key = {}) => {
+    if (key.ctrl && key.name === 'c') { finish(); return }
+    if (picker) {
+      const selected = updatePicker(picker, text, key, observation?.residents ?? [])
+      picker = selected.cancelled ? null : selected.picker
+      if (selected.handle) {
+        const result = source.selectResident?.(selected.handle)
+        if (result?.ok) {
+          picker = null
+          if (result.changed) {
+            generation += 1
+            resetMotion = true
+            void refresh()
+          }
+        } else showError(options.sceneFile ? 'That resident is not in this recording.' : READ_ERROR)
+      }
+      present()
+      return
     }
+    if (key.name === 'q' || key.name === 'escape') finish()
+    else if (key.name === 'r') void refresh()
+    else if (key.name === 'f') { picker = { query: '', index: 0 }; present() }
   }
   const onResize = () => {
     if (stopped) return
@@ -227,10 +245,11 @@ export const runViewSession = (source, options, {
       return
     }
     const size = sizeOf(options, output)
-    const frame = quietError ? quietFrame(frozenPicture, size, quietError) : paintLiveView(observation, size, motion?.frame)
+    const picture = quietError ? quietFrame(frozenPicture, size, quietError) : paintMotion(observation, size, motion)
+    const frame = picker ? paintPicker(picture, picker, observation?.residents ?? [], observation?.focus?.handle) : picture
     if (screen.present(frame)) {
       lastPaintMs = clock.now()
-      lastPicture = frame
+      lastPicture = picture
     }
   }
   const showError = (message = READ_ERROR) => {
@@ -248,7 +267,7 @@ export const runViewSession = (source, options, {
   }
   const animate = (force = false) => {
     if (stopped || quietError || !observation) return
-    motion = stepMotion(motion?.state ?? null, { nowMs: now(), size: sizeOf(options, output) })
+    motion = stepViewMotion(motion?.state ?? null, { nowMs: now(), size: sizeOf(options, output) })
     if (force || motion.changed) present()
     scheduleMotion()
   }
@@ -274,7 +293,7 @@ export const runViewSession = (source, options, {
       observation = result.observation
       quietError = null
       frozenPicture = null
-      motion = result.motion ?? stepMotion(resetMotion ? null : motion?.state ?? null, {
+      motion = result.motion ?? stepViewMotion(resetMotion ? null : motion?.state ?? null, {
         nowMs: now(), observation, size: sizeOf(options, output),
       })
       resetMotion = false
@@ -319,7 +338,7 @@ export const runDrawnView = async (options) => {
     if (legacy.exitCode) process.exitCode = legacy.exitCode
     return
   }
-  const source = await createLiveSource(options)
+  const source = await createLiveSource({ ...options, mode: 'follow-room' })
   try {
     if (options.dump) {
       const result = await dumpReplay(source, options)
@@ -341,13 +360,13 @@ export const runDrawnView = async (options) => {
   }
 }
 
-export const viewCommand = async (kind, args, { feed = false } = {}) => {
+export const viewCommand = async (args, { feed = false } = {}) => {
   try {
-    const options = parseViewArgs(args, kind)
+    const options = parseViewArgs(args)
     if (feed || options.dump || options.once) return await runDrawnView(options)
-    const script = resolve(pluginRoot, 'scripts', `${kind}-feed.mjs`)
-    const result = await openTerminalRunning(script, args, { title: kind === 'follow' ? '1F3D9 follow' : '1F3D9 live' })
-    if (result.opened) console.log('The city view was launched in a terminal window.')
+    const script = resolve(pluginRoot, 'scripts', 'follow-feed.mjs')
+    const result = await openTerminalRunning(script, args, { title: '1F3D9 follow' })
+    if (result.opened) console.log('The follow view was launched in a terminal window.')
     else await runDrawnView({ ...options, once: true })
   } catch (error) {
     console.error(error?.message ?? 'Could not open the drawn view.')

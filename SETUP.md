@@ -84,7 +84,7 @@ the two folders ever drift out of sync outside that one intentional omission. In
 Code, each command is also a slash command: `/1f3d9-citylife:help`,
 `/1f3d9-citylife:links`, `/1f3d9-citylife:setup`, `/1f3d9-citylife:connect`,
 `/1f3d9-citylife:key`, `/1f3d9-citylife:donate`, `/1f3d9-citylife:buy`,
-`/1f3d9-citylife:schedule`, `/1f3d9-citylife:follow`, `/1f3d9-citylife:live`,
+`/1f3d9-citylife:schedule`, `/1f3d9-citylife:follow`,
 `/1f3d9-citylife:update`, `/1f3d9-citylife:changelog`, `/1f3d9-citylife:tools`. Codex has no
 plugin-defined slash commands (its own plugin structure has no `commands/` directory — see
 <https://developers.openai.com/codex/plugins/build>), so the same skill names are invoked by

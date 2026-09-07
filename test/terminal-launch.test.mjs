@@ -18,8 +18,8 @@ const fakeChild = (pid, code) => {
 test('Windows fallback transports public argv without embedding it in PowerShell source', async () => {
   const calls = []
   const malicious = '$([IO.File]::WriteAllText("owned", "yes")); `Get-Process`; line\r\nnext'
-  const result = await openTerminalRunning('C:\\city view\\live-feed.mjs', [malicious], {
-    title: '1F3D9 live & calc.exe',
+  const result = await openTerminalRunning('C:\\city view\\follow-feed.mjs', [malicious], {
+    title: 'unsafe & calc.exe',
     platform: 'win32',
     executable: 'C:\\Program Files\\nodejs\\node.exe',
     env: { SystemRoot: 'C:\\Windows' },
@@ -34,20 +34,21 @@ test('Windows fallback transports public argv without embedding it in PowerShell
   assert.match(calls[0].command, /wt\.exe$/iu)
   assert.match(calls[1].command, /cmd\.exe$/iu)
   assert.deepEqual(calls[1].args.slice(0, 4), ['/d', '/s', '/c', 'start'])
-  assert.equal(calls[1].args[4], '1F3D9 live')
-  assert.equal(calls[1].args.includes('1F3D9 live & calc.exe'), false)
+  assert.equal(calls[0].args[calls[0].args.indexOf('--title') + 1], '1F3D9 follow')
+  assert.equal(calls[1].args[4], '1F3D9 follow')
+  assert.equal(calls[1].args.includes('unsafe & calc.exe'), false)
   assert.equal(calls[1].args.includes('-NoExit'), true)
   const payload = JSON.parse(Buffer.from(calls[1].options.env.ONEF3D9_LEGACY_CONSOLE_PAYLOAD, 'base64').toString('utf8'))
-  assert.deepEqual(payload.argv, ['C:\\city view\\live-feed.mjs', malicious])
+  assert.deepEqual(payload.argv, ['C:\\city view\\follow-feed.mjs', malicious])
   const source = Buffer.from(calls[1].args.at(-1), 'base64').toString('utf16le')
   assert.equal(source.includes(malicious), false)
   assert.equal(calls[1].args.join(' ').includes(malicious), false)
 })
 
-test('macOS launcher keeps public argv out of AppleScript and shell source', async () => {
+test('macOS launcher activates visible Terminal and keeps public argv out of AppleScript source', async () => {
   const calls = []
   const malicious = '\"; do shell script \"touch owned\"; $() `cmd` \' line\r\nnext'
-  const result = await openTerminalRunning('/city view/live-feed.mjs', [malicious], {
+  const result = await openTerminalRunning('/city view/follow-feed.mjs', [malicious], {
     platform: 'darwin',
     executable: '/opt/node bin/node',
     env: {},
@@ -60,13 +61,35 @@ test('macOS launcher keeps public argv out of AppleScript and shell source', asy
   assert.equal(result.opened, true)
   assert.equal(calls.length, 1)
   const appleScript = calls[0].args.at(-1)
+  assert.match(appleScript, /tell application "Terminal"[\s\S]*activate[\s\S]*do script/u)
   assert.equal(appleScript.includes(malicious), false)
   const encoded = /echo ([A-Za-z0-9+/=]+) \|/u.exec(appleScript)?.[1]
   assert.ok(encoded)
   const command = Buffer.from(encoded, 'base64').toString('utf8')
   const quote = value => `'${value.replaceAll("'", "'\\''")}'`
-  assert.equal(command, `exec ${['/opt/node bin/node', '/city view/live-feed.mjs', malicious].map(quote).join(' ')}`)
+  assert.equal(command, `exec ${['/opt/node bin/node', '/city view/follow-feed.mjs', malicious].map(quote).join(' ')} < /dev/tty`)
   assert.equal(command.includes("'\\''"), true, 'apostrophes use the standard POSIX literal escape')
+})
+
+test('macOS launcher waits for osascript failure instead of guessing success', async () => {
+  const child = new EventEmitter()
+  child.pid = 202
+  child.unref = () => {}
+  let observed
+  const launched = openTerminalRunning('/city/follow-feed.mjs', ['thog'], {
+    platform: 'darwin',
+    spawnImpl: () => child,
+  })
+  launched.then(result => { observed = result })
+
+  await new Promise(resolve => setImmediate(resolve))
+  const resultBeforeExit = observed
+  child.emit('exit', 1, null)
+  const result = await launched
+
+  assert.equal(resultBeforeExit, undefined)
+  assert.equal(result.opened, false)
+  assert.match(result.reason, /exited with code 1/u)
 })
 
 // `openTerminalRunning` is exercised for real (a genuine, visible window, not
@@ -91,7 +114,7 @@ if (process.platform !== 'win32') {
     const emptyDir = await mkdtemp(join(tmpdir(), 'citylife-empty-path-'))
     try {
       process.env.PATH = emptyDir
-      const result = await openTerminalRunning('/nonexistent/script.mjs', ['arg'])
+      const result = await openTerminalRunning('/nonexistent/script.mjs', ['arg'], { platform: 'linux' })
       assert.equal(result.opened, false)
       assert.equal(typeof result.reason, 'string')
       assert.ok(result.reason.length > 0, 'a failed launch always explains why')
@@ -113,7 +136,7 @@ if (process.platform !== 'win32') {
     const originalPath = process.env.PATH
     try {
       process.env.PATH = `${fakeBinDir}${delimiter}${originalPath}`
-      const result = await openTerminalRunning('/tmp/some script.mjs', ['hello world'])
+      const result = await openTerminalRunning('/tmp/some script.mjs', ['hello world'], { platform: 'linux' })
       assert.equal(result.opened, true)
       assert.equal(typeof result.pid, 'number')
       assert.match(result.commandLine, /x-terminal-emulator/u)
@@ -132,7 +155,7 @@ if (process.platform !== 'win32') {
     const originalPath = process.env.PATH
     try {
       process.env.PATH = `${fakeBinDir}${delimiter}${originalPath}`
-      const result = await openTerminalRunning('/tmp/script.mjs', [])
+      const result = await openTerminalRunning('/tmp/script.mjs', [], { platform: 'linux' })
       assert.equal(result.opened, true)
       assert.equal(typeof result.pid, 'number')
       // Clean up the still-running fake window process this test launched.

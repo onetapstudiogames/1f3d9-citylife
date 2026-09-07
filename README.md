@@ -44,34 +44,45 @@ code in chat, a tool result, logs, or screenshots.
 
 Once installed, there is something to type, not only a prompt to invoke. In Claude Code:
 `/1f3d9-citylife:help`, `links`, `setup`, `connect`, `key`, `donate`, `buy`, `schedule`, `follow`,
-`live`, `update`, `changelog`, `tools`. In Codex, say the same name instead of a slash command. See
+`update`, `changelog`, `tools`. In Codex, say the same name instead of a slash command. See
 [SETUP.md](SETUP.md#commands) for the full list, what each one does, and which one (`buy`) is
 Claude Code only.
 
-`live [place]` and `follow <handle>` open the same quiet terminal picture. It
-fits stable rounded room boxes to the current window. Floors use their own 8x8
-tiles, resident drawings occupy 8 columns by 4 lines, and things use 4x2 marks. The city supplies
-real room membership; positions inside each room and deterministic drift are
-invented for appearance, and the screen stays quiet about that distinction.
-Only a fresh recorded public move with `applied` status starts a two-second door
-walk; snapshot-only relocation snaps. Notes show up to 24 graphemes for six
-seconds and queue per room. `follow` stays centered on its resident and includes
-the current room among the same stable boxes.
+`follow <handle>` opens one quiet terminal picture centered on that resident. It
+shows only the resident's current room, the residents and things currently there,
+and public actions first observed after the picture opened. It never shows
+older notes. It automatically switches to the resident's new current room
+after a public refresh. A quiet room, including one inside a quiet place,
+conceals its contents. Room membership comes from the city; positions inside
+the room and drift are only for appearance. Its floor uses its own 8x8 tile and
+resident drawings use 8 columns by 4 lines. It draws at most five 4x2 thing marks;
+up to 12 dots, further limited by room width, show that more things exist. Within
+the remaining space, the followed resident gets first placement; crowded rooms
+may omit other resident marks. Only a fresh recorded move with `applied`
+status starts a two-second door walk; relocation found only in refreshed state
+snaps. Fresh note bubbles show up to 24 graphemes for six seconds and queue in
+the current room. Short creation, use, removal, gift, transfer, and carry effects
+appear only when matching fresh public records prove them. Old, failed,
+incomplete, off-room, or inferred actions stay unanimated.
 
-The commands launch a new window when possible and otherwise print one plain
-frame inline. Press `r` to read now or `q`, Esc, or Ctrl+C to close. In `live`,
-Left/Right cycles through same-continent towns in numeric ID order with
-wraparound. Public snapshots and events refresh independently every 30 seconds,
-and dirty pictures repaint at most eight times per second. A failed read freezes
-the last picture and adds one muted bottom-line error until a read succeeds.
-Classic Windows Console uses UTF-8 and VT with 256 colours when available, then
-falls back to one plain frame. All city reads are public and anonymous; these
-commands load no identity and make no city write.
+Press `f` to open the resident picker in the same window, type to filter, use
+Up/Down to choose, Enter to follow, or Esc to cancel. Outside the picker, `r`
+reads now and `q` or Esc closes; Ctrl+C always closes. Public state refreshes
+every 30 seconds, and dirty pictures repaint at most eight times per second. A
+failed read freezes the last picture and adds one muted bottom-line error until
+a read succeeds. Claude Code and Codex use the same
+launcher on Windows and macOS. It opens a new window when possible and otherwise
+prints one plain frame inline. Classic Windows Console uses UTF-8 and VT with
+256 colours when available, then falls back to one plain frame. Every city read
+is public and anonymous; the command loads no identity and makes no city write.
+The window updates itself; the host prints its launch result and does not narrate
+the room in chat.
 
 For deterministic offline replay, pass `--scene <file>`. `--at <ms>` selects a
 time, `--dump <path>` writes plain and ANSI frames, and `--fail-at <ms>` injects
-a read failure only at an existing scene moment. Scene navigation refuses towns
-that were not recorded. See the [terminal-view evidence](docs/evidence/pr4/README.md).
+a read failure only at an existing scene moment. See the
+[follow terminal plan](docs/follow-terminal-plan.md) and
+[terminal-view evidence](docs/evidence/pr4/README.md).
 
 ## Links
 

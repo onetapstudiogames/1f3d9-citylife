@@ -78,6 +78,10 @@ const resident = (roomId) => ({
 const city = (name, id = 1, residentRoom = 1, { events = [], notes = [] } = {}) => ({
   ok: true,
   target: { id, name },
+  residents: [
+    { id: 7, handle: 'walker' },
+    { id: 8, handle: 'moss' },
+  ],
   rooms: [1, 2].map(roomId => ({
     id: (id * 10) + roomId,
     name: `${name} room ${roomId}`,
@@ -93,7 +97,7 @@ const city = (name, id = 1, residentRoom = 1, { events = [], notes = [] } = {}) 
 })
 
 const closeSession = async (input, closed) => {
-  input.emit('keypress', 'q', { name: 'q' })
+  input.emit('keypress', undefined, { name: 'c', ctrl: true })
   await closed
 }
 
@@ -231,24 +235,16 @@ test('r coalesces repeated requests while one public read is pending', async () 
   }
 })
 
-test('arrows honor navigate results, discard a pending stale town, and seed the new town quietly', async () => {
+test('the resident picker selects a new follow target and discards an older pending read', async () => {
   const harness = makeHarness()
   const fake = makeClock()
   const stale = deferred()
   const oldTown = city('old town', 1, 1)
-  const historicalMove = {
-    id: 100,
-    kind: 'action',
-    actor: 'walker',
-    detail: { action: 'move', status: 'applied', from_place_id: 21, to_place_id: 22 },
-  }
-  const newTown = city('new town', 2, 2, {
-    events: [historicalMove],
-    notes: [{ id: 101, author: 'walker', place_id: 22, body: 'OLD NOTE MUST NOT SPEAK' }],
-  })
+  const newTown = city('moss room', 2, 2)
   let reads = 0
-  const navigations = []
-  let rightAttempts = 0
+  let closes = 0
+  const selections = []
+  let navigationCalls = 0
   const source = {
     read: async () => {
       reads += 1
@@ -256,15 +252,12 @@ test('arrows honor navigate results, discard a pending stale town, and seed the 
       if (reads === 2) return stale.promise
       return newTown
     },
-    navigate: direction => {
-      navigations.push(direction)
-      if (direction === 'left') return { ok: true, changed: false }
-      rightAttempts += 1
-      return rightAttempts === 1
-        ? { ok: false, error: 'SECRET navigation detail' }
-        : { ok: true, changed: true }
+    navigate: () => { navigationCalls += 1; return { ok: true, changed: true } },
+    selectResident: handle => {
+      selections.push(handle)
+      return { ok: true, changed: true }
     },
-    close: () => {},
+    close: () => { closes += 1 },
   }
   const closed = runViewSession(source, { color: '16' }, {
     ...harness, env: {}, platform: 'win32', clock: fake.clock,
@@ -273,31 +266,32 @@ test('arrows honor navigate results, discard a pending stale town, and seed the 
   try {
     await waitFor(() => reads === 1 && harness.writes.join('').includes('old town'))
     harness.input.emit('keypress', undefined, { name: 'left' })
-    await waitFor(() => navigations.length === 1)
-    assert.deepEqual(navigations, ['left'])
-    assert.equal(reads, 1, 'changed:false does not read the same follow/edge target again')
-
     harness.input.emit('keypress', undefined, { name: 'right' })
-    await waitFor(() => navigations.length === 2)
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(navigationCalls, 0, 'arrows outside the picker do not navigate towns')
+    assert.equal(reads, 1)
+
+    harness.input.emit('keypress', 'f', { name: 'f' })
     await fake.advance(125)
-    assert.equal(visibleRows(harness.writes).at(-1).trim(), 'Could not read the city.')
-    assert.equal(reads, 1, 'failed navigation keeps the current town without reading')
-    assert.doesNotMatch(harness.writes.join(''), /SECRET navigation detail/u)
+    assert.ok(visibleRows(harness.writes).some(row => row.includes('Follow a resident')))
+    harness.input.emit('keypress', undefined, { name: 'escape' })
+    await fake.advance(125)
+    assert.equal(closes, 0, 'Escape inside the picker cancels without closing the view')
+    assert.ok(visibleRows(harness.writes).every(row => !row.includes('Follow a resident')))
 
     harness.input.emit('keypress', 'r', { name: 'r' })
     await waitFor(() => reads === 2)
-    harness.input.emit('keypress', undefined, { name: 'right' })
-    await waitFor(() => navigations.length === 3)
+    harness.input.emit('keypress', 'f', { name: 'f' })
+    harness.input.emit('keypress', 'm', { name: 'm' })
+    harness.input.emit('keypress', '\r', { name: 'return' })
+    assert.deepEqual(selections, ['moss'])
+
     stale.resolve(city('ZZZZZZZZZZZZ', 99))
     await waitFor(() => reads === 3)
     await fake.advance(125)
-    await waitFor(() => visibleRows(harness.writes).some(row => row.includes('new town')))
+    await waitFor(() => visibleRows(harness.writes).some(row => row.includes('moss room')))
 
-    assert.deepEqual(navigations, ['left', 'right', 'right'])
-    assert.doesNotMatch(harness.writes.join(''), /ZZZZ|OLD NOTE MUST NOT SPEAK/u)
-    const quietAt = harness.writes.join('').length
-    await fake.advance(1_000)
-    assert.equal(harness.writes.join('').length, quietAt, 'historical events do not animate after navigation')
+    assert.doesNotMatch(harness.writes.join(''), /ZZZZ/u)
   } finally {
     await closeSession(harness.input, closed)
   }

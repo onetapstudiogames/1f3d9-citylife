@@ -1,8 +1,10 @@
 import { readFile } from 'node:fs/promises'
 
-import { buildDirectoryIndex, CITY_ORIGIN, resolvePlaceArgument } from './city.mjs'
+import {
+  buildDirectoryIndex, comparePublicChanges, mergeDirectoryPlaces, publicMarker,
+  readCityJson, readCoveredAncestry, readPublicChangeWindow, resolvePlaceArgument,
+} from './city.mjs'
 import { residentDrawingLimit } from './live-render.mjs'
-import { fetchJsonSafe } from './net.mjs'
 
 const FRAME_TIMES = Object.freeze([0, 2000, 4000, 30000, 30250, 30500, 31000, 32000, 60000, 62000, 65999, 66000, 68000])
 const DURATION_MS = 68000
@@ -12,19 +14,21 @@ const drawingKey = (type, id) => `${type}:${id}`
 
 const responseError = (label, response) => `${label}: ${response?.error ?? `HTTP ${response?.status ?? 0}`}`
 
-const readJson = async (fetchImpl, path) => {
-  const result = await fetchJsonSafe(`${CITY_ORIGIN}${path}`, { fetchImpl })
-  return { ...result, body: result.data ?? null }
-}
-
-const readPresencePages = async (fetchImpl) => {
+const readPresencePages = async (fetchImpl, afterMarker = null) => {
   const pages = []
   const seenCursors = new Set()
   let beforeId = null
+  let marker = afterMarker
   do {
     const suffix = beforeId === null ? '' : `&before_id=${encodeURIComponent(beforeId)}`
-    const result = await readJson(fetchImpl, `/api/residents?view=presence&limit=200${suffix}`)
+    const barrier = afterMarker === null ? '' : `&after_change_marker=${encodeURIComponent(afterMarker)}`
+    const result = await readCityJson(fetchImpl, `/api/residents?view=presence&limit=200${suffix}${barrier}`)
     if (!result.ok) return { ok: false, error: responseError('resident presence', result), pages }
+    if (afterMarker !== null) {
+      const covered = publicMarker(result.body?.change_marker)
+      if (covered === null || BigInt(covered) < BigInt(marker)) return { ok: false, error: 'resident presence: invalid change_marker', pages }
+      marker = covered
+    }
     pages.push(result.body)
     if (!result.body?.has_more) beforeId = null
     else {
@@ -36,7 +40,7 @@ const readPresencePages = async (fetchImpl) => {
       beforeId = next
     }
   } while (beforeId !== null)
-  return { ok: true, pages }
+  return { ok: true, pages, marker }
 }
 
 const residentsFromPages = (pages) => pages.flatMap((page) => page?.residents ?? [])
@@ -51,7 +55,7 @@ const defaultTarget = async (fetchImpl, outline, directoryIndex, residents) => {
   const continent = [...continents].sort((a, b) => (
     populationUnder(b.id, residents, directoryIndex) - populationUnder(a.id, residents, directoryIndex) || byId(a, b)
   ))[0]
-  const branchResult = await readJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(continent.id)}&subplace_limit=200`)
+  const branchResult = await readCityJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(continent.id)}&subplace_limit=200`)
   if (!branchResult.ok) return { ok: false, error: responseError('default town branch', branchResult) }
   const towns = branchResult.body?.subplaces ?? []
   if (!towns.length) return { ok: true, target: { id: continent.id, name: continent.name }, resolution: branchResult.body }
@@ -113,14 +117,18 @@ const navigatorFor = ({ followHandle, scene, getRaw, getPlaceId, setPlaceId }) =
 const cachedDrawing = async (fetchImpl, cache, type, id) => {
   const key = drawingKey(type, id)
   if (cache.has(key)) return { key, response: cache.get(key), cached: true }
-  const result = await readJson(fetchImpl, `/api/drawing/${type}/${encodeURIComponent(id)}`)
+  const result = await readCityJson(fetchImpl, `/api/drawing/${type}/${encodeURIComponent(id)}`)
   const response = { status: result.status, body: result.body, error: result.error ?? null }
   if (result.ok) cache.set(key, response)
   return { key, response, cached: false }
 }
+const eventDrawing = async (fetchImpl, cache, id) => {
+  const result = await cachedDrawing(fetchImpl, cache, 'thing', id)
+  return result.response.status === 404 ? { ...result, response: { status: 200, body: { drawing: null }, error: null } } : result
+}
 
 const readRoomResponses = async (fetchImpl, roomIds) => Promise.all(roomIds.map(async (placeId) => {
-  const result = await readJson(fetchImpl, `/api/place/${encodeURIComponent(placeId)}?view=outline&subplace_limit=1&thing_limit=5&note_limit=1`)
+  const result = await readCityJson(fetchImpl, `/api/place/${encodeURIComponent(placeId)}?view=outline&subplace_limit=1&thing_limit=5&note_limit=1`)
   return { placeId, result }
 }))
 
@@ -138,14 +146,18 @@ const mapWithConcurrency = async (items, limit, read) => {
   return results
 }
 
-const buildDrawingResponses = async (fetchImpl, cache, roomResponses, residents, residentLimit) => {
+const buildDrawingResponses = async (fetchImpl, cache, roomResponses, residents, residentLimit, focusResidentId = null) => {
   const requests = []
   for (const { placeId, result } of roomResponses) {
     requests.push(['place', placeId])
     for (const thing of [...(result.body?.things ?? [])].sort(byId).slice(0, 5)) requests.push(['thing', thing.id])
     const roomResidents = residents
       .filter((value) => Number(value.current_place_id) === Number(placeId))
-      .sort(byId)
+      .sort((left, right) => (
+        (Number(right.id) === Number(focusResidentId) ? 1 : 0)
+        - (Number(left.id) === Number(focusResidentId) ? 1 : 0)
+        || byId(left, right)
+      ))
       .slice(0, residentLimit)
     for (const resident of roomResidents) {
       requests.push(['resident', resident.id])
@@ -157,8 +169,8 @@ const buildDrawingResponses = async (fetchImpl, cache, roomResponses, residents,
 
 const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCache, maxRooms, size }) => {
   const [directoryResult, outlineResult, presenceResult] = await Promise.all([
-    readJson(fetchImpl, '/api/window?view=directory'),
-    readJson(fetchImpl, '/api/window?view=outline'),
+    readCityJson(fetchImpl, '/api/window?view=directory'),
+    readCityJson(fetchImpl, '/api/window?view=outline'),
     readPresencePages(fetchImpl),
   ])
   if (!directoryResult.ok) return { ok: false, error: responseError('directory', directoryResult) }
@@ -176,7 +188,7 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
   let resolution = null
 
   if (followHandle) {
-    const focusResult = await readJson(fetchImpl, `/api/residents?view=presence&handle=${encodeURIComponent(followHandle)}`)
+    const focusResult = await readCityJson(fetchImpl, `/api/residents?view=presence&handle=${encodeURIComponent(followHandle)}`)
     if (!focusResult.ok || !focusResult.body?.resident) return { ok: false, error: responseError(`resident ${followHandle}`, focusResult) }
     focusedPresence = focusResult.body
     const resident = focusResult.body.resident
@@ -186,7 +198,7 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
     const scopeId = followScopeId(target, outline, directoryIndex)
     const scope = directoryIndex.byId.get(scopeId)
     scopeTarget = { id: scopeId, name: scope?.name ?? `place #${scopeId}` }
-    branchResult = await readJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(scopeId)}&subplace_limit=200`)
+    branchResult = await readCityJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(scopeId)}&subplace_limit=200`)
   } else {
     const targetId = resolvePlaceArgument(placeArg, directory.places ?? [])
     const known = targetId === null ? null : directoryIndex.byId.get(targetId)
@@ -199,7 +211,7 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
       resolution = selected.resolution
     }
     scopeTarget = target
-    branchResult = await readJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(target.id)}&subplace_limit=200`)
+    branchResult = await readCityJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(target.id)}&subplace_limit=200`)
   }
   if (!branchResult.ok) return { ok: false, error: responseError('place branch', branchResult) }
 
@@ -209,8 +221,8 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
   if (failedRoom) return { ok: false, error: responseError(`room ${failedRoom.placeId}`, failedRoom.result) }
 
   const [notesResult, eventsResult] = await Promise.all([
-    readJson(fetchImpl, `/api/window?collection=notes&within_place_id=${encodeURIComponent(scopeTarget.id)}&limit=100`),
-    readJson(fetchImpl, `/api/events?within_place_id=${encodeURIComponent(scopeTarget.id)}&limit=100`),
+    readCityJson(fetchImpl, `/api/window?collection=notes&within_place_id=${encodeURIComponent(scopeTarget.id)}&limit=100`),
+    readCityJson(fetchImpl, `/api/events?within_place_id=${encodeURIComponent(scopeTarget.id)}&limit=100`),
   ])
   if (!notesResult.ok) return { ok: false, error: responseError('notes', notesResult) }
   if (!eventsResult.ok) return { ok: false, error: responseError('events', eventsResult) }
@@ -321,7 +333,112 @@ const normalizeRaw = (raw, maxRooms, selection = {}) => {
     directory: raw.directory,
   }
 }
-
+const pickerFromResidents = (residents) => [...new Map((residents ?? [])
+  .filter((resident) => Number.isSafeInteger(Number(resident?.id)) && Number(resident.id) > 0 && typeof resident.handle === 'string' && resident.handle.trim())
+  .map((resident) => [Number(resident.id), { id: Number(resident.id), handle: resident.handle.trim() }])).values()].sort(byId)
+const residentForHandle = (residents, handle) => {
+  const wanted = typeof handle === 'string' ? handle.trim() : ''
+  return wanted ? residents.find((resident) => resident.handle === wanted) ?? null : residents[0] ?? null
+}
+const quietAncestor = (placeId, directoryIndex) => directoryIndex.ancestorsOf(placeId)
+  .some((id) => directoryIndex.byId.get(id)?.quiet === true)
+const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [] }) => {
+  const drawings = drawingMapFromRaw(raw)
+  const residents = residentsFromPages(raw.presence?.pages ?? [])
+  const picker = pickerFromResidents(residents)
+  const focus = residentForHandle(residents, selectedHandle)
+  if (!focus) return { ok: false, error: selectedHandle ? `resident ${selectedHandle} was not found in the public resident list` : 'the public resident list is empty' }
+  if (!Number.isSafeInteger(Number(focus.current_place_id)) || Number(focus.current_place_id) < 1) return { ok: false, error: `resident ${focus.handle} has no public current room` }
+  const placeId = Number(focus.current_place_id)
+  const directoryIndex = buildDirectoryIndex(raw.directory?.places ?? [])
+  const known = directoryIndex.byId.get(placeId)
+  const target = { id: placeId, name: known?.name ?? `place #${placeId}` }
+  const hidden = quietAncestor(placeId, directoryIndex)
+  const roomEntry = (raw.rooms ?? []).find((entry) => Number(entry.placeId) === placeId)
+  if (!hidden && !roomEntry) return { ok: false, error: `resident ${focus.handle}'s room was not recorded in this scene` }
+  const response = roomEntry?.response ?? {}
+  const things = hidden ? [] : [...(response.things ?? [])].sort(byId).slice(0, 5).map((thing) => ({
+    ...thing,
+    drawing: drawings.get(drawingKey('thing', thing.id)) ?? null,
+  }))
+  const notes = hidden ? [] : [...(raw.notes?.notes ?? [])]
+    .filter((note) => Number(note.place_id) === placeId)
+    .sort(byId)
+  const thingIds = new Set([...knownThingIds, ...things.map((thing) => Number(thing.id))])
+  const relevant = hidden ? [] : relevantChanges([...(raw.events?.events ?? [])].sort(byId), focus, placeId, thingIds).events
+    .map((event) => {
+      const thingId = eventThingId(event)
+      if (thingId === null) return event
+      const named = things.find((thing) => Number(thing.id) === thingId)
+      return { ...event, thing: { id: thingId, name: named?.name ?? null, drawing: drawings.get(drawingKey('thing', thingId)) ?? null } }
+    })
+  const roomResidents = hidden ? [] : residents
+    .filter((resident) => Number(resident.current_place_id) === placeId)
+    .sort(byId)
+    .map((resident) => ({ ...resident, drawing: drawings.get(drawingKey('resident', resident.id)) ?? null }))
+  return {
+    ok: true,
+    target,
+    focus: { id: Number(focus.id), handle: focus.handle, placeId },
+    residents: picker,
+    rooms: [{
+      id: placeId,
+      name: response.place?.name ?? target.name,
+      drawing: hidden ? null : drawings.get(drawingKey('place', placeId)) ?? null,
+      things,
+      thingsCount: hidden ? 0 : response.things_page?.total_items ?? things.length,
+      residents: roomResidents,
+      notes,
+      focusResidentId: Number(focus.id),
+      quiet: hidden,
+    }],
+    events: relevant,
+    notes,
+    directory: raw.directory,
+  }
+}
+const eventThingId = (event) => {
+  const detail = event?.detail ?? {}
+  const value = Number.isSafeInteger(Number(detail.thing_id)) ? Number(detail.thing_id)
+    : event?.kind === 'transfer' && detail.asset_type === 'thing' && Number.isSafeInteger(Number(detail.asset_id)) ? Number(detail.asset_id)
+      : event?.kind === 'transfer' && detail.type === 'thing' && Number.isSafeInteger(Number(detail.id)) ? Number(detail.id)
+        : Number.isSafeInteger(Number(detail.source_thing_id)) ? Number(detail.source_thing_id) : null
+  return value !== null && value > 0 ? value : null
+}
+function eventRelevantToFollow(event, focus, placeId, thingIds) {
+  const detail = event?.detail ?? {}
+  const endpointMove = event?.actor === focus.handle && event?.kind === 'action'
+    && ['move', 'go_home'].includes(detail.action)
+    && Number.isSafeInteger(Number(detail.from_place_id)) && Number.isSafeInteger(Number(detail.to_place_id))
+  if (endpointMove) return true
+  if ([detail.place_id, detail.from_place_id, detail.to_place_id, detail.parent_id].some((id) => Number(id) === placeId)) return true
+  const thingId = eventThingId(event)
+  return thingId !== null && thingIds.has(thingId)
+}
+const relevantChanges = (changes, focus, placeId, knownThingIds) => {
+  const thingIds = new Set(knownThingIds)
+  const result = []
+  for (const change of changes) {
+    const thingId = eventThingId(change)
+    if (thingId !== null && ['thing_created', 'thing_moved'].includes(change.kind) && Number(change.detail?.place_id) === placeId) thingIds.add(thingId)
+    if (eventRelevantToFollow(change, focus, placeId, thingIds)) result.push(change)
+    if (thingId !== null && (change.kind === 'thing_withdrawn' || (change.kind === 'thing_moved' && Number(change.detail?.from_place_id) === placeId && Number(change.detail?.place_id) !== placeId))) thingIds.delete(thingId)
+  }
+  return { events: result, thingIds }
+}
+const noteBodiesFor = async (fetchImpl, events, placeId) => {
+  const ids = [...new Set(events.filter((event) => event.kind === 'note' && Number(event.detail?.place_id) === placeId)
+    .map((event) => Number(event.detail?.note_id)).filter((id) => Number.isSafeInteger(id) && id > 0))]
+  const reads = await mapWithConcurrency(ids, 8, async (id) => {
+    const result = await readCityJson(fetchImpl, `/api/note/${encodeURIComponent(id)}`)
+    return { id, result }
+  })
+  const failed = reads.find(({ result }) => !result.ok || !result.body?.note)
+  if (failed) return { ok: false, error: responseError(`note ${failed.id}`, failed.result) }
+  return { ok: true, notes: reads.map(({ result }) => result.body.note) }
+}
+const mergeNotes = (...groups) => [...new Map(groups.flat().filter((note) => Number.isSafeInteger(Number(note?.id)))
+  .map((note) => [Number(note.id), note])).values()].sort(byId)
 const clone = (value) => structuredClone(value)
 
 const FORBIDDEN_PATH_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
@@ -400,8 +517,8 @@ const readScene = async (sceneFile) => {
   ) {
     throw sceneError('frameTimes must be finite, strictly ordered from zero, and within durationMs')
   }
-  if (!Array.isArray(scene.moments) || scene.moments.length !== 3) {
-    throw sceneError('must contain exactly three moments')
+  if (!Array.isArray(scene.moments) || scene.moments.length < 3) {
+    throw sceneError('must contain at least three moments')
   }
   if (scene.moments.some((moment, index) => (
     !moment
@@ -424,7 +541,152 @@ const readScene = async (sceneFile) => {
   return scene
 }
 
-export async function createLiveSource({ placeArg, followHandle, sceneFile, failAt, fetchImpl = globalThis.fetch } = {}) {
+const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchImpl }) => {
+  let selectedHandle = followHandle ?? null
+  let latestResidents = null
+  let generation = 0
+  const selectResident = (handle) => {
+    if (!latestResidents) return { ok: false, error: 'Read the city before choosing a resident.' }
+    const resident = residentForHandle(latestResidents, handle)
+    if (!resident || resident.handle !== String(handle ?? '').trim()) return { ok: false, error: `Resident "${String(handle ?? '')}" is not in the public resident list.` }
+    if (selectedHandle === resident.handle) return { ok: true, changed: false }
+    selectedHandle = resident.handle
+    generation += 1
+    return { ok: true, changed: true }
+  }
+  const navigate = () => ({ ok: true, changed: false })
+  if (sceneFile) {
+    const scene = await readScene(sceneFile)
+    if (failAt !== undefined && (!Number.isFinite(failAt) || failAt < 0 || !scene.moments.some((moment) => moment.atMs === failAt))) {
+      throw new TypeError('scene failAt must be a finite non-negative exact scene moment')
+    }
+    return {
+      frameTimes: [...scene.frameTimes], momentTimes: scene.moments.map((moment) => moment.atMs), durationMs: scene.durationMs,
+      selectResident, navigate, close: () => {},
+      read: async (nowMs) => {
+        const readGeneration = generation
+        const index = Math.max(0, scene.moments.findLastIndex((moment) => moment.atMs <= nowMs))
+        if (failAt !== undefined && scene.moments[index].atMs === failAt) return { ok: false, error: 'Injected scene read failure.' }
+        const raw = rawForMoment(scene, index)
+        const residents = residentsFromPages(raw.presence?.pages ?? [])
+        const result = normalizedFollowRoom({ raw, selectedHandle })
+        if (readGeneration === generation) {
+          latestResidents = residents
+          if (result.ok && selectedHandle === null) selectedHandle = result.focus.handle
+        }
+        return result
+      },
+    }
+  }
+  if (failAt !== undefined) throw new TypeError('failAt requires --scene')
+  if (typeof fetchImpl !== 'function') throw new TypeError('live source requires a fetch implementation')
+  const controller = new AbortController()
+  const sourceFetch = (url, init) => fetchImpl(url, { ...init, signal: AbortSignal.any([init.signal, controller.signal]) })
+  const drawingCache = new Map()
+  const eventIds = new Map()
+  const noteCache = new Map()
+  const knownThings = new Map()
+  let nextEventId = 1
+  let marker = null
+  let lastRoomId = null
+  const eventId = (changeId) => {
+    if (!eventIds.has(changeId)) { eventIds.set(changeId, nextEventId); nextEventId += 1 }
+    return eventIds.get(changeId)
+  }
+  return {
+    selectResident, navigate, close: () => controller.abort(),
+    read: async (_nowMs, { size } = {}) => {
+      const readGeneration = generation
+      const readHandle = selectedHandle
+      const baseline = marker === null
+      const [directoryResult, firstChanges] = await Promise.all([
+        readCityJson(sourceFetch, '/api/window?view=directory'), readPublicChangeWindow(sourceFetch, marker),
+      ])
+      if (!directoryResult.ok) return { ok: false, error: responseError('directory', directoryResult) }
+      if (!firstChanges.ok) return firstChanges
+      let changeMarker = firstChanges.marker
+      let publicChanges = [...firstChanges.changes]
+      let presenceResult
+      let residents
+      let focus
+      let ancestry
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        presenceResult = await readPresencePages(sourceFetch, changeMarker)
+        if (!presenceResult.ok) return { ok: false, error: presenceResult.error }
+        residents = residentsFromPages(presenceResult.pages)
+        focus = residentForHandle(residents, readHandle)
+        if (!focus) {
+          if (readGeneration === generation) latestResidents = residents
+          return { ok: false, error: readHandle ? `resident ${readHandle} was not found in the public resident list` : 'the public resident list is empty' }
+        }
+        const placeId = Number(focus.current_place_id)
+        if (!Number.isSafeInteger(placeId) || placeId < 1) return { ok: false, error: `resident ${focus.handle} has no public current room` }
+        ancestry = await readCoveredAncestry(sourceFetch, placeId, changeMarker)
+        if (!ancestry.ok) return ancestry
+        const covered = BigInt(presenceResult.marker) > BigInt(ancestry.marker) ? presenceResult.marker : ancestry.marker
+        if (covered === changeMarker) break
+        if (attempt === 3) return { ok: false, error: 'city changed during the covered follow read; retry' }
+        if (baseline) changeMarker = covered
+        else {
+          const more = await readPublicChangeWindow(sourceFetch, changeMarker)
+          if (!more.ok || BigInt(more.marker) < BigInt(covered)) return more.ok ? { ok: false, error: 'changes did not cover the resident snapshot' } : more
+          publicChanges.push(...more.changes)
+          changeMarker = more.marker
+        }
+      }
+      const placeId = Number(focus.current_place_id)
+      let directory = mergeDirectoryPlaces(directoryResult.body, ancestry.places)
+      const directoryIndex = buildDirectoryIndex(directory.places)
+      let hidden = ancestry.places.some(place => place.quiet === true)
+      let roomResponse = { place: { id: placeId, name: directoryIndex.byId.get(placeId).name }, things: [], things_page: { total_items: 0 } }
+      let history = []
+      if (!hidden) {
+        const reads = [readCityJson(sourceFetch, `/api/place/${encodeURIComponent(placeId)}?view=outline&subplace_limit=1&thing_limit=5&note_limit=1`)]
+        if (lastRoomId !== placeId || !noteCache.has(placeId)) reads.push(readCityJson(sourceFetch, `/api/window?collection=notes&place_id=${encodeURIComponent(placeId)}&limit=100`))
+        const [roomResult, historyResult] = await Promise.all(reads)
+        if (!roomResult.ok) return { ok: false, error: responseError(`room ${placeId}`, roomResult) }
+        if (historyResult && !historyResult.ok) return { ok: false, error: responseError('notes', historyResult) }
+        roomResponse = roomResult.body
+        history = historyResult?.body?.notes ?? noteCache.get(placeId) ?? []
+        if (roomResponse.place?.quiet === true) {
+          hidden = true
+          history = []
+          directory = mergeDirectoryPlaces(directory, [roomResponse.place])
+        }
+      }
+      const roomThingIds = new Set((roomResponse.things ?? []).map((thing) => Number(thing.id)))
+      const priorThingIds = new Set([...(knownThings.get(placeId) ?? []), ...roomThingIds])
+      const orderedChanges = [...new Map(publicChanges.sort(comparePublicChanges).map(change => [change.change_id, change])).values()]
+      const changeWindow = hidden ? { events: [], thingIds: new Set() } : relevantChanges(orderedChanges, focus, placeId, priorThingIds)
+      const changes = changeWindow.events
+      const events = changes.map((change) => ({ ...change, id: eventId(change.change_id), at: change.created_at }))
+      const freshNotes = hidden ? { ok: true, notes: [] } : await noteBodiesFor(sourceFetch, events, placeId)
+      if (!freshNotes.ok) return freshNotes
+      const notes = hidden ? [] : mergeNotes(history, freshNotes.notes)
+      const residentLimit = size ? residentDrawingLimit(size, 1) : Number.MAX_SAFE_INTEGER
+      const roomRows = hidden ? [] : [{ placeId, result: { body: roomResponse } }]
+      const drawings = await buildDrawingResponses(sourceFetch, drawingCache, roomRows, residents, residentLimit, focus.id)
+      const extraThingIds = hidden ? [] : [...new Set(events.map(eventThingId).filter((id) => id !== null && !roomThingIds.has(id)))]
+      drawings.push(...await mapWithConcurrency(extraThingIds, 8, (id) => eventDrawing(sourceFetch, drawingCache, id)))
+      const failedDrawing = drawings.find((entry) => entry.response.status < 200 || entry.response.status >= 300)
+      if (failedDrawing) return { ok: false, error: `drawing ${failedDrawing.key}: ${failedDrawing.response.error ?? `HTTP ${failedDrawing.response.status}`}` }
+      const raw = { directory, presence: { pages: presenceResult.pages }, rooms: hidden ? [] : [{ placeId, response: roomResponse }], notes: { notes }, events: { events }, drawings }
+      const result = normalizedFollowRoom({ raw, selectedHandle: readHandle, knownThingIds: priorThingIds })
+      if (readGeneration === generation && result.ok) {
+        latestResidents = residents
+        selectedHandle = focus.handle
+        marker = changeMarker
+        lastRoomId = placeId
+        noteCache.set(placeId, notes)
+        knownThings.set(placeId, changeWindow.thingIds)
+      }
+      return result
+    },
+  }
+}
+
+export async function createLiveSource({ mode, placeArg, followHandle, sceneFile, failAt, fetchImpl = globalThis.fetch } = {}) {
+  if (mode === 'follow-room') return createFollowRoomSource({ followHandle, sceneFile, failAt, fetchImpl })
   if (failAt !== undefined && !sceneFile) throw new TypeError('failAt requires --scene')
   let selectedPlace = placeArg
   let lastSuccessfulRaw = null

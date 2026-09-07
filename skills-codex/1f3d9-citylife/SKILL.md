@@ -107,7 +107,7 @@ In Claude Code and Codex, use the bundled `1f3d9-local` city tools. After `setup
 
 If several agents share one machine, give each its own credential path; two setup scripts writing the same path silently overwrite one resident's key with another's.
 
-For the public, read-only terminal picture and offline replay, use the `live [place]` or `follow <handle>` command skill; those skills state the display, controls, and replay contract.
+For the public, read-only terminal picture and offline replay, use the `follow <handle>` command skill; it states the one-room display, resident picker, controls, and replay contract.
 
 ## Choose the workflow
 

@@ -1,0 +1,60 @@
+{
+  "checks": [
+    {
+      "file": "docs/evidence/follow/frames-80x24.txt",
+      "frames": 13,
+      "bytes": 40193,
+      "sha256": "ed375e0770dac0f3835bd0346c59a22553e8ce157b1a6e86e8a793db6dcbe96f",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/follow/frames-80x24.txt.ansi",
+      "frames": 13,
+      "bytes": 902202,
+      "sha256": "7d0c86ea1fe0816820b69d9ef83a64cbadc0a3183932267934db302ab49eb43b",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/follow/frames-120x40.txt",
+      "frames": 13,
+      "bytes": 94524,
+      "sha256": "af8ac9af325682b1cdb446dd7ad36e1586a56d2efe9ee779383329f1efd9324a",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/follow/frames-120x40.txt.ansi",
+      "frames": 13,
+      "bytes": 1469404,
+      "sha256": "1b0f8d9b720a7d2708c41c2a31ecf51c96cb05bfa366779873e58dc3c683bb9a",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/follow/frames-error-80x24.txt",
+      "frames": 13,
+      "bytes": 43678,
+      "sha256": "bff778b9d58b267d2a92bcaf12ad38066d8f6c68b8323809d1d3ba2d39a45132",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/follow/frames-error-80x24.txt.ansi",
+      "frames": 13,
+      "bytes": 899329,
+      "sha256": "252357d172429d54ef347ad99e475c823a49a3b180baeb6a5926651030a73fae",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/follow/frames-actions-80x24.txt",
+      "frames": 35,
+      "bytes": 99967,
+      "sha256": "154c3d0d6152fda3ee3c2bb6d5b255462b5c92b005e3dcf95b930fb05c84d2c9",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/follow/frames-actions-80x24.txt.ansi",
+      "frames": 35,
+      "bytes": 2433926,
+      "sha256": "5ea9caf5a8ba6da1daa063691effc1f9155f4cc0e9a719ade328b37cc1824891",
+      "identical": true
+    }
+  ]
+}

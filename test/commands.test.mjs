@@ -7,7 +7,7 @@ import { decodeEntities, readAttribute, stripTags } from '../scripts/lib/html.mj
 import { parseChangelogEntries } from '../scripts/lib/changelog.mjs'
 import { buildDirectoryIndex, resolvePlaceArgument } from '../scripts/lib/city.mjs'
 
-const COMMANDS = ['help', 'links', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'live', 'update', 'changelog', 'tools']
+const COMMANDS = ['help', 'links', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'update', 'changelog', 'tools']
 
 test('semver: parses and compares x.y.z versions', () => {
   assert.deepEqual(parseVersion('1.4.0'), [1, 4, 0])
@@ -85,6 +85,19 @@ test('every command has a scripts/<name>.mjs entry point and a skills/<name>/SKI
     assert.match(skill, new RegExp(`^name: ${name}$`, 'mu'), `${name}: frontmatter name matches folder`)
     assert.match(skill, /^description: /mu, `${name}: has a description`)
     assert.match(skill, /CLAUDE_PLUGIN_ROOT/u, `${name}: resolves the plugin root instead of a hardcoded path`)
+  }
+  await assert.rejects(() => access(new URL('../scripts/live.mjs', import.meta.url)), 'retired live script is absent')
+  await assert.rejects(() => access(new URL('../scripts/live-feed.mjs', import.meta.url)), 'retired live feed is absent')
+  await assert.rejects(() => access(new URL('../skills/live/', import.meta.url)), 'retired live skill is absent')
+  const currentInstructions = await Promise.all([
+    '../SETUP.md', '../README.md', '../SKILL.md', '../scripts/help.mjs', '../skills/follow/SKILL.md',
+  ].map((path) => readFile(new URL(path, import.meta.url), 'utf8')))
+  for (const instructions of currentInstructions) {
+    assert.doesNotMatch(
+      instructions,
+      /\/1f3d9-citylife:live|`live \[place\]`|\['live \[place\]'/u,
+      'current instructions do not expose the retired live command',
+    )
   }
 })
 
