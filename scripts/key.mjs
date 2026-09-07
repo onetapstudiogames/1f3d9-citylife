@@ -290,7 +290,7 @@ function recoverBegin() {
  * Recovers a resident key stranded under a registration staging label --
  * setup.mjs's stranded-registration refusal (and round-4 finding 1) points
  * here. `key status --handle <baseHandle>` can never answer that refusal's
- * question, because the confirmed key it needs lives ONLY under the staging
+ * question, because the staged key it needs lives ONLY under the staging
  * label at that point, not under the base handle -- see this function's own
  * refusal path for the same reasoning `requireStoredKey` above states for
  * status/rotate/recover. This never guesses: it reads the staged bundle by
@@ -318,8 +318,8 @@ async function adopt() {
   const stagingLabel = flags['from-label']
   if (typeof stagingLabel !== 'string') {
     console.error(
-      'key adopt: --from-label <staging-label> is required -- the vault label the stranded, already-' +
-      'confirmed key is currently stored under (setup\'s registration-staging refusal, or `key status`, ' +
+      'key adopt: --from-label <staging-label> is required -- the vault label the staged ' +
+      'key is currently stored under (setup\'s registration-staging refusal, or `key status`, ' +
       'names the exact label).',
     )
     process.exitCode = 1

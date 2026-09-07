@@ -411,10 +411,10 @@ if (!newIdentity) {
 
   // A registration staging label that outlived its own run is a different,
   // narrower risk than the ordinary "other label" check just below: it
-  // means a PAST run's /api/register confirm already succeeded server-side
-  // (the resident is already permanent there) while that run's own vault
-  // promotion failed afterward, leaving the confirmed key ONLY under this
-  // staging label -- see listVaultLabels's own doc comment on
+  // may mean a PAST run's /api/register confirm succeeded server-side but
+  // its response was lost or vault promotion failed. The key stays under
+  // this staging label even when confirmation failed before delivery, so
+  // its presence alone cannot prove success -- see listVaultLabels on
   // registrationStagingLabels. Checked first and separately from
   // otherLabels below, because listVaultLabels already excludes every
   // staging label (registration included) from the array otherLabels reads,
@@ -426,12 +426,12 @@ if (!newIdentity) {
     const baseHandle = baseHandleMatch ? baseHandleMatch[1] : stagingLabel
     console.error(
       `setup: refusing to register "${handle}" as a new identity at ${origin}: this host's vault still ` +
-      `holds a registration staging label, "${stagingLabel}", for this origin. A register whose vault ` +
-      'promotion failed (a lock timeout, a vault-write failure) leaves the confirmed resident key ONLY ' +
-      'under a label like that one, while the resident it named is already permanent server-side -- the ' +
-      `city's own confirm already succeeded. Registering "${handle}" now, without resolving that first, ` +
+      `holds a registration staging label, "${stagingLabel}", for this origin. Registration ` +
+      'confirmation may or may not have completed; a lost response or failed vault promotion can leave ' +
+      'a permanent resident whose key is stored only under that label. ' +
+      `Registering "${handle}" now, without resolving that first, ` +
       `risks creating a SECOND, permanent, unrecoverable resident next to it. Run \`key adopt --handle ` +
-      `${baseHandle} --from-label ${stagingLabel}\` to probe the confirmed key and, only if it actually ` +
+      `${baseHandle} --from-label ${stagingLabel}\` to probe the staged key and, only if it actually ` +
       `authenticates as "${baseHandle}", store it under that real handle and delete the staging copy -- or, ` +
       `to inspect the key by hand first, \`key show --handle ${stagingLabel} --reveal\`. Only pass ` +
       '--new-identity once that staging entry is resolved and a genuinely new resident, distinct from it, ' +

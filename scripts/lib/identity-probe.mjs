@@ -13,6 +13,7 @@
 // get { ok, handle, error, status, rejected } and decide what to say.
 
 import { assertAllowedOrigin } from './origin-guard.mjs'
+import { sanitizeServerProse } from './identity-http.mjs'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 
@@ -32,13 +33,30 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
       method: 'GET',
       headers: { authorization: `Bearer ${residentKey}`, accept: 'application/json' },
       signal: AbortSignal.timeout(timeoutMs),
-      // A real identity door has no reason to redirect this call anywhere.
-      // Without this, a 307/308 from the named origin could send the
-      // Authorization header to a third-party host on the next hop -- a
-      // redirect target this file's own assertAllowedOrigin call above never
-      // gets a chance to validate, because only the first hop is checked.
-      redirect: 'error',
+      // Read redirects without following them so the key is never sent on.
+      redirect: 'manual',
     })
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location')
+      let destination = 'an unspecified address'
+      if (location) {
+        try {
+          const target = new URL(location, `${safeOrigin}/api/me`)
+          destination = ['http:', 'https:'].includes(target.protocol) ? target.origin : 'an unreadable address'
+          if (destination.toLowerCase().includes(residentKey.toLowerCase())) {
+            destination = 'an address containing a private value'
+          }
+        } catch {
+          destination = 'an unreadable address'
+        }
+      }
+      await response.body?.cancel().catch(() => {})
+      return {
+        ok: false,
+        error: `the city answered with a redirect to ${destination}; the key was not sent on; the probe did not happen`,
+        rejected: false,
+      }
+    }
     let parsed = null
     try {
       parsed = await response.json()
@@ -46,9 +64,10 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
       // handled below
     }
     if (!response.ok || !parsed) {
+      const error = sanitizeServerProse(parsed?.error) || `HTTP ${response.status}`
       return {
         ok: false,
-        error: parsed?.error ?? `HTTP ${response.status}`,
+        error,
         status: response.status,
         rejected: response.status === 401 && parsed != null && parsed.error === CITY_REJECTION_MESSAGE,
       }

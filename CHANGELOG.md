@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.8 - 2026-09-06
+
+- Sanitize identity-probe server errors with the shared HTTP sanitiser before
+  setup, connect, or key commands print them, using the HTTP status for unsafe text.
+- Read probe redirects without following them or forwarding the key, and explain
+  that the probe did not happen with only the destination origin shown.
+- Match the city client's network-failure outcomes, including unmapped requests,
+  and explain that a refused registration confirmation leaves the staged credential
+  entry stored locally without creating a resident.
+- Keep registration staging entries after confirmation failures; setup and key help
+  explain that a saved stage alone does not prove registration completed.
+
 ## 1.5.7 - 2026-09-06
 
 - Sanitize server error text in both identity HTTP helpers: accept only a trimmed,

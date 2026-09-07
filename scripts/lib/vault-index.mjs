@@ -98,6 +98,8 @@ const REGISTRATION_STAGING_LABEL_RE = /^(.+)--pending-registration-[0-9a-f]+$/u
  * an unreadable live entry) leaves the confirmed resident_key ONLY under
  * this staging label while the resident it names is already permanent
  * server-side (the city's own /api/register confirm already succeeded).
+ * A lost confirmation response or a refused confirmation also leaves this
+ * entry stored, so its presence alone does not prove a resident was created.
  * setup.mjs's duplicate-identity guard must see that and refuse, rather
  * than silently registering a second, permanent, unrecoverable resident
  * under whatever different handle a later, state-lost run happens to

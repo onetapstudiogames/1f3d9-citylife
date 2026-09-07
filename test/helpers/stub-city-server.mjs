@@ -166,10 +166,14 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
  * The default matches the city sentence used by existing tests; `null`
  * omits the field, and a string overrides it for output-safety tests.
  */
+/**
+ * `failRegisterConfirm` (optional): closes the confirm request without a
+ * response, after stage succeeded, to model an uncertain transport result.
+ */
 export async function startStubCityServer({
   registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle, officialDoorsEnabled = true,
   followFixture, pairNextStep = 'This code is shown once, expires in ten minutes, and works once.',
-  sinceLastVisit,
+  sinceLastVisit, failRegisterConfirm = false, refuseRegisterConfirm = false,
 } = {}) {
   // A mutable box, not a bare closed-over boolean, so a test can flip
   // `official.doorsEnabled` AFTER the server has already started -- the
@@ -281,6 +285,13 @@ export async function startStubCityServer({
           return send(res, 200, { ...entry, handle: responseHandle, stage_token: stageToken })
         }
         if (body.action === 'confirm') {
+          if (failRegisterConfirm) {
+            req.socket.destroy()
+            return
+          }
+          if (refuseRegisterConfirm) {
+            return send(res, 409, { error: 'registration confirmation refused' })
+          }
           const pending = pendingRegistrations.get(body.stage_token)
           if (!pending || pending.resident_key !== body.resident_key) {
             return send(res, 403, { error: 'stage token or resident key mismatch' })
