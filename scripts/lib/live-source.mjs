@@ -61,10 +61,19 @@ const defaultTarget = async (fetchImpl, outline, directoryIndex, residents) => {
   return { ok: true, target: { id: town.id, name: town.name }, resolution: branchResult.body }
 }
 
-const stableRoomIds = (target, branch, maxRooms) => [
-  target.id,
-  ...(branch?.subplaces ?? []).map((place) => place.id).filter((id) => Number(id) !== Number(target.id)).sort((a, b) => a - b),
-].slice(0, maxRooms)
+const followScopeId = (target, outline, directoryIndex) => {
+  const parentId = directoryIndex.byId.get(target.id)?.parentId
+  const continentIds = new Set((outline?.places?.[0]?.children ?? []).map((place) => Number(place.id)))
+  return parentId === null || parentId === undefined || continentIds.has(Number(parentId))
+    ? Number(target.id)
+    : Number(parentId)
+}
+
+const stableRoomIds = (target, scopeId, branch, maxRooms) => [...new Set([
+  Number(target.id),
+  Number(scopeId),
+  ...(branch?.subplaces ?? []).map((place) => Number(place.id)).sort((a, b) => a - b),
+])].slice(0, maxRooms).sort((a, b) => a - b)
 
 const cachedDrawing = async (fetchImpl, cache, type, id) => {
   const key = drawingKey(type, id)
@@ -126,6 +135,7 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
   const directoryIndex = buildDirectoryIndex(directory.places ?? [])
   let residents = residentsFromPages(presenceResult.pages)
   let target
+  let scopeTarget
   let branchResult
   let focusedPresence = null
   let resolution = null
@@ -138,8 +148,10 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
     residents = [...residents.filter((value) => Number(value.id) !== Number(resident.id)), resident]
     const known = directoryIndex.byId.get(resident.current_place_id)
     target = { id: resident.current_place_id, name: known?.name ?? `place #${resident.current_place_id}` }
-    const parentId = known?.parentId ?? null
-    branchResult = await readJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(parentId ?? target.id)}&subplace_limit=200`)
+    const scopeId = followScopeId(target, outline, directoryIndex)
+    const scope = directoryIndex.byId.get(scopeId)
+    scopeTarget = { id: scopeId, name: scope?.name ?? `place #${scopeId}` }
+    branchResult = await readJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(scopeId)}&subplace_limit=200`)
   } else {
     const targetId = resolvePlaceArgument(placeArg, directory.places ?? [])
     const known = targetId === null ? null : directoryIndex.byId.get(targetId)
@@ -151,21 +163,19 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
       target = selected.target
       resolution = selected.resolution
     }
+    scopeTarget = target
     branchResult = await readJson(fetchImpl, `/api/map?view=outline&parent_id=${encodeURIComponent(target.id)}&subplace_limit=200`)
   }
   if (!branchResult.ok) return { ok: false, error: responseError('place branch', branchResult) }
 
-  const roomIds = stableRoomIds(target, branchResult.body, maxRooms)
+  const roomIds = stableRoomIds(target, scopeTarget.id, branchResult.body, maxRooms)
   const roomResponses = await readRoomResponses(fetchImpl, roomIds)
   const failedRoom = roomResponses.find(({ result }) => !result.ok)
   if (failedRoom) return { ok: false, error: responseError(`room ${failedRoom.placeId}`, failedRoom.result) }
 
-  const eventScopeId = followHandle
-    ? directoryIndex.byId.get(target.id)?.parentId ?? target.id
-    : target.id
   const [notesResult, eventsResult] = await Promise.all([
-    readJson(fetchImpl, `/api/window?collection=notes&within_place_id=${encodeURIComponent(eventScopeId)}&limit=100`),
-    readJson(fetchImpl, `/api/events?within_place_id=${encodeURIComponent(eventScopeId)}&limit=100`),
+    readJson(fetchImpl, `/api/window?collection=notes&within_place_id=${encodeURIComponent(scopeTarget.id)}&limit=100`),
+    readJson(fetchImpl, `/api/events?within_place_id=${encodeURIComponent(scopeTarget.id)}&limit=100`),
   ])
   if (!notesResult.ok) return { ok: false, error: responseError('notes', notesResult) }
   if (!eventsResult.ok) return { ok: false, error: responseError('events', eventsResult) }
@@ -179,7 +189,7 @@ const collectPublicRaw = async ({ placeArg, followHandle, fetchImpl, drawingCach
   return {
     ok: true,
     raw: {
-      target,
+      target: scopeTarget,
       directory,
       outline,
       presence: { pages: presenceResult.pages, focused: focusedPresence },
@@ -233,10 +243,18 @@ const normalizeRaw = (raw, maxRooms, selection = {}) => {
   if (maxRooms > 0 && !availableIds.has(Number(selected.id))) {
     return { ok: false, error: `place #${selected.id} was not recorded in this scene` }
   }
-  const candidates = selected.nearby
-    ? [...availableIds]
-    : [...availableIds].filter((id) => id === Number(selected.id) || directoryIndex.byId.get(id)?.parentId === Number(selected.id))
-  const roomOrder = [selected.id, ...candidates.filter((id) => id !== Number(selected.id)).sort((a, b) => a - b)].slice(0, maxRooms)
+  const roomOrder = selected.nearby
+    ? [...new Set([
+      Number(selected.id),
+      Number(raw.target?.id),
+      ...[...availableIds].sort((a, b) => a - b),
+    ])].filter((id) => availableIds.has(id)).slice(0, maxRooms).sort((a, b) => a - b)
+    : [
+      Number(selected.id),
+      ...[...availableIds]
+        .filter((id) => id !== Number(selected.id) && directoryIndex.byId.get(id)?.parentId === Number(selected.id))
+        .sort((a, b) => a - b),
+    ].slice(0, maxRooms)
   const roomById = new Map((raw.rooms ?? []).map((entry) => [Number(entry.placeId), entry.response]))
   const notes = [...(raw.notes?.notes ?? [])].sort(byId)
   const rooms = roomOrder.map((id) => {
@@ -376,6 +394,7 @@ export async function createLiveSource({ placeArg, followHandle, sceneFile, fetc
     const scene = await readScene(sceneFile)
     return {
       frameTimes: [...scene.frameTimes],
+      momentTimes: scene.moments.map((moment) => moment.atMs),
       durationMs: scene.durationMs,
       close: () => {},
       read: async (nowMs, { maxRooms = Number.MAX_SAFE_INTEGER } = {}) => {

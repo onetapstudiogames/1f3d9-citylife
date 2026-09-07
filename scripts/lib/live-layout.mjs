@@ -125,6 +125,14 @@ const feederFor = (resident, aisle) => ({
   height: Math.max(resident.y + resident.height, aisle.y + aisle.height) - Math.min(resident.y, aisle.y),
 })
 
+const residentFits = (candidate, box, aisle) => (
+  candidate.width === RESIDENT_WIDTH && candidate.height === RESIDENT_HEIGHT &&
+  candidate.x >= box.x + 1 && candidate.y >= box.y + 1 &&
+  candidate.x + candidate.width <= box.x + box.width - 1 &&
+  candidate.y + candidate.height <= box.y + box.height - 1 &&
+  !intersects(candidate, aisle)
+)
+
 const residentCandidatesFor = (box, aisle, id) => {
   const candidates = candidateOrigins(box, RESIDENT_WIDTH, RESIDENT_HEIGHT, aisle, true)
   const rows = [...new Set(candidates.map(({ y }) => y))]
@@ -142,7 +150,7 @@ const overflowDotsFor = (room, box) => {
 }
 
 /** Stable thing/resident homes with shared occupancy and a clear future walk feeder. */
-export const planRoomPlacements = (room, box) => {
+export const planRoomPlacements = (room, box, { preferredResidents = [], reservedResidents = [] } = {}) => {
   const aisle = aisleFor(box)
   const doors = {
     left: { x: box.x, y: aisle.y, width: 1, height: AISLE_HEIGHT },
@@ -165,21 +173,54 @@ export const planRoomPlacements = (room, box) => {
 
   const residents = []
   const reservedFeeders = []
-  for (const item of [...(room.residents ?? [])].sort(compareIds)) {
+  const claimResident = (item, rectangle, visible) => {
+    if (!residentFits(rectangle, box, aisle) || !canClaim(rectangle, claims)) return false
+    if (reservedFeeders.some((feeder) => intersects(rectangle, feeder))) return false
+    const feeder = feederFor(rectangle, aisle)
+    if (actualBlockers.some((blocker) => intersects(feeder, blocker))) return false
+    const placement = { item, ...rectangle, feeder }
+    if (visible) residents.push(placement)
+    claims.push({ rectangle: placement, margin: expanded(placement), kind: 'resident' })
+    actualBlockers.push(placement)
+    reservedFeeders.push(placement.feeder)
+    return true
+  }
+
+  for (const reserved of Array.isArray(reservedResidents) ? reservedResidents : []) {
+    claimResident(reserved.item ?? null, {
+      x: reserved.x,
+      y: reserved.y,
+      width: reserved.width,
+      height: reserved.height,
+    }, false)
+  }
+
+  const orderedResidents = [...(room.residents ?? [])].sort(compareIds)
+  const residentById = new Map(orderedResidents.map((item) => [stableKey(item.id), item]))
+  const retained = new Set()
+  for (const preferred of Array.isArray(preferredResidents) ? preferredResidents : []) {
+    const item = residentById.get(stableKey(preferred.item?.id))
+    if (!item || retained.has(stableKey(item.id))) continue
+    if (claimResident(item, {
+      x: preferred.x,
+      y: preferred.y,
+      width: preferred.width,
+      height: preferred.height,
+    }, true)) retained.add(stableKey(item.id))
+  }
+
+  for (const item of orderedResidents) {
+    if (retained.has(stableKey(item.id))) continue
     const rectangle = residentCandidatesFor(box, aisle, item.id).find((candidate) => {
-      if (!canClaim(candidate, claims)) return false
+      if (!residentFits(candidate, box, aisle) || !canClaim(candidate, claims)) return false
       if (reservedFeeders.some((feeder) => intersects(candidate, feeder))) return false
       const feeder = feederFor(candidate, aisle)
       return actualBlockers.every((blocker) => !intersects(feeder, blocker))
     })
-    if (!rectangle) continue
-    const placement = { item, ...rectangle, feeder: feederFor(rectangle, aisle) }
-    residents.push(placement)
-    claims.push({ rectangle: placement, margin: expanded(placement), kind: 'resident' })
-    actualBlockers.push(placement)
-    reservedFeeders.push(placement.feeder)
+    if (rectangle) claimResident(item, rectangle, true)
   }
 
+  residents.sort((left, right) => compareIds(left.item, right.item))
   return { box: { ...box }, aisle, doors, things, residents, overflowDots }
 }
 

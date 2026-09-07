@@ -95,3 +95,45 @@ test('live layout: placements and fetch budgets stay stable across input order',
   assert.equal(visibleRoomLimit({ columns: 80, rows: 24 }), 2)
   assert.ok(residentDrawingLimit({ columns: 80, rows: 24 }, 2) >= 7)
 })
+
+test('live layout: incumbents keep their homes while a departure is reserved and a lower-id arrival is allocated', () => {
+  const [townBox, fairBox] = layoutRooms(2, { columns: 80, rows: 24 })
+  const townBefore = {
+    id: 2,
+    things: [],
+    thingsCount: 0,
+    residents: [8, 44, 91, 103, 123, 171, 226].map(resident),
+  }
+  const fairThings = [947, 948, 1431, 1435, 1848].map(thing)
+  const fairBefore = { id: 34, things: fairThings, thingsCount: 16, residents: [resident(32)] }
+  const oldTown = planRoomPlacements(townBefore, townBox)
+  const oldFair = planRoomPlacements(fairBefore, fairBox)
+  const byId = (plan) => new Map(plan.residents.map((entry) => [entry.item.id, entry]))
+
+  const newTown = planRoomPlacements({
+    ...townBefore,
+    residents: townBefore.residents.filter((item) => item.id !== 8),
+  }, townBox, {
+    preferredResidents: oldTown.residents,
+    reservedResidents: oldTown.residents.filter((entry) => entry.item.id === 8),
+  })
+  const newFair = planRoomPlacements({
+    ...fairBefore,
+    residents: [resident(8), resident(32)],
+  }, fairBox, { preferredResidents: oldFair.residents })
+  const oldTownById = byId(oldTown)
+  const newTownById = byId(newTown)
+
+  for (const id of [44, 91, 103, 123, 171, 226]) {
+    assert.deepEqual(
+      { x: newTownById.get(id).x, y: newTownById.get(id).y },
+      { x: oldTownById.get(id).x, y: oldTownById.get(id).y },
+      `town resident ${id} stays home`,
+    )
+  }
+  assert.deepEqual(
+    { x: byId(newFair).get(32).x, y: byId(newFair).get(32).y },
+    { x: byId(oldFair).get(32).x, y: byId(oldFair).get(32).y },
+    'the lower-id arrival does not displace the fair incumbent',
+  )
+})

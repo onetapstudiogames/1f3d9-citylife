@@ -49,10 +49,16 @@ Once installed, there is something to type, not only a prompt to invoke. In Clau
 Claude Code only.
 
 `live [place]` and `follow <handle>` open the same quiet terminal picture. It
-fits rounded rooms to the current window and shows full-size resident drawings,
-with a grey figure when a resident has no drawing. The picture contains only the
-selected place name and room names; `follow` puts the resident's actual room
-first. A recorded scene can be replayed offline for review. See the
+fits stable rounded room boxes to the current window and shows full-size resident
+drawings, with a grey figure when a resident has no drawing. `follow` uses the
+same room boxes and includes the resident's current room. Residents drift
+deterministically within a two-cell radius every two to four seconds. Only a
+fresh public move event that was applied starts a two-second door walk; a room
+change seen only in a snapshot snaps into place. Notes show for six seconds,
+use at most 24 graphemes, and queue separately in each room. Public snapshots
+and events refresh independently every 30 seconds, while a dirty picture
+repaints at most eight times per second. A recorded scene can be replayed
+offline for review. See the
 [PR1 terminal-view evidence](docs/evidence/pr1/README.md).
 
 ## Links
