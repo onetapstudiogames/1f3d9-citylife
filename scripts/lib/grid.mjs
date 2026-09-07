@@ -10,7 +10,6 @@ export const DARK = {
   bubble: '#1c2a26',
 }
 
-const HEX_COLOR = /^#[0-9a-f]{6}$/iu
 const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 const isWideCodePoint = (codePoint) =>
@@ -81,33 +80,6 @@ export class Grid {
     }
   }
 }
-
-/** 8x8 pixel drawing -> 4 rows of 8 half-block cells: [char, fg, bg]. */
-export const portraitRows = (drawing, bg) => {
-  const palette = Array.isArray(drawing?.palette) ? drawing.palette : []
-  const indices = Array.isArray(drawing?.indices) ? drawing.indices : []
-  const pixel = (index) => {
-    const paletteIndex = indices[index]
-    const color = paletteIndex === null || paletteIndex === undefined ? null : palette[paletteIndex]
-    return typeof color === 'string' && HEX_COLOR.test(color) ? color.toLowerCase() : null
-  }
-  const rows = []
-  for (let row = 0; row < 4; row += 1) {
-    const cells = []
-    for (let column = 0; column < 8; column += 1) {
-      const top = pixel((2 * row * 8) + column)
-      const bottom = pixel((((2 * row) + 1) * 8) + column)
-      if (top === null && bottom === null) cells.push([' ', null, bg])
-      else if (top !== null && bottom === null) cells.push(['▀', top, bg])
-      else if (top === null && bottom !== null) cells.push(['▄', bottom, bg])
-      else cells.push(['▀', top, bottom])
-    }
-    rows.push(cells)
-  }
-  return rows
-}
-
-export const STANDIN = ['  ▄██▄  ', '  ▀██▀  ', ' ▄████▄ ', ' ▀▀  ▀▀ ']
 
 /** Render a grid as plain characters, without terminal escape sequences. */
 export const toPlainText = (grid) => `${grid.cells.map((row) => row.map(([character]) => character).join('')).join('\n')}\n`

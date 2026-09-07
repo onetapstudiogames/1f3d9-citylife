@@ -1,4 +1,4 @@
 # Fixed-size frame evidence keeps its exact bytes and intentional blank cells.
 docs/evidence/**/frames-*.txt -text whitespace=-blank-at-eol,-blank-at-eof
 docs/evidence/**/frames-*.ansi -text -diff
-docs/evidence/**/public-live-once.txt -text whitespace=-blank-at-eol,-blank-at-eof
+docs/evidence/**/public-*-once.txt -text whitespace=-blank-at-eol,-blank-at-eof

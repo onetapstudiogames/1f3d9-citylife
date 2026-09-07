@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { Grid, STANDIN, toPlainText } from '../scripts/lib/grid.mjs'
+import { createLiveSource } from '../scripts/lib/live-source.mjs'
+import { DARK, Grid, toPlainText } from '../scripts/lib/grid.mjs'
 import { paintLiveView, visibleRoomLimit } from '../scripts/lib/live-render.mjs'
 
 const solidDrawing = (hex) => ({ palette: [hex], indices: Array(64).fill(0) })
@@ -113,7 +114,9 @@ test('live paint: drawn residents stay full 8x4 and undrawn residents use the fo
   assert.equal(new Set(redCells.map(([x]) => x)).size, 8)
   assert.equal(new Set(redCells.map(([, y]) => y)).size, 4)
   const plain = toPlainText(view)
-  for (const line of STANDIN) assert.match(plain, new RegExp(line.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'))
+  for (const line of ['  ▄██▄  ', '  ▀██▀  ', ' ▄████▄ ', ' ▀▀  ▀▀ ']) {
+    assert.match(plain, new RegExp(line.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'))
+  }
 })
 
 test('live paint: resident positions are deterministic across input order changes', () => {
@@ -153,4 +156,48 @@ test('live paint: public names cannot inject terminal controls or break requeste
   assert.ok(view.cells.flat().every(([character]) => !/[\x00-\x1f\x7f-\x9f]/u.test(character)))
   assert.equal(view.cells[2][1][0], '╭')
   assert.equal(view.cells[2][35][0], '╮')
+})
+
+test('live paint: floors tile, transparent residents preserve them, and things stay pictorial', () => {
+  const floorDrawing = solidDrawing('#204020')
+  const transparentResident = { ...resident(1, 'sparse'), drawing: { palette: ['#ff0000'], indices: [0, ...Array(63).fill(null)] } }
+  const view = paintLiveView(observation([{
+    ...room(1, 'painted room', [transparentResident]),
+    drawing: floorDrawing,
+    things: [
+      { id: 1, drawing: solidDrawing('#ffff00') },
+      { id: 2, drawing: null },
+      { id: 3, drawing: null },
+      { id: 4, drawing: null },
+      { id: 5, drawing: null },
+    ],
+    thingsCount: 17,
+  }]), { columns: 80, rows: 24 })
+
+  assert.equal(view.cells[2][1][1], '#587058', 'wall is lightened from the room drawing')
+  assert.ok(view.cells.flat().some(([, fg, bg]) => fg === '#182e1d' || bg === '#182e1d'), 'dimmed floor is visible')
+  const redCell = view.cells.flat().find(([, fg]) => fg === '#ff0000')
+  assert.equal(redCell[2], '#182e1d', 'transparent lower portrait pixel keeps the floor')
+  assert.equal(locationOfColor(view, '#ffff00').length, 8, 'drawn thing is 4x2 terminal cells')
+  assert.equal(view.cells.flat().filter(([character]) => character === '·').length, 12)
+  assert.doesNotMatch(toPlainText(view), /thing|sparse/u)
+  assert.notEqual(view.cells[3][2][2], DARK.room, 'floor begins at the room interior')
+})
+
+test('live paint: recorded 80x24 and 120x40 scenes show the intended floors, things, and people offline', async () => {
+  const source = await createLiveSource({
+    sceneFile: new URL('./fixtures/live-scene.json', import.meta.url),
+    fetchImpl: async () => { throw new Error('replay attempted network') },
+  })
+  const smallObservation = await source.read(0, { maxRooms: 2, size: { columns: 80, rows: 24 } })
+  const largeObservation = await source.read(0, { maxRooms: 3, size: { columns: 120, rows: 40 } })
+  const small = paintLiveView(smallObservation, { columns: 80, rows: 24 })
+  const large = paintLiveView(largeObservation, { columns: 120, rows: 40 })
+
+  assert.ok(small.cells.flat().some(([, fg, bg]) => ['#13221c', '#192d23'].includes(fg) || ['#13221c', '#192d23'].includes(bg)), 'first-town grass is visible')
+  assert.equal(small.cells.flat().filter(([character]) => character === '·').length, 11, 'the fair shows 16 minus 5 overflow dots')
+  const workroomThingColours = new Set(largeObservation.rooms[2].things.find((item) => item.drawing)?.drawing.palette)
+  const workroomResidentColours = new Set(largeObservation.rooms[2].residents.find((item) => item.drawing)?.drawing.palette)
+  assert.ok(large.cells.flat().some(([, fg, bg]) => workroomThingColours.has(fg) || workroomThingColours.has(bg)), 'workroom drawn thing is visible')
+  assert.ok(large.cells.flat().some(([, fg, bg]) => workroomResidentColours.has(fg) || workroomResidentColours.has(bg)), 'workroom drawn resident is visible')
 })

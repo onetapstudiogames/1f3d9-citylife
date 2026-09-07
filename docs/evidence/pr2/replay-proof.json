@@ -1,0 +1,29 @@
+{
+  "framesPerDump": 13,
+  "checks": [
+    {
+      "file": "docs/evidence/pr2/frames-80x24.txt",
+      "bytes": 42343,
+      "sha256": "3ba7e970c2916917fa3e3e7611da7f6b45a01cb15dbbaa36b5c1a6d36e5213c7",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/pr2/frames-80x24.txt.ansi",
+      "bytes": 904128,
+      "sha256": "369e3c2deed30a721b23cbfce9e7f304f54898a781b22645f9e4d42960fbe845",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/pr2/frames-120x40.txt",
+      "bytes": 109709,
+      "sha256": "57e45b7a171e791a714cd76140525f37225bc54263ec0a51542e452907c507de",
+      "identical": true
+    },
+    {
+      "file": "docs/evidence/pr2/frames-120x40.txt.ansi",
+      "bytes": 1476802,
+      "sha256": "9829f7ea107bc7b962bd3c6e726177cd842a8f7c74d52f7181df0256c3053803",
+      "identical": true
+    }
+  ]
+}

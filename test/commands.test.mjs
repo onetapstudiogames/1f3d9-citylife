@@ -6,7 +6,6 @@ import { compareVersions, parseVersion } from '../scripts/lib/semver.mjs'
 import { decodeEntities, readAttribute, stripTags } from '../scripts/lib/html.mjs'
 import { parseChangelogEntries } from '../scripts/lib/changelog.mjs'
 import { buildDirectoryIndex, resolvePlaceArgument } from '../scripts/lib/city.mjs'
-import { portraitRows } from '../scripts/lib/grid.mjs'
 
 const COMMANDS = ['help', 'links', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'live', 'update', 'changelog', 'tools']
 
@@ -75,18 +74,6 @@ test('city: directory index resolves ancestor chains and place-argument lookup',
   assert.equal(resolvePlaceArgument('42', places), 42)
   assert.equal(resolvePlaceArgument('nowhere', places), null)
   assert.equal(resolvePlaceArgument(undefined, places), null)
-})
-
-test('grid: portraitRows turns a 2x2-ish drawing into half-block cells without throwing', () => {
-  const indices = Array(64).fill(null)
-  indices[0] = 0
-  indices[8] = 0
-  const drawing = { palette: ['#ff0000'], indices }
-  const rows = portraitRows(drawing, '#000000')
-  assert.equal(rows.length, 4)
-  assert.equal(rows[0].length, 8)
-  assert.equal(rows[0][0][0], '▀')
-  assert.equal(rows[0][0][1], '#ff0000')
 })
 
 test('every command has a scripts/<name>.mjs entry point and a skills/<name>/SKILL.md', async () => {

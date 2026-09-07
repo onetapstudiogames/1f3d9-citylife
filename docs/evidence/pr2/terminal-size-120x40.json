@@ -1,0 +1,9 @@
+{
+  "requestedSize": "120x40",
+  "columns": 120,
+  "rows": 40,
+  "isTTY": true,
+  "windowsTerminal": true,
+  "at": 0,
+  "color": "256"
+}
