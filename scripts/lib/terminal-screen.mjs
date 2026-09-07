@@ -17,7 +17,7 @@ export class TerminalScreen {
   enter() {
     if (this.entered) return
     this.entered = true
-    this.output.write('\x1b[?1049h\x1b[?25l')
+    this.output.write('\x1b[?1049h\x1b[?25l\x1b[?1004h')
   }
 
   invalidate() {
@@ -57,6 +57,6 @@ export class TerminalScreen {
     if (!this.entered) return
     this.entered = false
     this.previous = null
-    this.output.write(`${this.synchronized ? '\x1b[?2026l' : ''}\x1b[0m\x1b[?25h\x1b[?1049l`)
+    this.output.write(`${this.synchronized ? '\x1b[?2026l' : ''}\x1b[0m\x1b[?1004l\x1b[?25h\x1b[?1049l`)
   }
 }

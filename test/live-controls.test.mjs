@@ -235,6 +235,36 @@ test('r coalesces repeated requests while one public read is pending', async () 
   }
 })
 
+test('successful polls and r, Return, or terminal focus fully repaint a stale terminal', async () => {
+  const harness = makeHarness()
+  const fake = makeClock()
+  let reads = 0
+  const source = { read: async () => { reads += 1; return city('recovery town') }, close: () => {} }
+  const closed = runViewSession(source, { color: '16' }, {
+    ...harness, env: {}, platform: 'win32', clock: fake.clock,
+  })
+
+  const expectFullRepaint = async (action, expectedReads) => {
+    const start = harness.writes.length
+    await action()
+    await waitFor(() => reads === expectedReads)
+    await fake.advance(125)
+    const repaint = harness.writes.slice(start).join('')
+    assert.match(repaint, /recovery town/u)
+    assert.ok(new Set(cursorRows(repaint)).size > 1, 'repaint writes more than the quiet status row')
+  }
+
+  try {
+    await waitFor(() => reads === 1 && harness.writes.join('').includes('recovery town'))
+    await expectFullRepaint(async () => harness.input.emit('keypress', 'r', { name: 'r' }), 2)
+    await expectFullRepaint(async () => harness.input.emit('keypress', '\r', { name: 'return' }), 3)
+    await expectFullRepaint(async () => harness.input.emit('keypress', undefined, { sequence: '\x1b[I', code: '[I' }), 4)
+    await expectFullRepaint(async () => fake.advance(30_000), 5)
+  } finally {
+    await closeSession(harness.input, closed)
+  }
+})
+
 test('the resident picker selects a new follow target and discards an older pending read', async () => {
   const harness = makeHarness()
   const fake = makeClock()
