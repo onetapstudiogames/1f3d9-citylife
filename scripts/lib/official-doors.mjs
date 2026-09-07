@@ -40,11 +40,11 @@ export async function readCodingDoorsEnabled(origin, { timeoutMs = DEFAULT_TIMEO
       method: 'GET',
       headers: { accept: 'application/json' },
       signal: AbortSignal.timeout(timeoutMs),
-      // A public reference-facts read has no reason to redirect anywhere;
-      // refusing to follow one keeps this consistent with every other
-      // identity-adjacent fetch in this repo (identity-probe.mjs,
-      // identity-client.mjs's fetchOrExplain), even though this particular
-      // call carries no secret to protect from a redirect target.
+      // A public reference-facts read has no reason to redirect anywhere.
+      // identity-http.mjs reads a redirect without following it so it can
+      // name the destination in its refusal; this unauthenticated read has
+      // nothing to report and simply refuses. identity-probe.mjs still
+      // refuses the same way (see issue #40).
       redirect: 'error',
     })
     let parsed = null
