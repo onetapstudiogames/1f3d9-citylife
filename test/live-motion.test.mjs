@@ -115,7 +115,7 @@ test('recorded replay ignores baseline history, walks only on the new applied mo
     noteId: 9007199254740000,
     roomId: 34,
     residentId: 8,
-    text: 'The fair grass remembers',
+    text: 'The fair grass remembers every small arrival.',
   }])
   result = stepMotion(result.state, { nowMs: 65_999, size: SMALL })
   assert.equal(result.frame.bubbles.length, 1)
@@ -338,7 +338,7 @@ test('drift is deterministic for 100 seconds, stays near home, respects every vi
   )
 })
 
-test('new visible notes queue one six-second 24-grapheme bubble per room; old and offscreen notes stay silent', () => {
+test('new visible notes queue one six-second full-text bubble per room; old and offscreen notes stay silent', () => {
   const alice = resident(1, 'alice', 1)
   const hidden = resident(2, 'hidden', 3)
   const oldNote = note(10, 'alice', 1, 'old words')
@@ -354,7 +354,8 @@ test('new visible notes queue one six-second 24-grapheme bubble per room; old an
   result = stepMotion(result.state, { nowMs: 60_000, observation: after, size: SMALL })
   assert.equal(result.frame.bubbles.length, 1)
   assert.equal(result.frame.bubbles[0].noteId, 11)
-  assert.ok(graphemes(result.frame.bubbles[0].text).length <= 24)
+  assert.ok(graphemes(result.frame.bubbles[0].text).length > 24)
+  assert.match(result.frame.bubbles[0].text, /twenty-four graphemes$/u)
   assert.doesNotMatch(result.frame.bubbles[0].text, /[\x00-\x1f\x7f-\x9f]/u)
   assert.equal(result.frame.bubbles[0].residentId, 1)
 

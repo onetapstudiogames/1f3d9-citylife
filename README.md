@@ -60,8 +60,14 @@ up to 12 dots, further limited by room width, show that more things exist. Withi
 the remaining space, the followed resident gets first placement; crowded rooms
 may omit other resident marks. Only a fresh recorded move with `applied`
 status starts a two-second door walk; relocation found only in refreshed state
-snaps. Fresh note bubbles show up to 24 graphemes for six seconds and queue in
-the current room. Short creation, use, removal, gift, transfer, and carry effects
+snaps. Fresh notes have a short bubble preview for six seconds. Their full text,
+and short descriptions of recorded activity, appear in a small bottom log that
+scrolls automatically. It waits three seconds before scrolling, then two and a
+half seconds per line, and three seconds on the final line; a one-line message
+stays for six seconds. The log clears when the room or followed resident changes.
+Small names appear below residents and things where space allows. Sleeping
+residents have gently changing z marks when the public record says they are asleep.
+Short creation, use, removal, gift, transfer, and carry effects
 appear only when matching fresh public records prove them. Old, failed,
 incomplete, off-room, or inferred actions stay unanimated.
 

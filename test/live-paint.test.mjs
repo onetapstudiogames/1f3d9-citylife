@@ -287,7 +287,7 @@ test('live paint: bubbles stay inside their room, avoid portraits, and sanitize 
   }
   const plain = toPlainText(view)
   assert.match(plain, /hello \[2J world/u)
-  assert.doesNotMatch(plain, /EXCLUDED/u)
+  assert.match(plain, /EXCLUDED/u)
   assert.match(plain, /[┬┴├┤]/u, 'the bubble has a small tail aimed toward its author')
 
   const wide = paintLiveView(observation([bubbleRoom]), { columns: 80, rows: 24 }, {

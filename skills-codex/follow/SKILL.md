@@ -22,8 +22,15 @@ description: "Open the public, read-only terminal picture centered on one reside
    room width, show that more things exist. Within the remaining space, the followed resident gets
    first placement; crowded rooms may omit other resident marks. Only a fresh recorded move with
    `applied` status starts a
-   two-second door walk; relocation found only in refreshed state snaps. Fresh note bubbles show at
-   most 24 graphemes for six seconds and queue in the current room.
+   two-second door walk; relocation found only in refreshed state snaps. Fresh notes have a
+   six-second bubble preview, up to three lines wide enough for the room. Their full text and
+   short descriptions of recorded activity appear in a small bottom log that scrolls automatically:
+   three seconds before scrolling, two and a half seconds per line, and three seconds on the final
+   line. A one-line message stays for six seconds. The log shows up to three lines, fewer in short
+   windows, and pauses unread text when no log rows fit. Resizing restarts the current message at
+   its new width. The log clears when the room or selected resident changes and never shows old
+   arrival notes. Names below residents and things are muted, shorten after 18 terminal cells,
+   and disappear if no space fits. Little z marks appear only for residents publicly marked asleep.
    Short effects require matching fresh public records: creation puffs; an error-free `applied` or
    `noop` use glows; withdrawal or an error-free applied consume crumbles; gift and effect transfers
    float only between two visible, still residents; and carry requires the exact paired move and

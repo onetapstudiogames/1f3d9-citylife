@@ -43,7 +43,7 @@ const framed = (roomValue, effects = []) => {
 }
 const colored = (grid, color) => grid.cells.flat().filter(([, fg, bg]) => fg === color || bg === color).length
 
-test('follow paint marks the focused portrait and draws use, gift, and carry cues without prose', () => {
+test('follow paint marks the focused portrait and draws use, gift, and carry cues with small resident names', () => {
   const current = room()
   const baseFrame = framed(current)
   const alice = baseFrame.residents.find(({ resident: item }) => item.id === 1)
@@ -59,7 +59,8 @@ test('follow paint marks the focused portrait and draws use, gift, and carry cue
   assert.equal(view.cells[alice.y + 1][alice.x - 1][0], '›')
   assert.equal(view.cells[alice.y + 1][alice.x + alice.width][0], '‹')
   assert.match(plain, /♥/u)
-  assert.doesNotMatch(plain, /alice|gift|carry|use/iu)
+  assert.match(plain, /alice/u)
+  assert.doesNotMatch(plain, /gift|carry|use/iu)
   assert.ok(colored(view, DARK.hi) > 2, 'effects add a warm visual cue')
   assert.ok(bob, 'the recorded recipient is visible')
 })

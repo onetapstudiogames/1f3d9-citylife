@@ -173,3 +173,30 @@ test('a fresh recorded note in the move read waits for arrival and keeps its six
   assert.equal(at(settled, 8000).frame.bubbles.length, 0)
   assert.equal(text(at(departure, 3500)), text(at(settled, 3500)))
 })
+
+test('a recorded move enters the activity log only on arrival', () => {
+  const first = at(null, 0, room(1))
+  const departure = at(first, 1000, room(2, { events: [move(1, 1, 2)] }))
+  assert.deepEqual(departure.frame.activity, [])
+  const arrival = at(departure, 2000)
+  assert.deepEqual(arrival.frame.activity, ['walker moved to room 2.'])
+})
+
+test('queued room moves and arrival notes have identical activity with direct or paced clocks', () => {
+  const bounds = { columns: 38, rows: 18 }
+  const first = at(null, 0, room(1), bounds)
+  const departure = at(first, 1000, room(2, { events: [move(1, 1, 2)] }), bounds)
+  const pending = at(departure, 1500, room(3, {
+    notes: [{ id: 3, place_id: 3, author: 'walker', body: 'A new room and a long warm welcome with a readable ending.' }],
+    events: [move(2, 2, 3), { id: 3, kind: 'note', actor: 'walker', detail: { note_id: 3, place_id: 3 } }],
+  }), bounds)
+  let paced = pending
+  for (let time = 1625; time <= 20000; time += 125) {
+    paced = at(paced, time, undefined, bounds)
+    if (![2000, 3000, 4000, 5000, 10000, 20000].includes(time)) continue
+    const direct = at(pending, time, undefined, bounds)
+    assert.deepEqual(paced.state.activity, direct.state.activity, `activity at ${time}`)
+    assert.equal(toPlainText(paintLiveView(paced.observation, bounds, paced.frame)),
+      toPlainText(paintLiveView(direct.observation, bounds, direct.frame)), `picture at ${time}`)
+  }
+})

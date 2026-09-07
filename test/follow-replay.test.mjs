@@ -92,3 +92,29 @@ test('labelled action extensions replay create, use, gift, removal, and both exa
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('the full scrolling scene has identical paced and direct pictures at narrow and normal widths', async () => {
+  for (const bounds of [{ columns: 38, rows: 18 }, size]) {
+    const options = {
+      mode: 'follow-room', followHandle: 'thog', fetchImpl: offline,
+      sceneFile: new URL('../docs/evidence/follow-polish/follow-polish-scene.json', import.meta.url),
+    }
+    const sources = [await createLiveSource(options), await createLiveSource(options)]
+    try {
+      const paced = createReplay(sources[0], bounds)
+      const direct = createReplay(sources[1], bounds)
+      const rendered = []
+      for (const time of sources[0].frameTimes) {
+        const result = await paced.at(time)
+        rendered.push(toPlainText(result.frame))
+        if ([62000, 79000, 84000, 92000, 150000].includes(time)) {
+          assert.equal(toPlainText(result.frame), toPlainText((await direct.at(time)).frame), `${bounds.columns} columns at ${time}`)
+        }
+      }
+      assert.match(rendered.at(-1), /THE LANTERN IS HOME/)
+      assert.match(rendered.join('\n'), /created|used|carried/)
+    } finally {
+      sources.forEach(source => source.close())
+    }
+  }
+})

@@ -1,0 +1,43 @@
+{
+  "scene": "docs/evidence/follow-polish/follow-polish-scene.json",
+  "runs": [
+    {
+      "command": "node scripts/follow-feed.mjs thog --scene docs/evidence/follow-polish/follow-polish-scene.json --size 80x24 --color truecolor --dump docs/evidence/follow-polish/frames-80x24.txt",
+      "frames": 56,
+      "byteIdentical": true,
+      "files": [
+        {
+          "path": "docs/evidence/follow-polish/frames-80x24.txt",
+          "bytes": 168572,
+          "firstSha256": "33cace9768a8de889ee2f59f0599c2b2423811ab281f710d00bfc7643ef71db7",
+          "secondSha256": "33cace9768a8de889ee2f59f0599c2b2423811ab281f710d00bfc7643ef71db7"
+        },
+        {
+          "path": "docs/evidence/follow-polish/frames-80x24.txt.ansi",
+          "bytes": 3888502,
+          "firstSha256": "7da87571195b920cae54ec41002b0a6a05fc32e4a79785eba793b20fad2aad16",
+          "secondSha256": "7da87571195b920cae54ec41002b0a6a05fc32e4a79785eba793b20fad2aad16"
+        }
+      ]
+    },
+    {
+      "command": "node scripts/follow-feed.mjs thog --scene docs/evidence/follow-polish/follow-polish-scene.json --size 38x18 --color 256 --dump docs/evidence/follow-polish/frames-38x18.txt",
+      "frames": 56,
+      "byteIdentical": true,
+      "files": [
+        {
+          "path": "docs/evidence/follow-polish/frames-38x18.txt",
+          "bytes": 64710,
+          "firstSha256": "735ddc6bcee01346515f128b65cc248bdb3bf06073acdd1b513bedb8532c3e98",
+          "secondSha256": "735ddc6bcee01346515f128b65cc248bdb3bf06073acdd1b513bedb8532c3e98"
+        },
+        {
+          "path": "docs/evidence/follow-polish/frames-38x18.txt.ansi",
+          "bytes": 911368,
+          "firstSha256": "9b7831d4b36fde8a580cd9329d5081690ceaa75e484f1dbfb9ececc04af767f3",
+          "secondSha256": "9b7831d4b36fde8a580cd9329d5081690ceaa75e484f1dbfb9ececc04af767f3"
+        }
+      ]
+    }
+  ]
+}

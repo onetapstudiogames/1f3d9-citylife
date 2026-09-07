@@ -1,11 +1,11 @@
 import { layoutRooms, planRoomPlacements } from './live-layout.mjs'
+import { sanitizeBubbleText } from './bubble-text.mjs'
 
 const FRAME_MS = 125
 const WALK_MS = 2_000
 const BUBBLE_MS = 6_000
 const RESIDENT_WIDTH = 8
 const RESIDENT_HEIGHT = 4
-const segmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 const keyOf = (value) => String(value ?? '')
 const roomKey = (value) => keyOf(value)
@@ -60,7 +60,7 @@ const makePlans = (rooms, size, { previousPlans = [], reservedByRoom = new Map()
       preferredResidents: previous.residents,
       reservedResidents: reservedByRoom.get(roomKey(room.id)) ?? [],
     } : {}
-    return { roomId: room.id, ...planRoomPlacements(room, box, preferences) }
+    return { roomId: room.id, focusResidentId: room.focusResidentId, ...planRoomPlacements(room, box, preferences) }
   })
 }
 
@@ -84,7 +84,7 @@ const poseFits = (candidate, plan, otherPoses) => {
     x: plan.box.x + 1,
     y: plan.box.y + 1,
     width: Math.max(0, plan.box.width - 2),
-    height: Math.max(0, plan.box.height - 2),
+    height: Math.max(0, plan.box.height - 2 - (plan.focusResidentId != null ? 1 : 0)),
   }
   if (
     candidate.x < inner.x || candidate.y < inner.y ||
@@ -360,11 +360,6 @@ const doorsForWalk = (walk, nowMs) => {
   return []
 }
 
-const sanitizeBubble = (body) => {
-  const clean = keyOf(body).replace(/[\x00-\x1f\x7f-\x9f]+/gu, ' ').replace(/\s+/gu, ' ').trim()
-  return [...segmenter.segment(clean)].slice(0, 24).map((entry) => entry.segment).join('')
-}
-
 const nextBubbleEntries = (existing, records, cursor, nowMs, poses) => {
   const byHandle = handleMap(poses)
   const entries = [...existing]
@@ -375,7 +370,7 @@ const nextBubbleEntries = (existing, records, cursor, nowMs, poses) => {
     if (id === null || id <= cursor || typeof record.author !== 'string') continue
     const authorPose = byHandle.get(record.author)
     if (!authorPose || roomKey(authorPose.roomId) !== roomKey(record.place_id)) continue
-    const text = sanitizeBubble(record.body)
+    const text = sanitizeBubbleText(record.body)
     if (!text) continue
     const room = roomKey(record.place_id)
     const startMs = Math.max(nowMs, roomEnds.get(room) ?? nowMs)
