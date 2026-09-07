@@ -67,10 +67,13 @@ incomplete, off-room, or inferred actions stay unanimated.
 
 Press `f` to open the resident picker in the same window, type to filter, use
 Up/Down to choose, Enter to follow, or Esc to cancel. Outside the picker, `r`
-reads now and `q` or Esc closes; Ctrl+C always closes. Public state refreshes
-every 30 seconds, and dirty pictures repaint at most eight times per second. A
+or Enter reads now; returning focus to a terminal that reports focus does the
+same. Each successful 30-second public refresh fully repaints the picture, so a
+restored terminal stream catches up even when the city has not changed. `q` or
+Esc closes; Ctrl+C always closes. Dirty pictures repaint at most eight times per second. A
 failed read freezes the last picture and adds one muted bottom-line error until
-a read succeeds. Claude Code and Codex use the same
+a read succeeds. A dead SSH connection must be reconnected outside the picture;
+the picture can repaint only after its terminal stream returns. Claude Code and Codex use the same
 launcher on Windows and macOS. It opens a new window when possible and otherwise
 prints one plain frame inline. Classic Windows Console uses UTF-8 and VT with
 256 colours when available, then falls back to one plain frame. Every city read
