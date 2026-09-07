@@ -6,6 +6,8 @@ import test from 'node:test'
 
 import { createLiveSource } from '../scripts/lib/live-source.mjs'
 
+const fixtureSceneFile = new URL('./fixtures/live-scene.json', import.meta.url)
+
 const drawing = (colour = '#123456') => ({
   type: 'place',
   id: 1,
@@ -136,6 +138,45 @@ const makeFetch = ({ transientResident = false, residents } = {}) => {
         : { ...drawing('#654321'), type: 'thing', id, source: 'thing' })
     }
     throw new Error(`unexpected public read ${path}`)
+  }
+  return { fetchImpl, calls }
+}
+
+const makeNavigationFetch = ({ nested = false } = {}) => {
+  const base = makeFetch()
+  const calls = []
+  const places = [
+    { type: 'place', id: 1, parent_id: 99, name: 'continent', quiet: false },
+    { type: 'place', id: 3, parent_id: 1, name: 'third town', quiet: false },
+    { type: 'place', id: 2, parent_id: 1, name: 'second town', quiet: false },
+    ...(nested ? [{ type: 'place', id: 4, parent_id: 2, name: 'small house', quiet: false }] : []),
+  ]
+  const fetchImpl = async (input, init) => {
+    const url = new URL(String(input))
+    calls.push({ url: url.href, init })
+    const path = `${url.pathname}${url.search}`
+    if (path === '/api/window?view=directory') {
+      return jsonResponse({ view: 'directory', places, residents: [] })
+    }
+    if (path === '/api/window?view=outline') {
+      return jsonResponse({
+        view: 'outline',
+        places: [{ id: 99, parent_id: null, name: 'world', children: [{ id: 1, parent_id: 99, name: 'continent', children: [] }] }],
+        residents: [],
+      })
+    }
+    const mapMatch = path.match(/^\/api\/map\?view=outline&parent_id=(2|3|4)&subplace_limit=200$/u)
+    if (mapMatch) {
+      const id = Number(mapMatch[1])
+      return jsonResponse({ view: 'outline', place: places.find(place => place.id === id), subplaces: [] })
+    }
+    if (path === '/api/place/4?view=outline&subplace_limit=1&thing_limit=5&note_limit=1') {
+      return jsonResponse({ view: 'outline', place: places.find(place => place.id === 4), things: [], notes: [], things_page: { total_items: 0 } })
+    }
+    if (path === '/api/drawing/place/4') return jsonResponse(drawing('#444444'))
+    if (url.pathname === '/api/window' && url.searchParams.get('collection') === 'notes') return jsonResponse({ notes: [] })
+    if (url.pathname === '/api/events') return jsonResponse({ events: [] })
+    return base.fetchImpl(input, init)
   }
   return { fetchImpl, calls }
 }
@@ -357,6 +398,75 @@ test('follow target uses the focused presence response over a stale paged presen
   assert.equal(result.target.id, 2)
   assert.deepEqual(result.rooms.map((room) => room.id), [1, 2])
   assert.equal(result.rooms.find((room) => room.id === 2).residents.some((resident) => resident.handle === 'moss'), true)
+})
+
+test('live navigation ascends nested places, wraps numeric towns, performs no I/O, and keeps drawing cache', async () => {
+  const { fetchImpl, calls } = makeNavigationFetch({ nested: true })
+  const source = await createLiveSource({ placeArg: 'small house', fetchImpl })
+  const house = await source.read(0, { maxRooms: 1 })
+  assert.equal(house.ok, true)
+  assert.equal(house.target.id, 4)
+
+  const callsBeforeNavigate = calls.length
+  assert.deepEqual(source.navigate('right'), { ok: true, changed: true })
+  assert.equal(calls.length, callsBeforeNavigate, 'navigate does not read the city')
+  assert.equal((await source.read(1, { maxRooms: 1 })).target.id, 3, 'nested house ascends to town 2, then moves right')
+
+  assert.deepEqual(source.navigate('right'), { ok: true, changed: true })
+  assert.equal((await source.read(2, { maxRooms: 1 })).target.id, 2, 'right wraps from town 3 to town 2')
+  assert.deepEqual(source.navigate('left'), { ok: true, changed: true })
+  assert.equal((await source.read(3, { maxRooms: 1 })).target.id, 3, 'left wraps from town 2 to town 3')
+  assert.deepEqual(source.navigate('up'), { ok: false, error: 'Direction must be left or right.' })
+
+  for (const { url, init } of calls) {
+    assert.equal(new URL(url).origin, 'https://1f3d9.com')
+    assert.equal(init.method, 'GET')
+    assert.equal(init.headers.authorization, undefined)
+  }
+  const drawingPaths = calls.map(({ url }) => new URL(url).pathname)
+  assert.equal(drawingPaths.filter(path => path === '/api/drawing/place/3').length, 1, 'returning to a town reuses its drawing')
+})
+
+test('follow navigation is a synchronous no-op', async () => {
+  const { fetchImpl, calls } = makeFetch()
+  const source = await createLiveSource({ followHandle: 'moss', fetchImpl })
+  const before = await source.read(0, { maxRooms: 2 })
+  const callsBeforeNavigate = calls.length
+
+  assert.deepEqual(source.navigate('left'), { ok: true, changed: false })
+  assert.equal(calls.length, callsBeforeNavigate)
+  const after = await source.read(1, { maxRooms: 2 })
+  assert.equal(after.target.id, before.target.id)
+})
+
+test('offline scene navigation refuses an unrecorded neighboring town without networking', async () => {
+  let networkCalls = 0
+  const source = await createLiveSource({
+    sceneFile: fixtureSceneFile,
+    placeArg: 'first town',
+    fetchImpl: async () => {
+      networkCalls += 1
+      throw new Error('scene navigation attempted the network')
+    },
+  })
+  assert.equal((await source.read(0, { maxRooms: 3 })).ok, true)
+
+  assert.deepEqual(source.navigate('right'), { ok: false, error: 'This scene does not include that town.' })
+  assert.equal(networkCalls, 0)
+  assert.equal((await source.read(1, { maxRooms: 3 })).target.id, 2)
+})
+
+test('scene failAt covers its selected moment and recovers at the next moment', async () => {
+  const source = await createLiveSource({ sceneFile: fixtureSceneFile, failAt: 30000, fetchImpl: async () => { throw new Error('network') } })
+  assert.equal((await source.read(0, { maxRooms: 3 })).ok, true)
+  assert.equal((await source.read(30000, { maxRooms: 3 })).ok, false)
+  assert.equal((await source.read(30250, { maxRooms: 3 })).ok, false)
+  assert.equal((await source.read(59999, { maxRooms: 3 })).ok, false)
+  assert.equal((await source.read(60000, { maxRooms: 3 })).ok, true)
+
+  await assert.rejects(() => createLiveSource({ sceneFile: fixtureSceneFile, failAt: 30250 }), /exact scene moment/iu)
+  await assert.rejects(() => createLiveSource({ sceneFile: fixtureSceneFile, failAt: -1 }), /finite non-negative/iu)
+  await assert.rejects(() => createLiveSource({ failAt: 0, fetchImpl: async () => {} }), /requires --scene|requires a scene/iu)
 })
 
 test('a zero-room live read returns its title without room or drawing requests', async () => {
