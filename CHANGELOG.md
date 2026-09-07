@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.1 - 2026-09-07
+
+- Rebuild `live` and `follow` as quiet terminal pictures sized to the actual
+  window: the selected place and room names, rounded room boxes, and full 8x4
+  resident portraits or grey stand-ins, with one blank line reserved below.
+- Add deterministic offline scene replay, terminal screen restoration and
+  resize handling, cell-by-cell frame updates, and truecolor, xterm-256, and
+  basic-16 colour output.
+- Remove counts, clocks, event text, legends, handles, footers, and empty-room
+  messages from the picture. `follow` now opens the same picture with the
+  resident's actual room first.
+
 ## 1.6.0 - 2026-09-07
 
 - Bundle a local MCP bridge for Claude Code and Codex that reads the selected

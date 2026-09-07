@@ -8,9 +8,10 @@ const DEFAULT_TIMEOUT_MS = 10_000
  * Every command script must degrade gracefully when the network or the site
  * is unavailable, rather than crash the agent's turn.
  */
-export const fetchJsonSafe = async (url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers } = {}) => {
+export const fetchJsonSafe = async (url, { timeoutMs = DEFAULT_TIMEOUT_MS, headers, fetchImpl = globalThis.fetch } = {}) => {
   try {
-    const response = await fetch(url, {
+    const response = await fetchImpl(url, {
+      method: 'GET',
       redirect: 'manual',
       signal: AbortSignal.timeout(timeoutMs),
       headers: { accept: 'application/json', ...headers },
