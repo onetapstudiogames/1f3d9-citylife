@@ -64,9 +64,18 @@ const basicColor = (hex) => {
 
 /** Decide terminal color depth once at startup. */
 export const chooseColorMode = ({ env = process.env, platform = process.platform, isTTY = process.stdout.isTTY } = {}) => {
-  if (!isTTY || String(env.TERM ?? '').toLowerCase() === 'dumb') return '16'
+  if (!isTTY) return '16'
 
   const colorTerm = String(env.COLORTERM ?? '').toLowerCase()
+
+  // The bootstrap has already proved that this classic Windows console can
+  // process ANSI. Ignore an unrelated inherited TERM=dumb and use its safe
+  // 256-colour default.
+  if (platform === 'win32' && env.ONEF3D9_LEGACY_CONSOLE_MODE === 'ansi') {
+    return colorTerm.includes('truecolor') || colorTerm.includes('24bit') ? 'truecolor' : '256'
+  }
+  if (String(env.TERM ?? '').toLowerCase() === 'dumb') return '16'
+
   const termProgram = String(env.TERM_PROGRAM ?? '').toLowerCase()
   const lcTerminal = String(env.LC_TERMINAL ?? '').toLowerCase()
   if (
