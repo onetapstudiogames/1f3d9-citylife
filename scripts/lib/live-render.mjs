@@ -1,4 +1,6 @@
 import { DARK, Grid } from './grid.mjs'
+import { bubbleTextWidth, sanitizeBubbleText, wrapBubbleText } from './bubble-text.mjs'
+import { paintAnnotations } from './follow-annotations.mjs'
 import {
   blendHex,
   cellPixels,
@@ -12,6 +14,8 @@ import {
 } from './live-drawing.mjs'
 import {
   layoutRooms,
+  followActivityRows,
+  followRoomSize,
   planRoomPlacements,
   residentDrawingLimit,
   visibleRoomLimit,
@@ -25,8 +29,6 @@ const THING_STANDIN_PIXELS = [
   [DARK.muted, DARK.muted, DARK.muted, DARK.muted],
   [DARK.muted, null, null, DARK.muted],
 ]
-
-const bubbleSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' })
 
 const intersects = (left, right) => !(
   left.x + left.width <= right.x ||
@@ -184,28 +186,12 @@ const openDoor = (grid, door) => {
   }
 }
 
-const safeBubbleText = (value) => {
-  const safe = String(value ?? '').normalize('NFC').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
-  return Array.from(bubbleSegmenter.segment(safe), ({ segment }) => segment).slice(0, 24).join('')
-}
-
-const textCellWidth = (value) => {
-  const measure = new Grid(64, 1, DARK.bg)
-  measure.put(0, 0, value, DARK.ink)
-  let width = 0
-  measure.cells[0].forEach(([, foreground], index) => {
-    if (foreground === DARK.ink) width = index + 1
-  })
-  return width
-}
-
 const nearbyValues = (start, end, preferred) => Array.from(
   { length: Math.max(0, end - start + 1) },
   (_, index) => start + index,
 ).sort((left, right) => Math.abs(left - preferred) - Math.abs(right - preferred) || left - right)
 
-const bubbleCandidates = (box, author, width) => {
-  const height = 3
+const bubbleCandidates = (box, author, width, height) => {
   const left = box.x + 1
   const right = box.x + box.width - width - 1
   const top = box.y + 1
@@ -230,12 +216,20 @@ const bubbleCandidates = (box, author, width) => {
 }
 
 const drawBubble = (grid, bubble, author, box, occupied) => {
-  const text = safeBubbleText(bubble.text)
-  const width = Math.min(Math.max(6, textCellWidth(text) + 4), Math.max(0, box.width - 2))
-  const candidate = bubbleCandidates(box, author, width).find((rectangle) =>
-    occupied.every((blocker) => !intersects(rectangle, blocker)),
-  )
+  const text = sanitizeBubbleText(bubble.text)
+  const width = Math.min(Math.max(6, bubbleTextWidth(text) + 4), 52, Math.max(0, box.width - 2))
+  if (width < 6) return null
+  const lines = wrapBubbleText(text, width - 4)
+  let candidate
+  for (let rows = Math.min(3, lines.length); rows >= 1 && !candidate; rows--) {
+    candidate = bubbleCandidates(box, author, width, rows + 2).find(rectangle =>
+      occupied.every(blocker => !intersects(rectangle, blocker)))
+  }
   if (!candidate) return null
+  const shownLines = lines.slice(0, candidate.height - 2)
+  if (shownLines.length < lines.length) {
+    shownLines[shownLines.length - 1] = `${wrapBubbleText(shownLines.at(-1), width - 5)[0]}…`
+  }
 
   const top = ['╭', ...Array(candidate.width - 2).fill('─'), '╮']
   const bottom = ['╰', ...Array(candidate.width - 2).fill('─'), '╯']
@@ -245,11 +239,13 @@ const drawBubble = (grid, bubble, author, box, occupied) => {
   if (candidate.tail === 'up') top[tailColumn] = '┴'
 
   grid.put(candidate.x, candidate.y, top.join(''), DARK.ink, DARK.bubble, candidate.width)
-  grid.put(candidate.x, candidate.y + 1, `│${' '.repeat(candidate.width - 2)}│`, DARK.ink, DARK.bubble, candidate.width)
-  grid.put(candidate.x + 2, candidate.y + 1, text, DARK.ink, DARK.bubble, candidate.width - 4)
+  shownLines.forEach((line, index) => {
+    grid.put(candidate.x, candidate.y + index + 1, `│${' '.repeat(candidate.width - 2)}│`, DARK.ink, DARK.bubble, candidate.width)
+    grid.put(candidate.x + 2, candidate.y + index + 1, line, DARK.ink, DARK.bubble, candidate.width - 4)
+  })
   if (candidate.tail === 'right') grid.put(candidate.x + candidate.width - 1, candidate.y + 1, '├', DARK.ink, DARK.bubble)
   if (candidate.tail === 'left') grid.put(candidate.x, candidate.y + 1, '┤', DARK.ink, DARK.bubble)
-  grid.put(candidate.x, candidate.y + 2, bottom.join(''), DARK.ink, DARK.bubble, candidate.width)
+  grid.put(candidate.x, candidate.y + candidate.height - 1, bottom.join(''), DARK.ink, DARK.bubble, candidate.width)
   return candidate
 }
 
@@ -260,7 +256,8 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
 
   grid.put(1, 0, observation?.target?.name ?? '', DARK.ink, DARK.bg, Math.max(0, grid.width - 2))
   const rooms = Array.isArray(observation?.rooms) ? observation.rooms : []
-  const boxes = layoutRooms(rooms.length, { columns: grid.width, rows: grid.height })
+  const viewSize = { columns: grid.width, rows: grid.height }
+  const boxes = layoutRooms(rooms.length, observation?.focus ? followRoomSize(viewSize) : viewSize)
   const framed = motionFrame !== undefined && motionFrame !== null
   const framePlans = new Map((motionFrame?.plans ?? []).map((plan) => [String(plan.roomId), plan]))
   const roomStates = boxes.map((fallbackBox, index) => {
@@ -309,7 +306,7 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
   paintEffects(grid, motionFrame?.effects, roomStates, visiblePoses)
   paintFocus(grid, observation?.focus, visiblePoses, roomStates)
 
-  const bubbleRects = []
+  const bubbleRects = paintAnnotations(grid, observation, roomStates, visiblePoses, motionFrame ?? {})
   for (const bubble of motionFrame?.bubbles ?? []) {
     const author = visiblePoses.find((pose) => sameId(pose.roomId, bubble.roomId) && sameId(pose.resident?.id, bubble.residentId))
     const state = roomStates.find(({ room }) => sameId(room.id, bubble.roomId))
@@ -317,6 +314,24 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
     const portraitRects = visiblePoses.filter((pose) => sameId(pose.roomId, bubble.roomId))
     const rectangle = drawBubble(grid, bubble, author, state.box, [...portraitRects, ...state.plan.things, ...bubbleRects])
     if (rectangle) bubbleRects.push(rectangle)
+  }
+  if (observation?.focus && rooms[0]?.quiet !== true) {
+    const count = followActivityRows(viewSize)
+    const lines = (motionFrame?.activity ?? []).slice(-count)
+    if (count) {
+      lines.forEach((line, index) => grid.put(2, grid.height - 1 - lines.length + index, line, DARK.muted, DARK.bg, Math.max(0, grid.width - 4)))
+      const { offset = 0, maximum = 0 } = motionFrame?.activityScroll ?? {}
+      if (maximum > 0) {
+        const x = grid.width - 2
+        const top = grid.height - 1 - count
+        if (count === 1) grid.put(x, top, offset === 0 ? '↑' : offset >= maximum ? '↓' : '↕', DARK.muted, DARK.bg, 1)
+        else {
+          for (let row = 0; row < count; row++) grid.put(x, top + row, '│', DARK.muted, DARK.bg, 1)
+          const thumb = Math.round((1 - Math.min(1, offset / maximum)) * (count - 1))
+          grid.put(x, top + thumb, '▪', DARK.ink, DARK.bg, 1)
+        }
+      }
+    }
   }
   return grid
 }

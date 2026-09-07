@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import { createLiveSource } from '../scripts/lib/live-source.mjs'
 import { createReplay, dumpReplay } from '../scripts/lib/live-view.mjs'
 import { toPlainText } from '../scripts/lib/grid.mjs'
+import { stepFollowMotion } from '../scripts/lib/follow-motion.mjs'
 
 const sceneFile = new URL('./fixtures/live-scene.json', import.meta.url)
 const size = { columns: 80, rows: 24 }
@@ -90,5 +91,40 @@ test('labelled action extensions replay create, use, gift, removal, and both exa
   } finally {
     source?.close()
     await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('the witnessed chat scene has identical paced and direct pictures and readable scrollback', async () => {
+  for (const bounds of [{ columns: 38, rows: 18 }, size]) {
+    const options = {
+      mode: 'follow-room', followHandle: 'thog', fetchImpl: offline,
+      sceneFile: new URL('../docs/evidence/follow-polish/follow-polish-scene.json', import.meta.url),
+    }
+    const sources = [await createLiveSource(options), await createLiveSource(options)]
+    try {
+      const paced = createReplay(sources[0], bounds)
+      const direct = createReplay(sources[1], bounds)
+      const rendered = []
+      for (const time of sources[0].frameTimes) {
+        const result = await paced.at(time)
+        rendered.push(toPlainText(result.frame))
+        if ([62000, 79000, 84000, 92000, 150000].includes(time)) {
+          assert.equal(toPlainText(result.frame), toPlainText((await direct.at(time)).frame), `${bounds.columns} columns at ${time}`)
+        }
+      }
+      let shown = (await paced.at(150000)).motion
+      const history = []
+      shown = stepFollowMotion(shown.state, { nowMs: 150000, size: bounds, scroll: 'home' })
+      for (let index = 0; index < 200; index++) {
+        history.push(shown.frame.activity.join(' '))
+        if (shown.frame.activityScroll.offset === 0) break
+        shown = stepFollowMotion(shown.state, { nowMs: 150000, size: bounds, scroll: 'down' })
+      }
+      assert.match(history.join(' '), /THE LANTERN IS(?: thog:)? HOME/)
+      assert.match(history.join(' '), /first town fair/, 'witnessed prior-room activity remains in scrollback')
+      assert.match(history.join(' '), /created|used|carried/)
+    } finally {
+      sources.forEach(source => source.close())
+    }
   }
 })

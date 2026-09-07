@@ -208,7 +208,7 @@ test('replay reads source moments only and expires a note bubble after six secon
     assert.doesNotMatch(toPlainText(at0.frame), /The fair grass remembers/u)
     assert.doesNotMatch(toPlainText(at30000.frame), /The fair grass remembers/u)
     assert.match(toPlainText(at60000.frame), /The fair grass remembers/u)
-    assert.doesNotMatch(toPlainText(at60000.frame), /every small arrival/u)
+    assert.match(toPlainText(at60000.frame), /small arrival/u)
     assert.match(toPlainText(at65999.frame), /The fair grass remembers/u)
     assert.doesNotMatch(toPlainText(at66000.frame), /The fair grass remembers/u)
     await assert.rejects(() => replay.at(source.durationMs + 1), /duration|scene time/iu)

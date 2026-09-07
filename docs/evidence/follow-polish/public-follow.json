@@ -1,0 +1,11 @@
+{
+  "date": "2026-09-07",
+  "command": "node scripts/follow-feed.mjs thog --once",
+  "exitCode": 0,
+  "observedRoom": "the waystation",
+  "visibleDetails": ["resident names", "thing names", "public asleep marks"],
+  "openingLogWasBlank": true,
+  "credentialAccess": false,
+  "cityWrite": false,
+  "note": "This public read proves contact with the live city. The hand-authored replay proves new-note scrolling without making a city write."
+}

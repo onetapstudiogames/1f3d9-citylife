@@ -32,7 +32,7 @@ const safeText = (value) => String(value ?? '')
   .normalize('NFC')
   .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, ' ')
 
-const textCells = (value) => {
+export const textCells = (value) => {
   const cells = []
   for (const { segment } of segmenter.segment(safeText(value))) {
     const first = segment.codePointAt(0)

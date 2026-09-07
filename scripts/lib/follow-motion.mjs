@@ -1,5 +1,7 @@
 import { stepMotion } from './live-motion.mjs'
 import { stepRoomEffects } from './follow-effects.mjs'
+import { followActivityRows, followRoomSize } from './live-layout.mjs'
+import { stepActivity } from './follow-activity.mjs'
 
 const LEG_MS = 1000
 const FRAME_MS = 125
@@ -28,7 +30,7 @@ const moveChain = (state, observation) => {
 }
 
 const initial = (observation, size, nowMs) => {
-  const motion = stepMotion(null, { observation, size, nowMs })
+  const motion = stepMotion(null, { observation, size: followRoomSize(size), nowMs })
   const effects = stepRoomEffects(null, { nowMs, observation, motionFrame: motion.frame })
   return {
     nowMs, size, observation, eventCursor: maxEvent(observation), motion, effects: effects.state,
@@ -45,18 +47,18 @@ const startTransition = (state, destination, chain, nowMs) => {
     })),
   }
   const departure = stepMotion({ ...state.motion.state, walks: [], bubbles: [] }, {
-    nowMs, size: state.size, observation: source,
+    nowMs, size: followRoomSize(state.size), observation: source,
   })
   const newNotes = new Set(destination.events.filter(event => Number(event.id) > state.eventCursor
     && event.kind === 'note' && key(event.detail?.place_id) === key(destination.focus.placeId))
     .map(event => key(event.detail.note_id)))
   const entrySeed = stepMotion(null, {
-    nowMs, size: state.size, observation: {
+    nowMs, size: followRoomSize(state.size), observation: {
       ...destination, events: [], notes: (destination.notes ?? []).filter(note => !newNotes.has(key(note.id))),
     },
   })
   const arrival = stepMotion(entrySeed.state, {
-    nowMs, size: state.size, observation: { ...destination, events: [chain.at(-1)] },
+    nowMs, size: followRoomSize(state.size), observation: { ...destination, events: [chain.at(-1)] },
   })
   return {
     ...state,
@@ -69,7 +71,7 @@ const ingest = (state, observation, nowMs) => {
   if (key(state.observation.focus.placeId) === key(observation.focus.placeId)) {
     return {
       ...state, observation, eventCursor: Math.max(state.eventCursor, maxEvent(observation)),
-      motion: stepMotion(state.motion.state, { nowMs, observation, size: state.size }),
+      motion: stepMotion(state.motion.state, { nowMs, observation, size: followRoomSize(state.size) }),
     }
   }
   const chain = moveChain(state, observation)
@@ -87,7 +89,7 @@ const finishTransition = (state, nowMs) => {
   }))
   next = { ...next, motion: { ...next.motion, state: { ...next.motion.state, bubbles } } }
   if (state.pending) next = ingest(next, state.pending.observation, Math.max(transition.endMs, state.pending.atMs))
-  if (!next.transition) next = { ...next, motion: stepMotion(next.motion.state, { nowMs, size: state.size }) }
+  if (!next.transition) next = { ...next, motion: stepMotion(next.motion.state, { nowMs, size: followRoomSize(state.size) }) }
   return next
 }
 
@@ -129,7 +131,7 @@ const phaseFrame = (state, nowMs) => {
   // Each existing two-second door leg is sampled at twice its speed. The two
   // single-room legs together last two seconds; no intermediate room is invented.
   const seed = departing ? transition.departure : transition.arrival
-  const motion = stepMotion(seed.state, { nowMs: transition.startMs + elapsed * 2, size: state.size })
+  const motion = stepMotion(seed.state, { nowMs: transition.startMs + elapsed * 2, size: followRoomSize(state.size) })
   return {
     observation: departing ? transition.source : transition.destination,
     motion,
@@ -138,12 +140,22 @@ const phaseFrame = (state, nowMs) => {
 }
 
 /** A single-room camera that follows recorded resident moves, never snapshots. */
-export const stepFollowMotion = (previous, { nowMs, observation, size, reset = false } = {}) => {
+export const stepFollowMotion = (previous, { nowMs, observation, size, scroll, reset = false } = {}) => {
   if (!Number.isFinite(nowMs) || nowMs < 0) throw new TypeError('follow time must be finite and non-negative')
   if (previous && nowMs < previous.nowMs) throw new RangeError('follow time must move forward')
   const nextSize = size ?? previous?.size
   const incoming = observation ? singleRoom(observation) : null
   const switched = incoming && key(incoming.focus.id) !== key(previous?.observation.focus.id)
+  let activityState = previous?.activity ?? null
+  const activityOptions = { columns: Math.max(2, nextSize.columns - 4), rows: followActivityRows(nextSize) }
+  const observeArrival = transition => {
+    if (!transition) return
+    const atMs = transition.startMs + LEG_MS
+    if (nowMs < atMs || (activityState && activityState.nowMs >= atMs)) return
+    activityState = stepActivity(activityState, {
+      ...activityOptions, nowMs: atMs, observation: transition.destination,
+    }).state
+  }
   let state
   if (!previous || reset || switched || !sameSize(nextSize, previous.size)) {
     const latest = incoming ?? previous?.pending?.observation ?? previous?.transition?.destination ?? previous?.observation
@@ -153,11 +165,15 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, reset = f
     state = { ...previous, nowMs }
     if (state.transition && incoming) state = { ...state, pending: queueObservation(state.pending, incoming, nowMs) }
     if (state.transition && nowMs >= state.transition.endMs) {
-      while (state.transition && nowMs >= state.transition.endMs) state = finishTransition(state, nowMs)
+      while (state.transition && nowMs >= state.transition.endMs) {
+        observeArrival(state.transition)
+        state = finishTransition(state, nowMs)
+      }
     }
     else if (!state.transition && incoming) state = ingest(state, incoming, nowMs)
-    else if (!state.transition) state = { ...state, motion: stepMotion(state.motion.state, { nowMs, size: nextSize }) }
+    else if (!state.transition) state = { ...state, motion: stepMotion(state.motion.state, { nowMs, size: followRoomSize(nextSize) }) }
   }
+  observeArrival(state.transition)
   const shown = phaseFrame(state, nowMs)
   const effects = stepRoomEffects(state.effects, {
     nowMs,
@@ -167,11 +183,23 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, reset = f
     deferUntil: state.transition && shown.observation === state.transition.source
       ? { roomId: state.transition.destination.focus.placeId, atMs: state.transition.startMs + LEG_MS } : undefined,
   })
-  const frame = { ...shown.motion.frame, effects: effects.effects }
+  const activity = stepActivity(activityState, {
+    nowMs, scroll,
+    // The departure picture borrows a future move to draw its door leg. Only
+    // ingest that record when the camera reaches its real destination.
+    observation: state.transition && shown.observation === state.transition.source ? undefined : shown.observation,
+    ...activityOptions,
+  })
+  const sleeping = shown.motion.frame.residents.some(pose => pose.resident?.asleep === true)
+  const frame = {
+    ...shown.motion.frame, effects: effects.effects, activity: activity.lines,
+    activityScroll: { offset: activity.scrollOffset, maximum: activity.maxScroll },
+    sleepPhase: sleeping ? Math.floor(nowMs / 1500) % 3 : 0,
+  }
   const signature = JSON.stringify([shown.observation.target.id, frame])
-  const wakes = [shown.nextAtMs, effects.nextAtMs].filter(Number.isFinite)
+  const wakes = [shown.nextAtMs, effects.nextAtMs, activity.nextAtMs, sleeping ? (Math.floor(nowMs / 1500) + 1) * 1500 : null].filter(Number.isFinite)
   return {
-    state: { ...state, nowMs, signature, effects: effects.state }, observation: shown.observation, frame,
+    state: { ...state, nowMs, signature, effects: effects.state, activity: activity.state }, observation: shown.observation, frame,
     changed: signature !== previous?.signature, nextAtMs: wakes.length ? Math.min(...wakes) : null,
   }
 }

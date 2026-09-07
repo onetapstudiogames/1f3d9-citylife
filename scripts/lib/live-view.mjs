@@ -162,6 +162,7 @@ export const runViewSession = (source, options, {
   let generation = 0
   let resetMotion = false
   let picker = null
+  let pickerResidents = []
   const startedAt = clock.now()
   const now = () => options.at ?? Math.min(clock.now() - startedAt, source.durationMs ?? Infinity)
   const oldRaw = Boolean(input.isRaw)
@@ -206,7 +207,7 @@ export const runViewSession = (source, options, {
     if (key.ctrl && key.name === 'c') { finish(); return }
     if (key.sequence === '\x1b[I') { resync(); return }
     if (picker) {
-      const selected = updatePicker(picker, text, key, observation?.residents ?? [])
+      const selected = updatePicker(picker, text, key, pickerResidents)
       picker = selected.cancelled ? null : selected.picker
       if (selected.handle) {
         const result = source.selectResident?.(selected.handle)
@@ -215,6 +216,12 @@ export const runViewSession = (source, options, {
           if (result.changed) {
             generation += 1
             resetMotion = true
+            observation = null
+            motion = null
+            lastPicture = null
+            frozenPicture = null
+            quietError = null
+            clock.clearTimeout(motionTimer)
             void refresh()
           }
         } else showError(options.sceneFile ? 'That resident is not in this recording.' : READ_ERROR)
@@ -225,6 +232,14 @@ export const runViewSession = (source, options, {
     if (key.name === 'q' || key.name === 'escape') finish()
     else if (key.name === 'r' || key.name === 'return') resync()
     else if (key.name === 'f') { picker = { query: '', index: 0 }; present() }
+    else if (['up', 'down', 'pageup', 'pagedown', 'home', 'end'].includes(key.name) && motion?.state?.activity) {
+      motion = stepViewMotion(motion.state, {
+        nowMs: quietError ? motion.state.nowMs : now(), size: sizeOf(options, output), scroll: key.name,
+      })
+      if (quietError) frozenPicture = paintMotion(observation, sizeOf(options, output), motion)
+      present()
+      scheduleMotion()
+    }
   }
   const onResize = () => {
     if (stopped) return
@@ -240,7 +255,7 @@ export const runViewSession = (source, options, {
     pollTimer = clock.setTimeout(() => { void refresh() }, nextRead - now())
   }
   const present = () => {
-    if (stopped || (!observation && !quietError)) return
+    if (stopped || (!observation && !quietError && !resetMotion)) return
     clock.clearTimeout(paintTimer)
     paintTimer = null
     const delay = lastPaintMs + FRAME_MS - clock.now()
@@ -249,8 +264,10 @@ export const runViewSession = (source, options, {
       return
     }
     const size = sizeOf(options, output)
-    const picture = quietError ? quietFrame(frozenPicture, size, quietError) : paintMotion(observation, size, motion)
-    const frame = picker ? paintPicker(picture, picker, observation?.residents ?? [], observation?.focus?.handle) : picture
+    const picture = quietError || (resetMotion && !observation)
+      ? quietFrame(frozenPicture, size, quietError ?? '')
+      : paintMotion(observation, size, motion)
+    const frame = picker ? paintPicker(picture, picker, pickerResidents, observation?.focus?.handle) : picture
     if (screen.present(frame)) {
       lastPaintMs = clock.now()
       lastPicture = picture
@@ -295,6 +312,7 @@ export const runViewSession = (source, options, {
         return
       }
       observation = result.observation
+      pickerResidents = observation.residents ?? []
       quietError = null
       frozenPicture = null
       motion = result.motion ?? stepViewMotion(resetMotion ? null : motion?.state ?? null, {

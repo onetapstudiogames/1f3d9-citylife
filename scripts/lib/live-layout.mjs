@@ -8,6 +8,11 @@ const THING_HEIGHT = 2
 const RESIDENT_WIDTH = 8
 const RESIDENT_HEIGHT = 4
 
+export const followActivityRows = ({ rows }) => rows >= 24 ? 3 : rows >= 20 ? 2 : rows >= 14 ? 1 : 0
+export const followRoomSize = (size) => ({
+  ...size, rows: Math.max(0, size.rows - followActivityRows(size) - (followActivityRows(size) ? 1 : 0)),
+})
+
 const stableKey = (value) => String(value ?? '')
 const positiveInteger = (value) => {
   if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? value : null
@@ -81,14 +86,19 @@ export const layoutRooms = (roomCount, { columns, rows }) => {
   })
 }
 
-const aisleFor = (box) => ({
-  x: box.x + 1,
-  y: box.y + Math.floor((box.height - AISLE_HEIGHT) / 2),
-  width: Math.max(0, box.width - 2),
-  height: AISLE_HEIGHT,
-})
+const aisleFor = (box, focused = false) => {
+  const centeredY = box.y + Math.floor((box.height - AISLE_HEIGHT) / 2)
+  const interiorBottom = box.y + box.height - 1
+  const rowsBelow = interiorBottom - (centeredY + AISLE_HEIGHT)
+  return {
+    x: box.x + 1,
+    y: focused && rowsBelow === RESIDENT_HEIGHT ? centeredY - 1 : centeredY,
+    width: Math.max(0, box.width - 2),
+    height: AISLE_HEIGHT,
+  }
+}
 
-const candidateOrigins = (box, width, height, aisle, nearestAisleFirst) => {
+const candidateOrigins = (box, width, height, aisle, nearestAisleFirst, tightUpper = false) => {
   const inner = {
     x: box.x + 1,
     y: box.y + 1,
@@ -101,6 +111,13 @@ const candidateOrigins = (box, width, height, aisle, nearestAisleFirst) => {
   for (let y = inner.y + 1; y + height <= inner.y + inner.height - 1; y += height + 1) {
     const rectangle = { x: aisle.x, y, width, height }
     if (!intersects(rectangle, aisle)) rows.push(y)
+  }
+  if (tightUpper && inner.y + height <= aisle.y && !rows.includes(inner.y)) rows.push(inner.y)
+  // A short phone terminal can fit a mark even when the usual spaced rows cannot.
+  if (!rows.length) {
+    for (let y = inner.y; y + height <= inner.y + inner.height; y++) {
+      if (!intersects({ x: aisle.x, y, width, height }, aisle)) rows.push(y)
+    }
   }
   if (nearestAisleFirst) rows.sort((left, right) => {
     const distance = (y) => y < aisle.y ? aisle.y - (y + height) : y - (aisle.y + aisle.height)
@@ -151,7 +168,10 @@ const overflowDotsFor = (room, box) => {
 
 /** Stable thing/resident homes with shared occupancy and a clear future walk feeder. */
 export const planRoomPlacements = (room, box, { preferredResidents = [], reservedResidents = [] } = {}) => {
-  const aisle = aisleFor(box)
+  const focused = room.focusResidentId !== undefined && room.focusResidentId !== null
+  const centeredAisle = aisleFor(box)
+  const aisle = aisleFor(box, focused)
+  const tightUpper = aisle.y < centeredAisle.y
   const doors = {
     left: { x: box.x, y: aisle.y, width: 1, height: AISLE_HEIGHT },
     right: { x: box.x + box.width - 1, y: aisle.y, width: 1, height: AISLE_HEIGHT },
@@ -161,9 +181,15 @@ export const planRoomPlacements = (room, box, { preferredResidents = [], reserve
   const actualBlockers = [...overflowDots]
 
   const things = []
-  const thingCandidates = candidateOrigins(box, THING_WIDTH, THING_HEIGHT, aisle, false)
+  const thingCandidates = candidateOrigins(box, THING_WIDTH, THING_HEIGHT, aisle, false, tightUpper)
   for (const item of [...(room.things ?? [])].sort(compareIds).slice(0, 5)) {
-    const rectangle = rotate(thingCandidates, item.id).find((candidate) => canClaim(candidate, claims))
+    const orderedCandidates = tightUpper
+      ? [
+          ...rotate(thingCandidates.filter(({ y }) => y + THING_HEIGHT <= aisle.y), item.id),
+          ...rotate(thingCandidates.filter(({ y }) => y + THING_HEIGHT > aisle.y), item.id),
+        ]
+      : rotate(thingCandidates, item.id)
+    const rectangle = orderedCandidates.find((candidate) => canClaim(candidate, claims))
     if (!rectangle) continue
     const placement = { item, ...rectangle }
     things.push(placement)
@@ -201,12 +227,12 @@ export const planRoomPlacements = (room, box, { preferredResidents = [], reserve
   const residentById = new Map(orderedResidents.map((item) => [stableKey(item.id), item]))
   const retained = new Set()
   const preferredHomes = Array.isArray(preferredResidents) ? preferredResidents : []
-  const focused = orderedResidents.find(item => stableKey(item.id) === stableKey(room.focusResidentId))
-  if (focused && !preferredHomes.some(home => stableKey(home.item?.id) === stableKey(focused.id))) {
-    const rectangle = residentCandidatesFor(box, aisle, focused.id).find(candidate => residentFits(candidate, box, aisle)
+  const focusedResident = orderedResidents.find(item => stableKey(item.id) === stableKey(room.focusResidentId))
+  if (focusedResident && !preferredHomes.some(home => stableKey(home.item?.id) === stableKey(focusedResident.id))) {
+    const rectangle = residentCandidatesFor(box, aisle, focusedResident.id).find(candidate => residentFits(candidate, box, aisle)
       && canClaim(candidate, claims) && !reservedFeeders.some(feeder => intersects(candidate, feeder))
       && actualBlockers.every(blocker => !intersects(feederFor(candidate, aisle), blocker)))
-    if (rectangle && claimResident(focused, rectangle, true)) retained.add(stableKey(focused.id))
+    if (rectangle && claimResident(focusedResident, rectangle, true)) retained.add(stableKey(focusedResident.id))
   }
   for (const preferred of [...preferredHomes].sort((a, b) => focusFirst(a.item ?? {}, b.item ?? {}))) {
     const item = residentById.get(stableKey(preferred.item?.id))

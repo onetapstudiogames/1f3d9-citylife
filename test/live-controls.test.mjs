@@ -356,3 +356,118 @@ test('q, Escape, and Ctrl+C each restore input, screen, listeners, and timers', 
     })
   }
 })
+
+test('chat keys browse only witnessed activity, hold older lines on refresh, and End returns to newest', async () => {
+  const harness = makeHarness()
+  const fake = makeClock()
+  const observed = notes => ({
+    ok: true, target: { id: 1, name: 'chat room' }, focus: { id: 7, handle: 'walker', placeId: 1 },
+    residents: [resident(1)], rooms: [{ id: 1, name: 'chat room', residents: [resident(1)], things: [] }],
+    notes, events: notes.map(note => ({ id: note.id, actor: 'walker', kind: 'note', detail: { note_id: note.id, place_id: 1 } })),
+  })
+  let notes = [{ id: 1, place_id: 1, author: 'walker', body: 'old opening history' }]
+  let failed = false
+  let reads = 0
+  const source = { read: async () => { reads++; return failed ? { ok: false } : observed(notes) }, close: () => {} }
+  const closed = runViewSession(source, { color: '16' }, { ...harness, env: {}, platform: 'win32', clock: fake.clock })
+  const log = () => visibleRows(harness.writes).slice(-4, -1).join('\n')
+  const key = async name => {
+    harness.input.emit('keypress', undefined, { name })
+    await fake.advance(125)
+  }
+  try {
+    await waitFor(() => reads === 1 && harness.writes.join('').includes('chat room'))
+    notes = [...notes, ...Array.from({ length: 8 }, (_, i) => ({ id: i + 2, place_id: 1, author: 'walker', body: `message ${i + 1}` }))]
+    await key('r')
+    assert.match(log(), /message 8/)
+    assert.doesNotMatch(log(), /old opening history/)
+    const lastRead = reads
+    await key('home')
+    assert.match(log(), /message 1/)
+    await key('down')
+    assert.doesNotMatch(log(), /message 1\b/)
+    await key('pageup')
+    assert.match(log(), /message 1/)
+    const oldLines = log()
+    notes = [...notes, { id: 10, place_id: 1, author: 'walker', body: 'latest arrival' }]
+    await key('r')
+    assert.equal(log(), oldLines, 'a new observation does not pull the reader away')
+    await key('pagedown')
+    assert.notEqual(log(), oldLines)
+    await key('up')
+    await key('end')
+    assert.match(log(), /latest arrival/)
+    assert.equal(reads, lastRead + 1, 'scroll keys do not call the city')
+    failed = true
+    await key('r')
+    const frozenRoom = visibleRows(harness.writes).slice(0, -4)
+    await key('home')
+    assert.match(log(), /message 1/)
+    assert.deepEqual(visibleRows(harness.writes).slice(0, -4), frozenRoom, 'offline scrolling leaves the room frozen')
+    assert.equal(visibleRows(harness.writes).at(-1).trim(), 'Could not read the city.')
+    await key('end')
+    await key('f')
+    await key('up')
+    assert.match(visibleRows(harness.writes).join('\n'), /Follow a resident/)
+    await key('escape')
+    assert.match(log(), /latest arrival/, 'picker arrows leave chat position alone')
+  } finally {
+    await closeSession(harness.input, closed)
+  }
+})
+
+test('selecting another resident clears witnessed history even if the new read fails', async () => {
+  const harness = makeHarness()
+  const fake = makeClock()
+  const pending = deferred()
+  let reads = 0
+  let selected = 'walker'
+  const observed = notes => ({
+    ok: true, target: { id: 1, name: 'former room' }, focus: { id: 7, handle: 'walker', placeId: 1 },
+    residents: [{ id: 7, handle: 'walker' }, { id: 8, handle: 'moss' }],
+    rooms: [{ id: 1, name: 'former room', residents: [resident(1)], things: [] }],
+    notes, events: notes.map(note => ({ id: note.id, actor: 'walker', kind: 'note', detail: { note_id: note.id, place_id: 1 } })),
+  })
+  const source = {
+    read: async () => {
+      reads++
+      if (selected === 'moss') return pending.promise
+      return observed(reads === 1 ? [] : [{ id: 1, place_id: 1, author: 'walker', body: 'witnessed before switching' }])
+    },
+    selectResident: handle => { selected = handle; return { ok: true, changed: true } },
+    close: () => {},
+  }
+  const closed = runViewSession(source, { color: '16' }, { ...harness, env: {}, platform: 'win32', clock: fake.clock })
+  try {
+    await waitFor(() => reads === 1 && harness.writes.join('').includes('former room'))
+    harness.input.emit('keypress', undefined, { name: 'r' })
+    await fake.advance(125)
+    assert.match(visibleRows(harness.writes).join('\n'), /witnessed before switching/)
+    harness.input.emit('keypress', 'f', { name: 'f' })
+    harness.input.emit('keypress', 'm', { name: 'm' })
+    harness.input.emit('keypress', '\r', { name: 'return' })
+    await fake.advance(125)
+    assert.equal(reads, 3)
+    assert.doesNotMatch(visibleRows(harness.writes).join('\n'), /witnessed before switching|former room/)
+    pending.resolve({ ok: false })
+    await fake.advance(125)
+    assert.equal(visibleRows(harness.writes).at(-1).trim(), 'Could not read the city.')
+    assert.doesNotMatch(visibleRows(harness.writes).join('\n'), /witnessed before switching|former room/)
+    harness.input.emit('keypress', undefined, { name: 'home' })
+    await fake.advance(125)
+    assert.doesNotMatch(visibleRows(harness.writes).join('\n'), /witnessed before switching/)
+    harness.input.emit('keypress', 'f', { name: 'f' })
+    await fake.advance(125)
+    assert.match(visibleRows(harness.writes).join('\n'), /walker/)
+    assert.match(visibleRows(harness.writes).join('\n'), /moss/)
+    harness.input.emit('keypress', 'w', { name: 'w' })
+    harness.input.emit('keypress', '\r', { name: 'return' })
+    await fake.advance(250)
+    assert.equal(selected, 'walker')
+    assert.equal(reads, 4)
+    assert.match(visibleRows(harness.writes).join('\n'), /former room/)
+    assert.doesNotMatch(visibleRows(harness.writes).join('\n'), /witnessed before switching/)
+  } finally {
+    await closeSession(harness.input, closed)
+  }
+})

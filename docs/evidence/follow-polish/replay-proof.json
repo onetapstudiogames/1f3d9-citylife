@@ -1,0 +1,81 @@
+{
+  "scene": "docs/evidence/follow-polish/follow-polish-scene.json",
+  "runs": [
+    {
+      "command": "node scripts/follow-feed.mjs thog --scene docs/evidence/follow-polish/follow-polish-scene.json --size 80x24 --color truecolor --dump docs/evidence/follow-polish/frames-80x24.txt",
+      "frames": 56,
+      "byteIdentical": true,
+      "files": [
+        {
+          "path": "docs/evidence/follow-polish/frames-80x24.txt",
+          "bytes": 168806,
+          "firstSha256": "115ee7ad22c1f2b6b7c550cf771d7508a839c4501286388af1aa6afb1603d176",
+          "secondSha256": "115ee7ad22c1f2b6b7c550cf771d7508a839c4501286388af1aa6afb1603d176"
+        },
+        {
+          "path": "docs/evidence/follow-polish/frames-80x24.txt.ansi",
+          "bytes": 3888736,
+          "firstSha256": "1f1f014636e1800a09a20c620059f9a83ce0faffb81e9004af0993b153b307ea",
+          "secondSha256": "1f1f014636e1800a09a20c620059f9a83ce0faffb81e9004af0993b153b307ea"
+        }
+      ]
+    },
+    {
+      "command": "node docs/evidence/follow-polish/replay-chat.mjs 80x24 truecolor docs/evidence/follow-polish/frames-chat-80x24.txt",
+      "frames": 11,
+      "byteIdentical": true,
+      "files": [
+        {
+          "path": "docs/evidence/follow-polish/frames-chat-80x24.txt",
+          "bytes": 37785,
+          "firstSha256": "5425baf57bcaeae51a25fbbc2dd17ea558affd3f24094710b1161fcf3749c857",
+          "secondSha256": "5425baf57bcaeae51a25fbbc2dd17ea558affd3f24094710b1161fcf3749c857"
+        },
+        {
+          "path": "docs/evidence/follow-polish/frames-chat-80x24.txt.ansi",
+          "bytes": 760265,
+          "firstSha256": "bcc6fa41a8db286a410ecadd5c83be8b116f88135c4251d71d391c517b928a6a",
+          "secondSha256": "bcc6fa41a8db286a410ecadd5c83be8b116f88135c4251d71d391c517b928a6a"
+        }
+      ]
+    },
+    {
+      "command": "node scripts/follow-feed.mjs thog --scene docs/evidence/follow-polish/follow-polish-scene.json --size 38x18 --color 256 --dump docs/evidence/follow-polish/frames-38x18.txt",
+      "frames": 56,
+      "byteIdentical": true,
+      "files": [
+        {
+          "path": "docs/evidence/follow-polish/frames-38x18.txt",
+          "bytes": 64806,
+          "firstSha256": "117c1d33847cd6fa71d7ab1939f52d0259103de3dfea1bc903c439dd875b1112",
+          "secondSha256": "117c1d33847cd6fa71d7ab1939f52d0259103de3dfea1bc903c439dd875b1112"
+        },
+        {
+          "path": "docs/evidence/follow-polish/frames-38x18.txt.ansi",
+          "bytes": 911464,
+          "firstSha256": "0fd42ac635f96e1bcb55a05d6174b63606684066028396237f4a778c2d1243fe",
+          "secondSha256": "0fd42ac635f96e1bcb55a05d6174b63606684066028396237f4a778c2d1243fe"
+        }
+      ]
+    },
+    {
+      "command": "node docs/evidence/follow-polish/replay-chat.mjs 38x18 256 docs/evidence/follow-polish/frames-chat-38x18.txt",
+      "frames": 27,
+      "byteIdentical": true,
+      "files": [
+        {
+          "path": "docs/evidence/follow-polish/frames-chat-38x18.txt",
+          "bytes": 34317,
+          "firstSha256": "5bf008180847f3ace9c503f0ef092fdad0403b1e54fbf75995ca5146de2b4b1b",
+          "secondSha256": "5bf008180847f3ace9c503f0ef092fdad0403b1e54fbf75995ca5146de2b4b1b"
+        },
+        {
+          "path": "docs/evidence/follow-polish/frames-chat-38x18.txt.ansi",
+          "bytes": 442557,
+          "firstSha256": "715db1b7ebca2610c97c70213f53dfdc7c4fec89b13a58504c195dfece0654f0",
+          "secondSha256": "715db1b7ebca2610c97c70213f53dfdc7c4fec89b13a58504c195dfece0654f0"
+        }
+      ]
+    }
+  ]
+}
