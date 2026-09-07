@@ -594,39 +594,30 @@ test('connect chat falls back safely when the city pairing sentence is missing o
   }
 })
 
-// --- Findings 1-4: the printed MCP connector commands are correct ---------
+// --- Bundled local bridge guidance -----------------------------------------
 
-test('connect.mjs prints a single-quoted, unexpanded Claude Code header targeting /mcp on one line (PowerShell-safe), under a distinct server name, and the real Codex flag', async () => {
+test('connect.mjs points both coding hosts at the bundled local bridge and asks for one restart, never an env-based MCP command', async () => {
   const result = await runNode(connectPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'nobody'], { env: NOT_A_REAL_ORIGIN_ENV })
   const out = result.stdout
-  const claudeLine = out.split(/\r?\n/u).find(line => line.trimStart().startsWith('claude mcp add'))
-  assert.ok(claudeLine, 'the Claude Code command line is present')
-  assert.match(
-    claudeLine,
-    /^\s*claude mcp add --transport http 1f3d9-key https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
-    'the whole command fits on one line -- a POSIX `\\` continuation is a hard parse error in PowerShell',
-  )
-  assert.doesNotMatch(claudeLine, /\\\s*$/u, 'the line never ends with a line-continuation backslash')
-  assert.doesNotMatch(out, /\/mcp\/connect/u, 'the bearer-header (Claude Code) line never names /mcp/connect')
-  assert.doesNotMatch(out, /--header "Authorization: Bearer \$\{/u, 'header is never double-quoted (that is what let the shell expand it)')
-  assert.match(out, /codex mcp add 1f3d9-key --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
-  assert.doesNotMatch(out, /--bearer_token_env_var/u, 'never the underscored flag spelling the real Codex CLI rejects')
-  // The bundled .mcp.json server is separately named "1f3d9" (hosted-chat
-  // browser sign-in) -- the printed commands above must never collide with
-  // it under the same server name.
-  assert.match(out, /bundles?[\s\S]{0,80}`?1f3d9`?/iu, 'names the distinction from the bundled `1f3d9` connector')
+  assert.match(out, /bundles? the 1f3d9-local bridge for Claude Code and Codex/iu)
+  assert.match(out, /vault/iu)
+  assert.match(out, /setup/iu)
+  assert.equal((out.match(/\brestart\b[^\n]*\bonce\b/giu) ?? []).length, 1, 'prints one restart instruction')
+  assert.match(out, /bundled bridge serves only https:\/\/1f3d9\.com/iu)
+  assert.match(out, /custom-origin check does not change that door/iu)
+  assert.doesNotMatch(out, /1f3d9-key|mcp add|AGENT_1F3D9_SECRET|Authorization:|--header/iu)
   assertNoSecretLeaked(result, 'connect.mjs')
 })
 
-test('connect.mjs refuses a disallowed http origin before printing any MCP command, and exits non-zero (finding 2)', async () => {
+test('connect.mjs refuses a disallowed http origin before printing any bridge guidance, and exits non-zero (finding 2)', async () => {
   const result = await runNode(connectPath, ['--origin', 'http://attacker.example', '--handle', 'victim-agent'])
   assert.notEqual(result.status, 0)
-  assert.doesNotMatch(result.stdout, /mcp add/u, 'no connector command line was ever printed')
+  assert.doesNotMatch(result.stdout, /1f3d9-local|restart|mcp add/iu, 'no bridge guidance was ever printed')
   assert.match(result.stderr, /only https is allowed/iu)
   assertNoSecretLeaked(result, 'connect.mjs disallowed origin')
 })
 
-test('setup.mjs prints the same corrected MCP connector command shape, on one line, in its own connect step', async () => {
+test('setup.mjs prints the same bundled local bridge and one-restart contract in its own connect step', async () => {
   // Reached via the "no existing identity, no handle/client-class given"
   // refusal path, which still prints nothing about the connector — so drive
   // this through the repair branch instead by seeding setup-state directly,
@@ -641,15 +632,13 @@ test('setup.mjs prints the same corrected MCP connector command shape, on one li
     )
     const result = await runNode(setupPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid'], { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } })
     const out = result.stdout
-    const claudeLine = out.split(/\r?\n/u).find(line => line.trimStart().startsWith('claude mcp add'))
-    assert.ok(claudeLine, 'the Claude Code command line is present')
-    assert.match(
-      claudeLine,
-      /^\s*claude mcp add --transport http 1f3d9-key https:\/\/example\.invalid\/mcp --header 'Authorization: Bearer \$\{AGENT_1F3D9_SECRET\}'\s*$/u,
-    )
-    assert.doesNotMatch(claudeLine, /\\\s*$/u, 'the line never ends with a line-continuation backslash')
-    assert.match(out, /codex mcp add 1f3d9-key --url https:\/\/example\.invalid\/mcp --bearer-token-env-var AGENT_1F3D9_SECRET/u)
-    assert.doesNotMatch(out, /--bearer_token_env_var/u)
+    assert.match(out, /bundles? the 1f3d9-local bridge for Claude Code and Codex/iu)
+    assert.match(out, /vault/iu)
+    assert.match(out, /setup/iu)
+    assert.equal((out.match(/\brestart\b[^\n]*\bonce\b/giu) ?? []).length, 1, 'prints one restart instruction')
+    assert.match(out, /bundled bridge serves only https:\/\/1f3d9\.com/iu)
+    assert.match(out, /custom-origin check does not change that door/iu)
+    assert.doesNotMatch(out, /1f3d9-key|mcp add|AGENT_1F3D9_SECRET|Authorization:|--header/iu)
     assertNoSecretLeaked(result, 'setup.mjs (repair branch)')
   } finally {
     home.cleanup()
