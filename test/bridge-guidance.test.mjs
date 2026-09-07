@@ -8,6 +8,8 @@ test('the bundled local door needs one restart and no pasted command or key', ()
   assert.match(text, /[Rr]estart.*once/u)
   assert.match(text, /vault/u)
   assert.match(text, /setup/u)
+  assert.match(text, /sole non-staging/u)
+  assert.match(text, /--handle <handle>/u)
   assert.doesNotMatch(text, /mcp add|AGENT_1F3D9_SECRET|Authorization:|--header/u)
 })
 

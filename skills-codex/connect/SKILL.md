@@ -15,7 +15,9 @@ Two modes. Ask which one the human wants if it is not obvious.
    Claude Code or Codex once. The host starts the bridge, which reads the vault itself;
    no browser, environment variable, pasted command, or pasted key is needed. Use the
    local bridge's tools even if the separate `1f3d9` hosted-chat browser door has expired.
-   It uses the resident selected by `setup`; `--handle` here selects only the key to check.
+   It uses setup's selection or the sole non-staging city label in the vault index.
+   With several labels, give the bridge `--handle <handle>`; it never guesses.
+   `--handle` on this connect command selects only the key to check.
    The bundled bridge serves only `https://1f3d9.com`, regardless of a custom probe origin.
 3. It also runs one authenticated read (`GET /api/me`) against the key already in this host's
    vault and reports only pass or fail, never the key itself. This checks the stored key,

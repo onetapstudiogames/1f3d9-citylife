@@ -1,6 +1,7 @@
 import { once } from 'node:events'
 
 import { HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE } from '../identity-client.mjs'
+import { isPendingLabel } from './vault-index.mjs'
 
 const MCP_ORIGIN = 'https://1f3d9.com'
 const MCP_URL = `${MCP_ORIGIN}/mcp`
@@ -27,59 +28,136 @@ function hasValidRequestId(value) {
     || (typeof value.id === 'number' && Number.isSafeInteger(value.id))
 }
 
-function loadIdentity(readSetupStateImpl, readSecretImpl) {
+function isResidentHandle(handle) {
+  return typeof handle === 'string'
+    && HANDLE_RE.test(handle)
+    && !RESERVED_HANDLE_SUBSTRING_RE.test(handle)
+    && !isPendingLabel(handle)
+}
+
+function parseBridgeArgs(argv) {
+  if (argv.length === 0) return { handle: null }
+  let handle
+  if (argv.length === 1 && argv[0].startsWith('--handle=')) {
+    handle = argv[0].slice('--handle='.length)
+  } else if (argv.length === 2 && argv[0] === '--handle') {
+    handle = argv[1]
+  } else {
+    throw new Error('usage: mcp-bridge.mjs [--handle <handle>]')
+  }
+  if (!isResidentHandle(handle)) {
+    throw new Error('--handle must be a resident handle, never a staging label')
+  }
+  return { handle }
+}
+
+function indexedResidentHandles(index) {
+  const entries = Array.isArray(index?.[MCP_ORIGIN]) ? index[MCP_ORIGIN] : []
+  const handles = new Set()
+  for (const entry of entries) {
+    if (typeof entry === 'string') {
+      if (isResidentHandle(entry) && !isPendingLabel(entry)) handles.add(entry)
+      continue
+    }
+    if (
+      entry
+      && typeof entry === 'object'
+      && entry.staging === false
+      && isResidentHandle(entry.label)
+    ) {
+      handles.add(entry.label)
+    }
+  }
+  return [...handles].sort()
+}
+
+function readSelectedIdentity(handle, selection, readSecretImpl) {
+  let stored
+  try {
+    stored = readSecretImpl(MCP_ORIGIN, handle)
+  } catch {
+    return { residentKey: null, status: 'key_unreadable', handle, selection }
+  }
+  if (!stored?.found) return { residentKey: null, status: 'key_missing', handle, selection }
+  const residentKey = stored.value?.resident_key
+  if (typeof residentKey !== 'string' || !RESIDENT_KEY_RE.test(residentKey)) {
+    return { residentKey: null, status: 'key_unreadable', handle, selection }
+  }
+  return { residentKey, status: 'ready', handle, selection }
+}
+
+function loadIdentity({ selectedHandle, readSetupStateImpl, readVaultIndexImpl, readSecretImpl }) {
+  if (selectedHandle !== null) {
+    if (!isResidentHandle(selectedHandle)) {
+      throw new TypeError('--handle must be a resident handle, never a staging label')
+    }
+    return readSelectedIdentity(selectedHandle, 'explicit', readSecretImpl)
+  }
+
   let state
   try {
     state = readSetupStateImpl(MCP_ORIGIN)
   } catch {
-    return { residentKey: null, status: 'setup_unreadable' }
+    return { residentKey: null, status: 'setup_unreadable', handle: null, selection: null }
   }
-  if (state === null) return { residentKey: null, status: 'setup_missing' }
-  if (
-    !state
-    || typeof state !== 'object'
-    || typeof state.handle !== 'string'
-    || !HANDLE_RE.test(state.handle)
-    || RESERVED_HANDLE_SUBSTRING_RE.test(state.handle)
-  ) {
-    return { residentKey: null, status: 'setup_unreadable' }
+  if (state !== null) {
+    if (!state || typeof state !== 'object' || !isResidentHandle(state.handle)) {
+      return { residentKey: null, status: 'setup_unreadable', handle: null, selection: null }
+    }
+    return readSelectedIdentity(state.handle, 'setup', readSecretImpl)
   }
 
-  let stored
+  let index
   try {
-    stored = readSecretImpl(MCP_ORIGIN, state.handle)
+    index = readVaultIndexImpl()
   } catch {
-    return { residentKey: null, status: 'key_unreadable' }
+    return { residentKey: null, status: 'index_unavailable', handle: null, selection: null }
   }
-  if (!stored?.found) return { residentKey: null, status: 'key_missing' }
-  const residentKey = stored.value?.resident_key
-  if (typeof residentKey !== 'string' || !RESIDENT_KEY_RE.test(residentKey)) {
-    return { residentKey: null, status: 'key_unreadable' }
+  const handles = indexedResidentHandles(index)
+  if (handles.length === 0) {
+    return { residentKey: null, status: 'setup_missing', handle: null, selection: null }
   }
-  return { residentKey, status: 'ready' }
+  if (handles.length > 1) {
+    return { residentKey: null, status: 'index_ambiguous', handle: null, selection: null }
+  }
+  return readSelectedIdentity(handles[0], 'index', readSecretImpl)
 }
 
-function statusGuidance(status) {
-  if (status === 'setup_missing') {
+function statusGuidance(identity) {
+  if (identity.status === 'setup_missing') {
     return 'Setup has not run on this host. Run `node scripts/setup.mjs`, then restart the host before using resident tools.'
   }
-  if (status === 'setup_unreadable') {
+  if (identity.status === 'setup_unreadable') {
     return 'The local setup state could not be read safely. Repair it with `node scripts/setup.mjs`, then restart the host before using resident tools.'
   }
-  if (status === 'key_missing') {
-    return 'Setup did not find a usable resident key in this host\'s vault. Run `node scripts/setup.mjs`, then restart the host before using resident tools.'
+  if (identity.status === 'index_unavailable') {
+    return 'The local vault index could not be checked safely. Restart the host with this bridge configured as `--handle <handle>` to select a resident identity.'
   }
-  if (status === 'key_unreadable') {
-    return 'The resident key in this host\'s vault could not be read safely. Repair it with `node scripts/setup.mjs`, then restart the host before using resident tools.'
+  if (identity.status === 'index_ambiguous') {
+    return 'The local vault index has several resident labels. Restart the host with this bridge configured as `--handle <handle>` to select one; no resident key was read.'
   }
-  return 'This host\'s setup state and resident key were loaded when the bridge started.'
+  if (identity.status === 'key_missing') {
+    return `No usable resident key was found for "${identity.handle}" in this host's vault. Run ` +
+      '`node scripts/setup.mjs`, then restart the host before using resident tools.'
+  }
+  if (identity.status === 'key_unreadable') {
+    return `The resident key for "${identity.handle}" in this host's vault could not be read safely. Repair it with ` +
+      '`node scripts/setup.mjs`, then restart the host before using resident tools.'
+  }
+  if (identity.selection === 'index') {
+    return `This bridge selected vault-index identity "${identity.handle}" and loaded its resident key when the bridge started.`
+  }
+  if (identity.selection === 'explicit') {
+    return `This bridge selected "${identity.handle}" from --handle and loaded its resident key when the bridge started.`
+  }
+  return `This bridge selected setup identity "${identity.handle}" and loaded its resident key when the bridge started.`
 }
 
-function bridgeInstructions(status) {
+function bridgeInstructions(identity) {
   return (
-    `${BRIDGE_NAME} is the local bridge for the identity created by this plugin's setup. ` +
+    `${BRIDGE_NAME} is the local bridge for a resident stored in this host's vault. ` +
     'Do not use browser sign-in as a fallback for this local bridge. ' +
-    statusGuidance(status)
+    statusGuidance(identity)
   )
 }
 
@@ -182,8 +260,8 @@ function isMatchingJsonRpcResponse(value, id) {
   return Object.hasOwn(value, 'result') !== Object.hasOwn(value, 'error')
 }
 
-function authRequiredGuidance(value, status) {
-  if (status === 'ready' || !value?.result?.isError || !Array.isArray(value.result.content)) return value
+function authRequiredGuidance(value, identity) {
+  if (identity.status === 'ready' || !value?.result?.isError || !Array.isArray(value.result.content)) return value
   let changed = false
   const content = value.result.content.map(item => {
     if (!item || typeof item !== 'object' || typeof item.text !== 'string') return item
@@ -197,18 +275,18 @@ function authRequiredGuidance(value, status) {
     changed = true
     return {
       ...item,
-      text: JSON.stringify({ ...classified, error: statusGuidance(status) }),
+      text: JSON.stringify({ ...classified, error: statusGuidance(identity) }),
     }
   })
   return changed ? { ...value, result: { ...value.result, content } } : value
 }
 
-function appendBridgeInstructions(value, method, status) {
+function appendBridgeInstructions(value, method, identity) {
   if (method !== 'initialize' || !value?.result || typeof value.result !== 'object') return value
   const cityInstructions = typeof value.result.instructions === 'string'
     ? value.result.instructions.trimEnd()
     : ''
-  const localInstructions = bridgeInstructions(status)
+  const localInstructions = bridgeInstructions(identity)
   return {
     ...value,
     result: {
@@ -247,18 +325,24 @@ async function readBoundedResponse(response, maxResponseBytes) {
 }
 
 async function createMcpBridge({
+  selectedHandle = null,
   readSetupStateImpl,
+  readVaultIndexImpl,
   readSecretImpl,
   fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
 }) {
-  if (typeof readSetupStateImpl !== 'function' || typeof readSecretImpl !== 'function') {
+  if (
+    typeof readSetupStateImpl !== 'function'
+    || typeof readVaultIndexImpl !== 'function'
+    || typeof readSecretImpl !== 'function'
+  ) {
     throw new TypeError('identity readers are required')
   }
   if (typeof fetchImpl !== 'function') throw new TypeError('fetch is required')
-  const identity = loadIdentity(readSetupStateImpl, readSecretImpl)
+  const identity = loadIdentity({ selectedHandle, readSetupStateImpl, readVaultIndexImpl, readSecretImpl })
   const redactSecret = createSecretRedactor(identity.residentKey)
 
   async function handleLine(line) {
@@ -323,8 +407,8 @@ async function createMcpBridge({
     }
     try {
       parsed = redactValue(parsed, redactSecret)
-      parsed = authRequiredGuidance(parsed, identity.status)
-      parsed = appendBridgeInstructions(parsed, request?.method, identity.status)
+      parsed = authRequiredGuidance(parsed, identity)
+      parsed = appendBridgeInstructions(parsed, request?.method, identity)
       return JSON.stringify(parsed)
     } catch {
       return JSON.stringify(rpcError(id, -32603, `${BRIDGE_NAME} received an unreadable city response`))
@@ -395,5 +479,6 @@ export {
   MCP_ORIGIN,
   MCP_URL,
   createMcpBridge,
+  parseBridgeArgs,
   runMcpBridge,
 }

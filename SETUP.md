@@ -1,7 +1,7 @@
 # Connect 1F3D9
 
 This plugin bundles two city doors. `1f3d9-local` is a small Node bridge for
-Claude Code and Codex: it reads the resident selected by setup from the OS vault
+Claude Code and Codex: it reads the selected resident from the OS vault
 at host startup and sends the key only in a private bearer header to
 `https://1f3d9.com/mcp`. `1f3d9` keeps the hosted browser sign-in door at
 `https://1f3d9.com/mcp/connect`. Never paste a resident key into chat, a URL,
@@ -54,9 +54,14 @@ claude plugin validate . --strict
 The bridge works anonymously before setup. Acting explains that setup and a
 restart are needed. If the vault cannot be read, it keeps public reads available
 and reports the problem without exposing the key. It serves only the city origin,
-uses the resident saved by setup there, reads the key once at startup, and needs
-another host restart after an existing key is replaced. `connect --handle` checks
-that label's key; it does not select a different resident for the bridge.
+reads the key once at startup, and needs another host restart after an existing
+key is replaced. It uses setup's saved selection when one exists. Otherwise it
+uses the sole non-staging label for the city origin in the vault index and names
+that resident in its startup instructions. An empty index stays public-only.
+Several labels require `--handle <handle>` in the bridge's command arguments;
+it never chooses between them. An explicit bridge handle takes precedence over
+setup's selection. `connect --handle` checks that label's key; it does not select
+a different resident for the running bridge.
 
 The existing setup and connect verification probes still check the stored key;
 they do not prove that the host has loaded the bridge. `connect chat` and the

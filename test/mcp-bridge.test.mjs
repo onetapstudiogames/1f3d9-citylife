@@ -7,6 +7,7 @@ import {
   MCP_ORIGIN,
   MCP_URL,
   createMcpBridge,
+  parseBridgeArgs,
   runMcpBridge,
 } from '../scripts/lib/mcp-bridge.mjs'
 
@@ -20,7 +21,7 @@ function jsonResponse(value, init = {}) {
   })
 }
 
-function identityDeps({ state = { handle: 'tinylantern' }, stored = {
+function identityDeps({ state = { handle: 'tinylantern' }, index = {}, stored = {
   found: true,
   value: { resident_key: RESIDENT_KEY },
 } } = {}) {
@@ -30,6 +31,10 @@ function identityDeps({ state = { handle: 'tinylantern' }, stored = {
     readSetupStateImpl(origin) {
       calls.push(['state', origin])
       return state
+    },
+    readVaultIndexImpl() {
+      calls.push(['index'])
+      return index
     },
     readSecretImpl(origin, handle) {
       calls.push(['secret', origin, handle])
@@ -142,6 +147,179 @@ test('missing setup stays anonymous so initialize and server-selected public too
   assert.deepEqual(listed.result.tools, [{ name: 'look' }])
 })
 
+test('one safe vault-index label is selected, read once, and named during initialize', async () => {
+  const identity = identityDeps({
+    state: null,
+    index: { [MCP_ORIGIN]: [{ label: 'bridge-buyer', staging: false }] },
+  })
+  const requests = []
+  const bridge = await createMcpBridge({
+    ...identity,
+    fetchImpl: async (_url, init) => {
+      requests.push(init)
+      const request = JSON.parse(init.body)
+      return jsonResponse({
+        jsonrpc: '2.0', id: request.id,
+        result: { instructions: 'City rules.' },
+      })
+    },
+  })
+
+  const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+
+  assert.deepEqual(identity.calls, [
+    ['state', MCP_ORIGIN],
+    ['index'],
+    ['secret', MCP_ORIGIN, 'bridge-buyer'],
+  ])
+  assert.equal(requests[0].headers.authorization, `Bearer ${RESIDENT_KEY}`)
+  assert.match(initialized, /resident stored in this host's vault/iu)
+  assert.doesNotMatch(initialized, /identity created by this plugin's setup/iu)
+  assert.match(initialized, /selected vault-index identity \\"bridge-buyer\\"/iu)
+})
+
+test('an index-selected identity with no key uses neutral repair guidance', async () => {
+  const bridge = await createMcpBridge({
+    ...identityDeps({
+      state: null,
+      index: { [MCP_ORIGIN]: [{ label: 'bridge-buyer', staging: false }] },
+      stored: { found: false, value: null },
+    }),
+    fetchImpl: async (_url, init) => {
+      const { id } = JSON.parse(init.body)
+      return jsonResponse({ jsonrpc: '2.0', id, result: { instructions: 'City rules.' } })
+    },
+  })
+
+  const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+
+  assert.match(initialized, /no usable resident key was found for \\"bridge-buyer\\"/iu)
+  assert.match(initialized, /setup\.mjs.*restart the host/iu)
+  assert.doesNotMatch(initialized, /setup did not find/iu)
+})
+
+test('several vault-index labels remain public and acting guidance requests --handle', async () => {
+  const identity = identityDeps({
+    state: null,
+    index: {
+      [MCP_ORIGIN]: [
+        { label: 'bridge-buyer', staging: false },
+        { label: 'tinylantern', staging: false },
+      ],
+    },
+  })
+  const requests = []
+  const bridge = await createMcpBridge({
+    ...identity,
+    fetchImpl: async (_url, init) => {
+      requests.push(init)
+      const request = JSON.parse(init.body)
+      if (request.method === 'initialize') {
+        return jsonResponse({ jsonrpc: '2.0', id: request.id, result: { instructions: 'City rules.' } })
+      }
+      return jsonResponse({
+        jsonrpc: '2.0', id: request.id,
+        result: {
+          isError: true,
+          content: [{
+            type: 'text',
+            text: JSON.stringify({ error_class: 'auth_required', error: 'upstream wording' }),
+          }],
+        },
+      })
+    },
+  })
+
+  const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+  const acted = await bridge.handleLine('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"walk"}}')
+
+  assert.equal(identity.calls.some(call => call[0] === 'secret'), false)
+  assert.equal(requests.some(init => 'authorization' in init.headers), false)
+  assert.match(initialized, /several resident labels/iu)
+  assert.match(initialized, /--handle <handle>/u)
+  assert.match(acted, /--handle <handle>/u)
+  assert.match(acted, /restart the host/iu)
+})
+
+test('staging and malformed index entries are never selected or read', async () => {
+  const identity = identityDeps({
+    state: null,
+    index: {
+      [MCP_ORIGIN]: [
+        { label: 'bridge-buyer--pending-rotation', staging: true },
+        { label: 'not-staging-but-unknown', staging: null },
+        'legacy--pending-recovery',
+        "bad'label",
+      ],
+    },
+  })
+  const bridge = await createMcpBridge({
+    ...identity,
+    fetchImpl: async (_url, init) => {
+      const { id } = JSON.parse(init.body)
+      return jsonResponse({ jsonrpc: '2.0', id, result: { instructions: 'City rules.' } })
+    },
+  })
+
+  const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+
+  assert.equal(identity.calls.some(call => call[0] === 'secret'), false)
+  assert.match(initialized, /setup has not run on this host/iu)
+})
+
+test('explicit --handle selects one identity without reading setup state or the index', async () => {
+  const identity = identityDeps({
+    state: null,
+    index: {
+      [MCP_ORIGIN]: [
+        { label: 'bridge-buyer', staging: false },
+        { label: 'tinylantern', staging: false },
+      ],
+    },
+  })
+  const bridge = await createMcpBridge({
+    ...identity,
+    selectedHandle: 'bridge-buyer',
+    fetchImpl: async (_url, init) => {
+      const request = JSON.parse(init.body)
+      return jsonResponse({ jsonrpc: '2.0', id: request.id, result: { instructions: 'City rules.' } })
+    },
+  })
+
+  const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+
+  assert.deepEqual(identity.calls, [['secret', MCP_ORIGIN, 'bridge-buyer']])
+  assert.match(initialized, /selected \\"bridge-buyer\\" from --handle/iu)
+})
+
+test('an explicit identity with an unreadable key does not claim setup selected it', async () => {
+  const bridge = await createMcpBridge({
+    ...identityDeps(),
+    selectedHandle: 'bridge-buyer',
+    readSecretImpl() {
+      throw new Error('unreadable')
+    },
+    fetchImpl: async (_url, init) => {
+      const { id } = JSON.parse(init.body)
+      return jsonResponse({ jsonrpc: '2.0', id, result: { instructions: 'City rules.' } })
+    },
+  })
+
+  const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+
+  assert.match(initialized, /resident key for \\"bridge-buyer\\".*could not be read safely/iu)
+  assert.match(initialized, /setup\.mjs.*restart the host/iu)
+  assert.doesNotMatch(initialized, /setup did not find/iu)
+})
+
+test('bridge CLI parsing accepts one safe handle and rejects staging or unknown arguments', () => {
+  assert.deepEqual(parseBridgeArgs([]), { handle: null })
+  assert.deepEqual(parseBridgeArgs(['--handle', 'bridge-buyer']), { handle: 'bridge-buyer' })
+  assert.deepEqual(parseBridgeArgs(['--handle=bridge-buyer']), { handle: 'bridge-buyer' })
+  assert.throws(() => parseBridgeArgs(['--handle', 'agent--pending-rotation']), /must be a resident handle/iu)
+  assert.throws(() => parseBridgeArgs(['--unknown']), /usage:/iu)
+})
+
 test('unreadable setup state remains anonymous and reports repair wording without raw details', async () => {
   const bridge = await createMcpBridge({
     ...identityDeps(),
@@ -166,6 +344,7 @@ test('an invalid setup handle is not passed to the vault facade', async () => {
     let secretReads = 0
     const bridge = await createMcpBridge({
       readSetupStateImpl: () => ({ handle }),
+      readVaultIndexImpl: () => ({}),
       readSecretImpl: () => {
         secretReads += 1
         return { found: true, value: { resident_key: RESIDENT_KEY } }
@@ -191,6 +370,7 @@ test('unreadable or invalid vault entries stay anonymous without exposing failur
     const requests = []
     const bridge = await createMcpBridge({
       readSetupStateImpl: () => ({ handle: 'tinylantern' }),
+      readVaultIndexImpl: () => ({}),
       readSecretImpl,
       fetchImpl: async (_url, init) => {
         requests.push(init)
@@ -232,7 +412,7 @@ test('missing key forwards public calls and replaces only auth-required text wit
   assert.equal(output.result.extra, 9)
   assert.equal(classified.error_class, 'auth_required')
   assert.equal(classified.front_door_tool, 'front_door')
-  assert.match(classified.error, /setup did not find a usable resident key/iu)
+  assert.match(classified.error, /no usable resident key was found/iu)
   assert.match(classified.error, /run `node scripts\/setup\.mjs`/iu)
   assert.match(classified.error, /restart the host/iu)
 })

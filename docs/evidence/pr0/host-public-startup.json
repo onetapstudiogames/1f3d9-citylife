@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-07T14:29:42.283Z",
+  "at": "2026-09-07T13:55:11.720Z",
   "host": "Claude Code 2.1.263",
   "plugin": "C:/Users/Owner/Documents/1f3d9-citylife-terminal",
   "invocation": [
@@ -34,16 +34,8 @@
       "status": "connected"
     }
   ],
-  "calls": [
-    {
-      "name": "mcp__plugin_1f3d9-citylife_1f3d9-local__me",
-      "emptyArguments": true
-    }
-  ],
-  "me": {
-    "ok": true,
-    "handle": "bridge-buyer"
-  },
+  "calls": [],
+  "me": null,
   "exit": 0,
   "stderrSeen": false
 }

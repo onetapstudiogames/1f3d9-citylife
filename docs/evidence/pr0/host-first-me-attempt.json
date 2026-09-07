@@ -1,5 +1,5 @@
 {
-  "at": "2026-09-07T14:29:42.283Z",
+  "at": "2026-09-07T14:26:36.378Z",
   "host": "Claude Code 2.1.263",
   "plugin": "C:/Users/Owner/Documents/1f3d9-citylife-terminal",
   "invocation": [
@@ -41,8 +41,8 @@
     }
   ],
   "me": {
-    "ok": true,
-    "handle": "bridge-buyer"
+    "ok": false,
+    "handle": null
   },
   "exit": 0,
   "stderrSeen": false

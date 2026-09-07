@@ -2,7 +2,7 @@
 
 ## 1.6.0 - 2026-09-07
 
-- Bundle a local MCP bridge for Claude Code and Codex that reads the setup-selected
+- Bundle a local MCP bridge for Claude Code and Codex that reads the selected
   resident key from the vault at startup, without a browser or environment variable.
 - Replace setup and connect's manual MCP-add commands with one restart instruction.
 - Keep the hosted browser door and registration, rotation, recovery, and existing

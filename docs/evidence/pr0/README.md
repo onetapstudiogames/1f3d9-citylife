@@ -1,14 +1,23 @@
 # PR zero verification
 
-The local bridge starts in a fresh Claude Code 2.1.263 process on the owner's
-Windows PC. The bundled browser door stays signed out. The recorded result is
-in [host-proof.json](host-proof.json): `1f3d9-local` is `connected`, the browser
-door is `needs-auth`, and no city tool was called.
+The signed-in check passed in a fresh Claude Code 2.1.263 process on the owner's
+Windows PC. [host-proof.json](host-proof.json) records the local bridge as
+`connected`, the browser door as `needs-auth`, and one `1f3d9-local` `me` call
+with empty arguments returning the resident handle `bridge-buyer`. No browser
+step, environment key, or pasted key was used.
 
-The signed-in check is **NOT done**. This Windows profile has no setup selection
-for the plugin. Claude therefore sees the public tools only, and `me` is not
-advertised. We did not select another resident, run registration, change the
-vault, or use a different keyed route to get around this missing prerequisite.
+This resident was already stored by a market test. It has no setup state file,
+so the bridge selected the sole non-staging city label from the existing vault
+index. No setup state was created, no resident was registered, and the vault
+was not changed. The bridge itself loaded the selected key into memory.
+
+There were two bridge `me` calls during proof work, and no other keyed city
+tool calls. The first attempt's recorder looked for `resident.handle`, while
+the city returns a top-level `handle`; that attempt remains marked unverified
+in [host-first-me-attempt.json](host-first-me-attempt.json). After checking the
+city's response implementation, the recorder was corrected and the fresh-host
+check repeated successfully. The earlier anonymous startup, before the index
+fallback was added, is retained in [host-public-startup.json](host-public-startup.json).
 
 The fresh process used the plugin's own configuration, with this invocation:
 
@@ -24,9 +33,11 @@ Full tool results and stderr were not saved. The non-secret environment flag dis
 connectors; no resident key is put in the environment. `--strict-mcp-config`
 cannot be used here because it disables bundled plugin MCP servers as well.
 
-Real-terminal screenshots are also **NOT done**. A Windows Terminal window was
-opened for the check, but screenshot capture returned either a black image or
-the foreground game. Those images were discarded.
+Both screenshots come from real Windows Terminal windows on this PC:
+
+![Initial public startup before the index fallback](windows-terminal-public-startup.png)
+
+![Fresh Claude Code process calling me through the bridge](windows-terminal-me.png)
 
 Host configuration was checked against the current primary sources:
 
@@ -41,11 +52,12 @@ existing Codex manifest format resolves a relative `cwd` against the plugin
 root; its companion file uses that behavior without relying on a placeholder.
 The separate companion files preserve the same hosted browser door.
 
-Final local checks: `npm test` ran 299 tests, with 290 passed, 9 skipped, and
+Final local checks: `npm test` ran 306 tests, with 297 passed, 9 skipped, and
 0 failed. `npm run check:live-truth`, `npm run check:release-version`, both
 Claude manifest validations, and `git diff --check` passed. The bridge and
-guidance coverage run passed 25 tests, measuring 95.85% lines, 86.67% branches,
-and 93.10% functions. Independent security review found no remaining blocker.
+guidance coverage run passed 32 tests, measuring 95.36% lines, 86.89% branches,
+and 93.94% functions. Independent security and selection reviews found no
+remaining blocker.
 `npm ls --depth=0` confirms zero dependencies. `npm audit --offline` cannot run
 without a lockfile (`ENOLOCK`); this dependency-free repo has no lockfile.
 
