@@ -1,0 +1,17 @@
+{
+  "targetClientPid": 410708,
+  "input": "q",
+  "method": "WriteConsoleInputW to this console only",
+  "written": 1,
+  "ok": true,
+  "before": {
+    "inputCodePage": 65001,
+    "outputCodePage": 65001,
+    "outputMode": 7
+  },
+  "after": {
+    "inputCodePage": 437,
+    "outputCodePage": 65001,
+    "outputMode": 7
+  }
+}

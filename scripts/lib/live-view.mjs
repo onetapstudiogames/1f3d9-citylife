@@ -1,17 +1,19 @@
 import { writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { emitKeypressEvents } from 'node:readline'
-import { toAnsi, toPlainText } from './grid.mjs'
+import { DARK, Grid, toAnsi, toPlainText } from './grid.mjs'
 import { paintLiveView, visibleRoomLimit } from './live-render.mjs'
 import { createLiveSource } from './live-source.mjs'
 import { stepMotion } from './live-motion.mjs'
 import { chooseColorMode } from './terminal-colors.mjs'
 import { TerminalScreen } from './terminal-screen.mjs'
 import { openTerminalRunning } from './terminal.mjs'
+import { prepareLegacyConsole } from './legacy-console.mjs'
 import { pluginRoot } from './paths.mjs'
 
 const REFRESH_MS = 30_000
 const FRAME_MS = 125
+const READ_ERROR = 'Could not read the city.'
 const realClock = { now: () => performance.now(), setTimeout, clearTimeout }
 
 export const parseViewArgs = (args, kind = 'live') => {
@@ -21,7 +23,7 @@ export const parseViewArgs = (args, kind = 'live') => {
     const arg = args[index]
     if (arg === '--once') { options.once = true; continue }
     if (!arg.startsWith('-')) { positionals.push(arg); continue }
-    if (!['--scene', '--dump', '--size', '--color', '--at'].includes(arg)) throw new Error(`unknown view argument: ${arg}`)
+    if (!['--scene', '--dump', '--size', '--color', '--at', '--fail-at'].includes(arg)) throw new Error(`unknown view argument: ${arg}`)
     const value = args[++index]
     if (!value || value.startsWith('--')) throw new Error(`view argument ${arg} needs a value`)
     if (arg === '--scene') options.sceneFile = value
@@ -36,13 +38,13 @@ export const parseViewArgs = (args, kind = 'live') => {
       if (!['truecolor', '256', '16'].includes(value)) throw new Error('view color must be truecolor, 256, or 16')
       options.color = value
     }
-    if (arg === '--at') {
+    if (arg === '--at' || arg === '--fail-at') {
       if (!/^\d{1,9}$/u.test(value)) throw new Error('scene time must be milliseconds')
-      options.at = Number(value)
+      options[arg === '--at' ? 'at' : 'failAt'] = Number(value)
     }
   }
   if (positionals.length > 1) throw new Error('view accepts one place or resident argument')
-  if ((options.dump || options.at !== undefined) && !options.sceneFile) throw new Error('--dump and --at require --scene')
+  if ((options.dump || options.at !== undefined || options.failAt !== undefined) && !options.sceneFile) throw new Error('--dump, --at, and --fail-at require --scene')
   if (kind === 'follow') {
     if (!positionals[0]) throw new Error('follow view needs a resident handle')
     options.followHandle = positionals[0]
@@ -61,6 +63,15 @@ const readObservation = async (source, nowMs, size) => {
   return observation
 }
 
+const quietFrame = (picture, size, message) => {
+  const grid = new Grid(size.columns, size.rows, DARK.bg)
+  for (let y = 0; y < Math.min(picture?.height ?? 0, grid.height - 1); y += 1) {
+    for (let x = 0; x < Math.min(picture.width, grid.width); x += 1) grid.cells[y][x] = [...picture.cells[y][x]]
+  }
+  grid.put(1, grid.height - 1, message, DARK.muted, DARK.bg, Math.max(0, grid.width - 2))
+  return grid
+}
+
 /** Replay observations in order, then advance only the decorative clock. */
 export const createReplay = (source, size) => {
   const moments = source.momentTimes ?? [0]
@@ -68,6 +79,8 @@ export const createReplay = (source, size) => {
   let state = null
   let observation = null
   let previousTime = -1
+  let error = null
+  let picture = null
   return {
     async at(nowMs) {
       if (!Number.isFinite(nowMs) || nowMs < 0 || nowMs < previousTime || nowMs > source.durationMs) {
@@ -75,13 +88,26 @@ export const createReplay = (source, size) => {
       }
       while (index < moments.length && moments[index] <= nowMs) {
         const time = moments[index++]
-        observation = await readObservation(source, time, size)
-        state = stepMotion(state, { nowMs: time, observation, size }).state
+        if (state && !error) {
+          const advanced = stepMotion(state, { nowMs: time, size })
+          state = advanced.state
+          picture = paintLiveView(observation, size, advanced.frame)
+        }
+        try {
+          observation = await readObservation(source, time, size)
+          state = stepMotion(state, { nowMs: time, observation, size }).state
+          error = null
+        } catch {
+          error = READ_ERROR
+        }
       }
-      const motion = stepMotion(state, { nowMs, size })
-      state = motion.state
+      const motion = !error && state ? stepMotion(state, { nowMs, size }) : null
+      if (motion) {
+        state = motion.state
+        picture = paintLiveView(observation, size, motion.frame)
+      }
       previousTime = nowMs
-      return { observation, motion, frame: paintLiveView(observation, size, motion.frame) }
+      return { observation, motion, error, frame: error ? quietFrame(picture, size, error) : picture }
     },
   }
 }
@@ -113,7 +139,7 @@ export const runViewSession = (source, options, {
   const screen = new TerminalScreen({
     output,
     mode: options.color ?? chooseColorMode({ env, platform, isTTY: true }),
-    synchronized: Boolean(env.WT_SESSION || env.TMUX || (platform !== 'win32' && /iterm|ghostty/iu.test(env.TERM_PROGRAM ?? ''))),
+    synchronized: platform === 'win32' ? Boolean(env.WT_SESSION) : Boolean(env.TMUX || /iterm|ghostty/iu.test(env.TERM_PROGRAM ?? '')),
   })
   let stopped = false
   let reading = false
@@ -124,6 +150,11 @@ export const runViewSession = (source, options, {
   let paintTimer = null
   let motion = null
   let lastPaintMs = -Infinity
+  let lastPicture = null
+  let frozenPicture = null
+  let quietError = null
+  let generation = 0
+  let resetMotion = false
   const startedAt = clock.now()
   const now = () => options.at ?? Math.min(clock.now() - startedAt, source.durationMs ?? Infinity)
   const oldRaw = Boolean(input.isRaw)
@@ -163,11 +194,21 @@ export const runViewSession = (source, options, {
   }
   const onKey = (_text, key = {}) => {
     if (key.name === 'q' || key.name === 'escape' || (key.ctrl && key.name === 'c')) finish()
+    else if (key.name === 'r') void refresh()
+    else if (key.name === 'left' || key.name === 'right') {
+      const result = source.navigate?.(key.name)
+      if (result?.ok && result.changed) {
+        generation += 1
+        resetMotion = true
+        void refresh()
+      } else if (result?.ok === false) showError(options.sceneFile ? 'This scene does not include that town.' : READ_ERROR)
+    }
   }
   const onResize = () => {
     if (stopped) return
     screen.invalidate()
-    if (observation) animate(true)
+    if (quietError) present()
+    else if (observation) animate(true)
     void refresh()
   }
   const schedule = () => {
@@ -177,7 +218,7 @@ export const runViewSession = (source, options, {
     pollTimer = clock.setTimeout(() => { void refresh() }, nextRead - now())
   }
   const present = () => {
-    if (stopped || !observation) return
+    if (stopped || (!observation && !quietError)) return
     clock.clearTimeout(paintTimer)
     paintTimer = null
     const delay = lastPaintMs + FRAME_MS - clock.now()
@@ -185,17 +226,28 @@ export const runViewSession = (source, options, {
       paintTimer = clock.setTimeout(present, delay)
       return
     }
-    const frame = paintLiveView(observation, sizeOf(options, output), motion?.frame)
-    if (screen.present(frame)) lastPaintMs = clock.now()
+    const size = sizeOf(options, output)
+    const frame = quietError ? quietFrame(frozenPicture, size, quietError) : paintLiveView(observation, size, motion?.frame)
+    if (screen.present(frame)) {
+      lastPaintMs = clock.now()
+      lastPicture = frame
+    }
+  }
+  const showError = (message = READ_ERROR) => {
+    if (!quietError) frozenPicture = lastPicture
+    quietError = message
+    clock.clearTimeout(motionTimer)
+    clock.clearTimeout(paintTimer)
+    present()
   }
   const scheduleMotion = () => {
     clock.clearTimeout(motionTimer)
-    if (stopped || options.at !== undefined || !Number.isFinite(motion?.nextAtMs)) return
+    if (stopped || quietError || options.at !== undefined || !Number.isFinite(motion?.nextAtMs)) return
     if (motion.nextAtMs > (source.durationMs ?? Infinity)) return
     motionTimer = clock.setTimeout(() => animate(), Math.max(FRAME_MS, motion.nextAtMs - now()))
   }
   const animate = (force = false) => {
-    if (stopped || !observation) return
+    if (stopped || quietError || !observation) return
     motion = stepMotion(motion?.state ?? null, { nowMs: now(), size: sizeOf(options, output) })
     if (force || motion.changed) present()
     scheduleMotion()
@@ -204,6 +256,7 @@ export const runViewSession = (source, options, {
     if (stopped) return
     if (reading) { refreshAgain = true; return }
     reading = true
+    const readGeneration = generation
     clock.clearTimeout(pollTimer)
     try {
       const size = sizeOf(options, output)
@@ -211,14 +264,24 @@ export const runViewSession = (source, options, {
         ? await createReplay(source, size).at(options.at)
         : { observation: await readObservation(source, now(), size) }
       if (stopped) return
+      if (readGeneration !== generation) { refreshAgain = true; return }
+      if (result.error) {
+        frozenPicture = result.frame
+        quietError = result.error
+        present()
+        return
+      }
       observation = result.observation
-      motion = result.motion ?? stepMotion(motion?.state ?? null, {
+      quietError = null
+      frozenPicture = null
+      motion = result.motion ?? stepMotion(resetMotion ? null : motion?.state ?? null, {
         nowMs: now(), observation, size: sizeOf(options, output),
       })
+      resetMotion = false
       present()
       scheduleMotion()
     } catch {
-      if (!stopped) finish('Could not read the city.')
+      if (!stopped && readGeneration === generation) showError()
     } finally {
       reading = false
       if (refreshAgain && !stopped) {
@@ -249,6 +312,13 @@ export const runViewSession = (source, options, {
 })
 
 export const runDrawnView = async (options) => {
+  const legacy = !options.dump && !options.once && process.stdout.isTTY
+    ? await prepareLegacyConsole()
+    : { mode: 'ansi' }
+  if (legacy.mode === 'relaunched') {
+    if (legacy.exitCode) process.exitCode = legacy.exitCode
+    return
+  }
   const source = await createLiveSource(options)
   try {
     if (options.dump) {
@@ -256,12 +326,12 @@ export const runDrawnView = async (options) => {
       console.log(`Saved ${result.frames} frames to ${result.path}.`)
       return
     }
-    if (options.once || !process.stdout.isTTY) {
+    if (options.once || !process.stdout.isTTY || legacy.mode === 'plain') {
       const size = sizeOf(options, process.stdout)
       const { frame } = options.sceneFile
         ? await createReplay(source, size).at(options.at ?? 0)
         : { frame: paintLiveView(await readObservation(source, 0, size), size) }
-      process.stdout.write(toPlainText(frame))
+      process.stdout.write(`${legacy.mode === 'plain' ? `${legacy.message}\n` : ''}${toPlainText(frame)}`)
       return
     }
     const result = await runViewSession(source, options)

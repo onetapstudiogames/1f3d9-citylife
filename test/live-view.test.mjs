@@ -122,6 +122,8 @@ const walkingObservation = (roomId, events = []) => ({
 })
 
 test('view arguments keep scene, size, and color explicit and reject typos', () => {
+  assert.equal(parseViewArgs(['--scene', 'scene.json', '--fail-at', '30000']).failAt, 30000)
+  assert.throws(() => parseViewArgs(['--fail-at', '30000']), /scene/u)
   assert.deepEqual(parseViewArgs(['first town', '--scene', 'scene.json', '--size', '80x24', '--color', '256']), {
     placeArg: 'first town', sceneFile: 'scene.json', columns: 80, rows: 24, color: '256',
   })
@@ -223,6 +225,35 @@ test('--once CLI renders the real fixture as plain text offline', async () => {
   assert.match(stdout, /first town/u)
   assert.doesNotMatch(stdout, /\x1b/u)
   assert.equal(stderr, '')
+})
+
+test('the reviewed 120x40 note frame matches its plain text snapshot', async () => {
+  const source = await createLiveSource({ sceneFile })
+  try {
+    const result = await createReplay(source, { columns: 120, rows: 40 }).at(62000)
+    assert.equal(toPlainText(result.frame), await readFile(new URL('./fixtures/live-frame-120x40.txt', import.meta.url), 'utf8'))
+  } finally { source.close() }
+})
+
+test('replay failure freezes the picture, recovers at the next moment, and ignores requested frame cadence', async () => {
+  const fixture = await createLiveSource({ sceneFile })
+  const source = {
+    ...fixture,
+    read: async (time, request) => time === 30000 ? { ok: false, error: 'raw stack must stay private' } : fixture.read(time, request),
+  }
+  const size = { columns: 80, rows: 24 }
+  const paced = createReplay(source, size)
+  await paced.at(0)
+  await paced.at(4000)
+  const failed = await paced.at(30000)
+  assert.match(toPlainText(failed.frame).split('\n').at(-2), /Could not read the city\./u)
+  assert.doesNotMatch(toPlainText(failed.frame), /raw stack/u)
+  assert.equal(toPlainText((await paced.at(32000)).frame), toPlainText(failed.frame))
+  assert.equal(toPlainText((await createReplay(source, size).at(30000)).frame), toPlainText(failed.frame))
+  const recovered = await paced.at(60000)
+  assert.doesNotMatch(toPlainText(recovered.frame), /Could not read the city/u)
+  assert.equal(toPlainText(recovered.frame).split('\n').at(-2).trim(), '')
+  source.close()
 })
 
 test('q during a pending read restores the terminal and aborts the source', async () => {
@@ -347,16 +378,20 @@ test('resizes during a pending read coalesce and repaint at the current dimensio
   assert.match(writes.join(''), /room c/u, 'the coalesced reread adds the third room visible at 120 columns')
 })
 
-test('read errors restore the screen, close the source, and remove every listener', async () => {
+test('read errors keep the session open until q restores the screen and removes every listener', async () => {
   const { input, output, host, writes } = makeSessionHarness({ isTTY: false })
   let closes = 0
   const source = { read: async () => ({ ok: false, error: 'offline' }), close: () => { closes += 1 } }
-  const result = await runViewSession(source, {}, { input, output, host, env: {}, platform: 'win32' })
+  const closed = runViewSession(source, {}, { input, output, host, env: {}, platform: 'win32' })
+  await waitFor(() => writes.join('').includes('Could not read the city.'))
+  assert.equal(closes, 0)
+  host.emit('SIGINT')
+  const result = await closed
 
-  assert.deepEqual(result, { ok: false })
+  assert.deepEqual(result, { ok: true })
   assert.equal(closes, 1)
   assert.match(writes.join(''), /\x1b\[\?25h\x1b\[\?1049l/u)
-  assert.match(writes.at(-1), /Could not read the city\./u)
+  assert.match(writes.at(-1), /View closed\./u)
   for (const event of ['SIGINT', 'SIGTERM', 'uncaughtException', 'unhandledRejection', 'exit']) {
     assert.equal(host.listenerCount(event), 0)
   }

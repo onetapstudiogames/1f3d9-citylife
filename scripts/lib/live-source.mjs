@@ -75,6 +75,41 @@ const stableRoomIds = (target, scopeId, branch, maxRooms) => [...new Set([
   ...(branch?.subplaces ?? []).map((place) => Number(place.id)).sort((a, b) => a - b),
 ])].slice(0, maxRooms).sort((a, b) => a - b)
 
+const navigatorFor = ({ followHandle, scene, getRaw, getPlaceId, setPlaceId }) => (direction) => {
+  if (!['left', 'right'].includes(direction)) {
+    return { ok: false, error: 'Direction must be left or right.' }
+  }
+  if (followHandle) return { ok: true, changed: false }
+  const raw = getRaw()
+  if (!raw) return { ok: false, error: 'Read the city before changing towns.' }
+
+  const directoryIndex = buildDirectoryIndex(raw.directory?.places ?? [])
+  const continentIds = new Set((raw.outline?.places?.[0]?.children ?? []).map((place) => Number(place.id)))
+  let town = directoryIndex.byId.get(Number(getPlaceId()))
+  let guard = 0
+  while (town && !continentIds.has(Number(town.parentId)) && guard < 64) {
+    if (town.parentId === null || town.parentId === undefined) return { ok: false, error: 'The current town is unavailable.' }
+    town = directoryIndex.byId.get(Number(town.parentId))
+    guard += 1
+  }
+  if (!town || !continentIds.has(Number(town.parentId))) {
+    return { ok: false, error: 'The current town is unavailable.' }
+  }
+
+  const towns = [...directoryIndex.byId.values()]
+    .filter((place) => Number(place.parentId) === Number(town.parentId))
+    .sort(byId)
+  const currentIndex = towns.findIndex((place) => Number(place.id) === Number(town.id))
+  if (currentIndex < 0 || towns.length < 2) return { ok: true, changed: false }
+  const offset = direction === 'right' ? 1 : -1
+  const nextTown = towns[(currentIndex + offset + towns.length) % towns.length]
+  if (scene && !(raw.rooms ?? []).some((room) => Number(room.placeId) === Number(nextTown.id))) {
+    return { ok: false, error: 'This scene does not include that town.' }
+  }
+  setPlaceId(Number(nextTown.id))
+  return { ok: true, changed: true }
+}
+
 const cachedDrawing = async (fetchImpl, cache, type, id) => {
   const key = drawingKey(type, id)
   if (cache.has(key)) return { key, response: cache.get(key), cached: true }
@@ -389,17 +424,49 @@ const readScene = async (sceneFile) => {
   return scene
 }
 
-export async function createLiveSource({ placeArg, followHandle, sceneFile, fetchImpl = globalThis.fetch } = {}) {
+export async function createLiveSource({ placeArg, followHandle, sceneFile, failAt, fetchImpl = globalThis.fetch } = {}) {
+  if (failAt !== undefined && !sceneFile) throw new TypeError('failAt requires --scene')
+  let selectedPlace = placeArg
+  let lastSuccessfulRaw = null
+  let selectionGeneration = 0
   if (sceneFile) {
     const scene = await readScene(sceneFile)
+    if (failAt !== undefined && (!Number.isFinite(failAt) || failAt < 0)) {
+      throw new TypeError('scene failAt must be a finite non-negative number')
+    }
+    if (failAt !== undefined && !scene.moments.some((moment) => moment.atMs === failAt)) {
+      throw new TypeError('scene failAt must match an exact scene moment')
+    }
+    const navigate = navigatorFor({
+      followHandle,
+      scene: true,
+      getRaw: () => lastSuccessfulRaw,
+      getPlaceId: () => selectedPlace ?? lastSuccessfulRaw?.target?.id,
+      setPlaceId: id => {
+        selectedPlace = id
+        selectionGeneration += 1
+      },
+    })
     return {
       frameTimes: [...scene.frameTimes],
       momentTimes: scene.moments.map((moment) => moment.atMs),
       durationMs: scene.durationMs,
+      navigate,
       close: () => {},
       read: async (nowMs, { maxRooms = Number.MAX_SAFE_INTEGER } = {}) => {
+        const readGeneration = selectionGeneration
         const selectedIndex = scene.moments.findLastIndex((moment) => moment.atMs <= nowMs)
-        return normalizeRaw(rawForMoment(scene, Math.max(0, selectedIndex)), maxRooms, { placeArg, followHandle })
+        const momentIndex = Math.max(0, selectedIndex)
+        if (failAt !== undefined && scene.moments[momentIndex].atMs === failAt) {
+          return { ok: false, error: 'Injected scene read failure.' }
+        }
+        const raw = rawForMoment(scene, momentIndex)
+        const result = normalizeRaw(raw, maxRooms, { placeArg: selectedPlace, followHandle })
+        if (result.ok && readGeneration === selectionGeneration) {
+          lastSuccessfulRaw = raw
+          if (!followHandle) selectedPlace = result.target.id
+        }
+        return result
       },
     }
   }
@@ -410,11 +477,30 @@ export async function createLiveSource({ placeArg, followHandle, sceneFile, fetc
     signal: AbortSignal.any([init.signal, controller.signal]),
   })
   const drawingCache = new Map()
+  const navigate = navigatorFor({
+    followHandle,
+    scene: false,
+    getRaw: () => lastSuccessfulRaw,
+    getPlaceId: () => selectedPlace ?? lastSuccessfulRaw?.target?.id,
+    setPlaceId: id => {
+      selectedPlace = id
+      selectionGeneration += 1
+    },
+  })
   return {
+    navigate,
     close: () => controller.abort(),
     read: async (_nowMs, { maxRooms = 9, size } = {}) => {
-      const collected = await collectPublicRaw({ placeArg, followHandle, fetchImpl: sourceFetch, drawingCache, maxRooms, size })
-      return collected.ok ? normalizeRaw(collected.raw, maxRooms) : collected
+      const readGeneration = selectionGeneration
+      const readPlace = selectedPlace
+      const collected = await collectPublicRaw({ placeArg: readPlace, followHandle, fetchImpl: sourceFetch, drawingCache, maxRooms, size })
+      if (!collected.ok) return collected
+      const result = normalizeRaw(collected.raw, maxRooms)
+      if (result.ok && readGeneration === selectionGeneration) {
+        lastSuccessfulRaw = collected.raw
+        if (!followHandle) selectedPlace = result.target.id
+      }
+      return result
     },
   }
 }

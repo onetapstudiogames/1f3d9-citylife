@@ -11,6 +11,18 @@ test('terminal colors: truecolor hints win on supported terminals', () => {
 
 test('terminal colors: a tty falls back through xterm 256 to basic 16', () => {
   assert.equal(chooseColorMode({ env: {}, platform: 'win32', isTTY: true }), '256')
+  assert.equal(chooseColorMode({
+    env: { ONEF3D9_LEGACY_CONSOLE_MODE: 'ansi', TERM: 'dumb' },
+    platform: 'win32',
+    isTTY: true,
+  }), '256')
+  assert.equal(chooseColorMode({
+    env: { ONEF3D9_LEGACY_CONSOLE_MODE: 'ansi', TERM: 'dumb', COLORTERM: 'truecolor' },
+    platform: 'win32',
+    isTTY: true,
+  }), 'truecolor')
+  assert.equal(chooseColorMode({ env: { WT_SESSION: 'abc', TERM: 'dumb' }, platform: 'win32', isTTY: true }), 'truecolor')
+  assert.equal(chooseColorMode({ env: { COLORTERM: 'truecolor', TERM: 'dumb' }, platform: 'linux', isTTY: true }), '16')
   assert.equal(chooseColorMode({ env: { TERM: 'xterm-256color' }, platform: 'linux', isTTY: true }), '256')
   assert.equal(chooseColorMode({ env: { TERM: 'dumb' }, platform: 'linux', isTTY: true }), '16')
   assert.equal(chooseColorMode({ env: {}, platform: 'linux', isTTY: false }), '16')

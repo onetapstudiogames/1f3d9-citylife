@@ -19,11 +19,11 @@
 // process.platform: 'win32' | 'darwin' | everything else treated as Linux/BSD.
 
 import { spawn } from 'node:child_process'
+import { win32 } from 'node:path'
 
-/** Quote one argument for embedding inside a manually-built shell command string. */
-const quoteArg = (arg) => `"${String(arg).replaceAll('"', '\\"')}"`
+import { buildLegacyConsoleLaunch } from './legacy-console.mjs'
 
-const describeCommand = (command, args) => [command, ...args.map((a) => (/\s/u.test(String(a)) ? quoteArg(a) : String(a)))].join(' ')
+const describeCommand = (command, args) => [command, ...args.map(value => JSON.stringify(String(value)))].join(' ')
 
 /**
  * Spawns `command` detached and resolves as soon as the outcome is actually
@@ -41,7 +41,7 @@ const describeCommand = (command, args) => [command, ...args.map((a) => (/\s/u.t
  *    macrotask (a long-lived terminal emulator such as `xterm`) is treated
  *    as opened, using its real PID.
  */
-const trySpawn = (command, args, options = {}) =>
+const trySpawn = (command, args, options = {}, spawnImpl = spawn) =>
   new Promise((resolvePromise) => {
     let settled = false
     const settle = (result) => {
@@ -51,7 +51,7 @@ const trySpawn = (command, args, options = {}) =>
     }
     let child
     try {
-      child = spawn(command, args, {
+      child = spawnImpl(command, args, {
         detached: true,
         stdio: 'ignore',
         windowsHide: false,
@@ -73,8 +73,8 @@ const trySpawn = (command, args, options = {}) =>
     })
   })
 
-const attempt = async (command, args) => {
-  const result = await trySpawn(command, args)
+const attempt = async (command, args, options, spawnImpl) => {
+  const result = await trySpawn(command, args, options, spawnImpl)
   return { ...result, commandLine: describeCommand(command, args) }
 }
 
@@ -89,12 +89,19 @@ const attempt = async (command, args) => {
  * successfully; it is not proof a window is on screen, only that nothing
  * about the launch itself failed.
  */
-export const openTerminalRunning = async (scriptPath, args = [], { title = '1F3D9 live' } = {}) => {
+export const openTerminalRunning = async (scriptPath, args = [], {
+  title = '1F3D9 live',
+  platform = process.platform,
+  executable = process.execPath,
+  env = process.env,
+  spawnImpl = spawn,
+} = {}) => {
   const nodeArgs = [scriptPath, ...args]
 
-  if (process.platform === 'win32') {
-    const wtArgs = ['new-tab', '--title', title, 'node', ...nodeArgs]
-    const wt = await attempt('wt.exe', wtArgs)
+  if (platform === 'win32') {
+    const safeTitle = title === '1F3D9 follow' ? '1F3D9 follow' : '1F3D9 live'
+    const wtArgs = ['new-tab', '--title', safeTitle, executable, ...nodeArgs]
+    const wt = await attempt('wt.exe', wtArgs, { env }, spawnImpl)
     if (wt.opened) return wt
 
     // No Windows Terminal on PATH (or it failed to start): fall back to a
@@ -103,40 +110,38 @@ export const openTerminalRunning = async (scriptPath, args = [], { title = '1F3D
     // directly here (no `start`) would instead attach it to no console at
     // all — an invisible, orphaned process, not a window the human can see.
     //
-    // The inner command is passed to PowerShell as base64-encoded UTF-16LE
-    // (`-EncodedCommand`) rather than a quoted `-Command` string: that is
-    // what actually "quotes paths with spaces" correctly through two layers
-    // of argument parsing (Node's own Windows quoting for the outer
-    // `cmd.exe` call, then cmd's `start`), instead of hoping nested quote
-    // escaping survives both.
-    const psScript = `node ${nodeArgs.map(quoteArg).join(' ')}`
-    const encodedCommand = Buffer.from(psScript, 'utf16le').toString('base64')
-    const cmdArgs = ['/c', 'start', title, 'powershell', '-NoExit', '-EncodedCommand', encodedCommand]
-    const fallback = await trySpawn('cmd.exe', cmdArgs)
-    const readableCommandLine = `cmd.exe /c start ${quoteArg(title)} powershell -NoExit -Command ${quoteArg(psScript)}`
+    // PowerShell owns console negotiation and restoration. Public arguments
+    // are carried as base64 JSON in memory and never become PowerShell source.
+    const legacy = buildLegacyConsoleLaunch({ executable, argv: nodeArgs, keepOpen: true, env })
+    const cmd = win32.join(env.SystemRoot || env.WINDIR || 'C:\\Windows', 'System32', 'cmd.exe')
+    const cmdArgs = ['/d', '/s', '/c', 'start', safeTitle, legacy.command, ...legacy.args]
+    const fallback = await trySpawn(cmd, cmdArgs, { env: legacy.options.env }, spawnImpl)
+    const readableCommandLine = `${cmd} /d /s /c start ${JSON.stringify(safeTitle)} ${legacy.command} -NoLogo -NoProfile -NoExit -EncodedCommand <encoded>`
     if (fallback.opened) return { ...fallback, commandLine: readableCommandLine }
     return { opened: false, commandLine: readableCommandLine, reason: `wt.exe: ${wt.reason}; cmd.exe start powershell: ${fallback.reason}` }
   }
 
-  if (process.platform === 'darwin') {
-    const escaped = ['node', ...nodeArgs].map((a) => String(a).replaceAll('\\', '\\\\').replaceAll('"', '\\"')).join(' ')
-    const script = `tell application "Terminal" to do script "${escaped}"`
-    return attempt('osascript', ['-e', script])
+  if (platform === 'darwin') {
+    const shellQuote = value => `'${String(value).replaceAll("'", "'\\''")}'`
+    const command = `exec ${[executable, ...nodeArgs].map(shellQuote).join(' ')}`
+    const payload = Buffer.from(command, 'utf8').toString('base64')
+    const script = `tell application "Terminal" to do script "/bin/echo ${payload} | /usr/bin/base64 -D | /bin/sh"`
+    return attempt('osascript', ['-e', script], { env }, spawnImpl)
   }
 
   // Linux and other Unix-likes: try common emulators in rough popularity order.
   const linuxEmulators = [
-    ['x-terminal-emulator', ['-e', 'node', ...nodeArgs]],
-    ['gnome-terminal', ['--', 'node', ...nodeArgs]],
-    ['konsole', ['-e', 'node', ...nodeArgs]],
-    ['xfce4-terminal', ['-x', 'node', ...nodeArgs]],
-    ['xterm', ['-e', 'node', ...nodeArgs]],
+    ['x-terminal-emulator', ['-e', executable, ...nodeArgs]],
+    ['gnome-terminal', ['--', executable, ...nodeArgs]],
+    ['konsole', ['-e', executable, ...nodeArgs]],
+    ['xfce4-terminal', ['-x', executable, ...nodeArgs]],
+    ['xterm', ['-e', executable, ...nodeArgs]],
   ]
   const reasons = []
   for (const [command, emulatorArgs] of linuxEmulators) {
-    const result = await attempt(command, emulatorArgs)
+    const result = await attempt(command, emulatorArgs, { env }, spawnImpl)
     if (result.opened) return result
     reasons.push(`${command}: ${result.reason}`)
   }
-  return { opened: false, commandLine: describeCommand('node', nodeArgs), reason: `no terminal emulator found on PATH (${reasons.join('; ')})` }
+  return { opened: false, commandLine: describeCommand(executable, nodeArgs), reason: `no terminal emulator found on PATH (${reasons.join('; ')})` }
 }
