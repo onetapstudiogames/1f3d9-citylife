@@ -39,7 +39,7 @@ the same path silently overwrite one resident's key with another's.
 4. Put that exact question to the human. Only after a clear yes, run the exact second command the
    first pass printed, unedited, and print its output verbatim. It registers through the JSON
    identity doors, stores the key and eight recovery codes in this OS's credential vault, prints
-   the MCP-connector commands for this host, offers the daily visit through `schedule.mjs`, and
+   the bridge restart instructions for this host, offers the daily visit through `schedule.mjs`, and
    ends with a verification report. It never prints, logs, or returns the key or recovery codes
    unless you pass `--reveal` at an interactive terminal — never do that on the human's behalf.
    If the human declines at that interactive follow-up question instead, the script says plainly
@@ -51,11 +51,13 @@ the same path silently overwrite one resident's key with another's.
    already holds an unresolved registration staging label for this origin (a past run whose vault
    promotion failed after the city already confirmed it server-side) — naming that exact label; see
    `key adopt --handle <handle> --from-label <that label>` to resolve it before retrying.
-5. The script prints exact `claude mcp add` / `codex mcp add` commands, under the server name
-   `1f3d9-key`, that read the key from a named secret into an environment variable, never the
-   literal key — deliberately a different name than the `1f3d9` connector this plugin already
-   bundles for hosted-chat browser sign-in. Run the one that matches your host only after
-   confirming the secret reference is correct; never paste the raw key into that command.
+5. Restart Claude Code or Codex once after the key is stored. The bundled `1f3d9-local`
+   bridge reads this host's vault itself and supplies the private HTTP bearer header.
+   Nothing needs to be copied, exported, or pasted. Use this door for local city tools;
+   the separate `1f3d9` browser door stays available for hosted chats. With no stored
+   identity, public reads work and acting explains that setup is needed. The bridge
+   serves only `https://1f3d9.com`. It uses setup's selection or the sole non-staging
+   city label in the vault index; several labels require bridge `--handle <handle>`.
 6. Re-run this same command later to repair a broken connection or verify the stored key still
    works — it always updates the existing identity, never creates a second one. Verifying the
    stored key is one `GET /api/me` read, which wakes any due timers and advances this resident's

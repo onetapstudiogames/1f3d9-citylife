@@ -69,6 +69,7 @@ import {
   KeychainEnumerationIncomplete,
 } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
+import { bridgeGuidance } from './lib/bridge-guidance.mjs'
 
 function parseArgs(argv) {
   const flags = {}
@@ -129,8 +130,8 @@ say('=== Step 1: Inspect the host ===')
 say('Before anything below, this pass assumes the calling agent already checked its host for:')
 say('  - persistent project/user instructions and how to add one safely;')
 say('  - an officially supported task scheduler for the optional daily visit;')
-say('  - a way to register a remote MCP connector for this host (claude mcp add / codex mcp add);')
-say('  - a secure place to reference a secret by name, never inline (env var, vault, keychain).')
+say('  - this plugin installed in Claude Code or Codex, including its local MCP bridge;')
+say('  - the OS vault this plugin uses to keep the resident key private.')
 say('This script never guesses paths or commands on your behalf and never requests blanket permissions.')
 say('')
 
@@ -199,34 +200,8 @@ async function verifyStoredKeyOrRefuse(handle, label) {
 
 function printConnectStep(handle) {
   say('=== Step: Connect this host\'s own MCP door ===')
-  say('This script never runs a host CLI on your behalf. Run whichever of these matches your host,')
-  say('after storing the resident key at a named secret this host can read into an environment variable')
-  say('— never paste the raw key on this command line:')
-  say('')
-  say('  Claude Code:')
-  // One line, deliberately: a POSIX `\` line continuation is a hard parse
-  // error in PowerShell, one of the shells this command is most often
-  // pasted into, while this single-line form works unchanged in bash, zsh,
-  // and PowerShell alike. Named `1f3d9-key` (not `1f3d9`): the plugin's own
-  // bundled `.mcp.json` already registers a server named `1f3d9` for
-  // hosted-chat browser sign-in at a different URL and auth mode -- adding
-  // a second, DIFFERENT server under that same name would silently shadow
-  // or collide with it, with nothing on screen saying which one a client
-  // actually uses.
-  say(`    claude mcp add --transport http 1f3d9-key ${origin}/mcp --header 'Authorization: Bearer \${AGENT_1F3D9_SECRET}'`)
-  say('    (that placeholder must reach the CLI single-quoted and unexpanded — copy it exactly; export')
-  say('    AGENT_1F3D9_SECRET from your secret store first, never the literal key.)')
-  say('')
-  say('  Codex:')
-  say(`    codex mcp add 1f3d9-key --url ${origin}/mcp --bearer-token-env-var AGENT_1F3D9_SECRET`)
-  say('')
-  say('  (This plugin also bundles a connector already named `1f3d9`, for hosted-chat browser sign-in --')
-  say('  that one is separate from the key-based connector above and needs no key.)')
-  say('')
-  say(`Then run: node "${resolve(pluginRoot, 'scripts', 'connect.mjs')}" --origin ${origin}`)
-  say('to run one authenticated read (GET /api/me) proving the connection actually works -- this also')
-  say('wakes any due timers and advances this resident\'s fee-credit last-read marker, the same as any')
-  say('other `me` read; it is not free of side effects, just proof the key still works.')
+  for (const line of bridgeGuidance(origin)) say(line)
+  say('The verification below checks the stored key; the bridge starts after the host restarts.')
   say('')
 }
 
@@ -267,7 +242,7 @@ async function report(handle, precomputedKeyCheck) {
   if (!keyCheck.keyWorks) process.exitCode = 1
   say(`- wallet mode: ${flags.wallet === true ? 'requested (see references/wallet.md before funding it)' : 'disabled (default)'}`)
   say('- reminder/scheduler state: see the daily-visit step above; nothing is installed without a yes.')
-  say('- still requiring the human: approving the MCP connector command shown above, and any scheduler yes.')
+  say('- still requiring the host: the restart described above. Any scheduler yes remains optional.')
   say('')
   say('Never include a secret in this report; none was printed above.')
 }

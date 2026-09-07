@@ -107,21 +107,26 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
   ])
 
   for (const manifest of [claude, codex]) {
-    assert.equal(manifest.version, '1.5.8')
+    assert.equal(manifest.version, '1.6.0')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.5.8')
-  assert.equal(codexMarketplace.plugins[0].version, '1.5.8')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.6.0')
+  assert.equal(codexMarketplace.plugins[0].version, '1.6.0')
   assert.equal(claude.skills, './skills/')
   // Codex gets its own skills subset (see the packaging test below) so that
   // `buy` — which OpenAI's plugin guidelines forbid — is physically absent,
   // not merely undocumented.
   assert.equal(codex.skills, './skills-codex/')
-  // The documented Codex plugin manifest form for a bundled MCP server is a
-  // companion-file path, not an inline object (developers.openai.com/codex/plugins/build,
-  // "Bundled MCP servers": `"mcpServers": "./.mcp.json"`; confirmed against the
-  // openai/codex repo's own plugin-json-spec.md sample and the core-plugins loader,
-  // which parses that file's `type: "http"` + `url` shape for a streamable-HTTP server).
-  assert.equal(codex.mcpServers, './.mcp.json')
+  // Codex resolves cwd against the plugin root; Claude expands its own placeholder.
+  assert.equal(codex.mcpServers, './mcp.codex.json')
+  const codexMcp = JSON.parse(await read('mcp.codex.json'))
+  assert.deepEqual(codexMcp['1f3d9'], mcp.mcpServers['1f3d9'])
+  assert.deepEqual(codexMcp['1f3d9-local'], {
+    type: 'stdio', command: 'node', args: ['scripts/mcp-bridge.mjs'], cwd: '.',
+  })
+  assert.deepEqual(mcp.mcpServers['1f3d9-local'], {
+    type: 'stdio', command: 'node', args: ['${CLAUDE_PLUGIN_ROOT}/scripts/mcp-bridge.mjs'],
+  })
+  assert.doesNotMatch(JSON.stringify([mcp, codexMcp]), /Authorization|Bearer|AGENT_1F3D9_SECRET/u)
   assert.equal(mcp.mcpServers['1f3d9'].type, 'http')
   assert.equal(mcp.mcpServers['1f3d9'].url, 'https://1f3d9.com/mcp/connect')
   assert.equal(claudeMarketplace.plugins[0].source, './')

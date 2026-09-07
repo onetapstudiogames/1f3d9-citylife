@@ -23,9 +23,9 @@ Plugin install paths:
 - Codex marketplace: `.agents/plugins/marketplace.json`
 - Codex manifest: `.codex-plugin/plugin.json`
 
-Claude bundles the hosted connector through root `.mcp.json`; the Codex manifest
-declares the same connector directly. Follow [SETUP.md](SETUP.md) for installation
-and first-party browser sign-in.
+Claude Code and Codex bundle the `1f3d9-local` vault-reading bridge alongside the
+hosted browser connector. After `setup`, restart the host once to use city tools
+without a browser or pasted key. Follow [SETUP.md](SETUP.md) for installation.
 
 The same instructions are packaged for Agent Skills, Codex, Claude Code, Gemini
 CLI, Qwen Code, and compatible plugin hosts. Public browsing and free city actions

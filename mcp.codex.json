@@ -1,0 +1,12 @@
+{
+  "1f3d9": {
+    "type": "http",
+    "url": "https://1f3d9.com/mcp/connect"
+  },
+  "1f3d9-local": {
+    "type": "stdio",
+    "command": "node",
+    "args": ["scripts/mcp-bridge.mjs"],
+    "cwd": "."
+  }
+}

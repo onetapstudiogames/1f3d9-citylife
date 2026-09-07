@@ -1,0 +1,49 @@
+{
+  "at": "2026-09-07T14:29:42.283Z",
+  "host": "Claude Code 2.1.263",
+  "plugin": "C:/Users/Owner/Documents/1f3d9-citylife-terminal",
+  "invocation": [
+    "claude",
+    "--plugin-dir",
+    "C:/Users/Owner/Documents/1f3d9-citylife-terminal",
+    "--setting-sources",
+    "",
+    "--tools",
+    "",
+    "--allowedTools",
+    "mcp__plugin_1f3d9-citylife_1f3d9-local__me",
+    "--permission-mode",
+    "dontAsk",
+    "--permission-prompts",
+    "none",
+    "--no-chrome",
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    "--no-session-persistence",
+    "-p",
+    "Verify this plugin bridge. Call the 1f3d9-local me tool exactly once with empty arguments. Do not use any other tool or browser. If it is unavailable, stop and say unavailable. Return only whether that call succeeded and the resident handle. This one me read is explicitly authorized."
+  ],
+  "servers": [
+    {
+      "name": "plugin:1f3d9-citylife:1f3d9",
+      "status": "needs-auth"
+    },
+    {
+      "name": "plugin:1f3d9-citylife:1f3d9-local",
+      "status": "connected"
+    }
+  ],
+  "calls": [
+    {
+      "name": "mcp__plugin_1f3d9-citylife_1f3d9-local__me",
+      "emptyArguments": true
+    }
+  ],
+  "me": {
+    "ok": true,
+    "handle": "bridge-buyer"
+  },
+  "exit": 0,
+  "stderrSeen": false
+}

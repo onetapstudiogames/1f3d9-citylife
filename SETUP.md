@@ -1,8 +1,11 @@
 # Connect 1F3D9
 
-This plugin bundles the skill and the hosted remote MCP connector at
-`https://1f3d9.com/mcp/connect`. The browser sign-in page is first-party. Never
-paste a resident key into chat, a URL, or a tool argument.
+This plugin bundles two city doors. `1f3d9-local` is a small Node bridge for
+Claude Code and Codex: it reads the selected resident from the OS vault
+at host startup and sends the key only in a private bearer header to
+`https://1f3d9.com/mcp`. `1f3d9` keeps the hosted browser sign-in door at
+`https://1f3d9.com/mcp/connect`. Never paste a resident key into chat, a URL,
+a tool argument, a config file, or an environment variable for the bridge.
 
 ## Claude Code
 
@@ -19,9 +22,10 @@ paste a resident key into chat, a URL, or a tool argument.
    claude plugin install 1f3d9-citylife@1f3d9-citylife
    ```
 
-3. Start a new Claude Code session, open the 1F3D9 connector, and finish browser
-   sign-in at the exact `https://1f3d9.com` origin.
-4. Say `Configure 1F3D9.`
+3. Start Claude Code and run `setup` through the plugin. It keeps the existing
+   registration and human approval steps, then stores the key in the vault.
+4. Restart Claude Code once. Use the `1f3d9-local` tools; no browser step is needed.
+   The separate hosted door can remain signed out.
 
 Validate a local checkout with:
 
@@ -40,17 +44,32 @@ claude plugin validate . --strict
    `.agents/plugins/marketplace.json` and `.codex-plugin/plugin.json`. That manifest's
    `skills` field points at `skills-codex/`, not `skills/`: a Codex-only subset that
    physically omits `buy` (see [Commands](#commands)). Its `mcpServers` field points at
-   the companion `./.mcp.json` file at the repo root — the same file Claude Code bundles
-   through its own root `.mcp.json` convention — rather than declaring the connector
-   inline; that is the form the published Codex plugin docs and the `openai/codex`
-   plugin manifest spec show for a plugin's own MCP config file.
-3. Start a new thread so Codex loads the skill and connector, then finish the
-   first-party browser sign-in when prompted.
-4. Say `Configure 1F3D9.`
+   companion `./mcp.codex.json` file. It contains a direct server map with the same
+   browser door and a Node stdio bridge. Its `cwd: "."` is resolved against the
+   plugin root, so the script path works regardless of the task's working folder.
+   Claude's `.mcp.json` uses `${CLAUDE_PLUGIN_ROOT}` for that same script.
+3. Start a new task and run `setup` through the plugin.
+4. Restart Codex once after the key is stored, then use `1f3d9-local`.
 
-The shorter `https://1f3d9.com/mcp` endpoint is only for local clients that can
-keep a bearer key in a private authorization header. Do not replace the bundled
-hosted address with it in Claude Code or Codex.
+The bridge works anonymously before setup. Acting explains that setup and a
+restart are needed. If the vault cannot be read, it keeps public reads available
+and reports the problem without exposing the key. It serves only the city origin,
+reads the key once at startup, and needs another host restart after an existing
+key is replaced. It uses setup's saved selection when one exists. Otherwise it
+uses the sole non-staging label for the city origin in the vault index and names
+that resident in its startup instructions. An empty index stays public-only.
+Several labels require `--handle <handle>` in the bridge's command arguments;
+it never chooses between them. An explicit bridge handle takes precedence over
+setup's selection. `connect --handle` checks that label's key; it does not select
+a different resident for the running bridge.
+
+The existing setup and connect verification probes still check the stored key;
+they do not prove that the host has loaded the bridge. `connect chat` and the
+hosted browser door keep their existing pairing behavior.
+
+Configuration references: [Claude plugin MCP servers](https://code.claude.com/docs/en/plugins-reference),
+[Codex bundled MCP servers](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks),
+and [Codex relative working-directory resolution](https://github.com/openai/codex/blob/main/codex-rs/codex-mcp/src/plugin_config.rs).
 
 A real Codex plugin-install smoke test (adding this repo as a Codex marketplace and
 installing it in a live Codex session) still has to happen before any marketplace
@@ -75,7 +94,7 @@ one-line summary, never on rendering.
 
 `setup`, `connect`, and `key` are shipped: `setup` registers through the city's coding-client JSON
 identity doors and stores the key and eight recovery codes in this host's OS vault; `connect` (or
-`connect chat`) adds this host's own MCP door or mints a pairing code for a chat twin; `key status`,
+`connect chat`) explains this host's bridge or mints a pairing code for a chat twin; `key status`,
 `key rotate`, `key recover`, `key show`, and `key adopt` check, replace, reveal, or recover a key
 stranded by an interrupted `setup`, `key rotate`, or `key recover begin`. `key adopt` promotes over
 a live entry only when the city itself rejects its credential with the city's own 401 JSON error,
