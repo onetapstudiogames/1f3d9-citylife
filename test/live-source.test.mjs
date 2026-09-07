@@ -427,6 +427,35 @@ test('live navigation ascends nested places, wraps numeric towns, performs no I/
   assert.equal(drawingPaths.filter(path => path === '/api/drawing/place/3').length, 1, 'returning to a town reuses its drawing')
 })
 
+test('a stale in-flight town read cannot undo a later navigation', async () => {
+  const base = makeNavigationFetch()
+  let town2Maps = 0
+  let releaseStale
+  let reachedStale
+  const staleGate = new Promise(resolve => { releaseStale = resolve })
+  const staleReached = new Promise(resolve => { reachedStale = resolve })
+  const fetchImpl = async (input, init) => {
+    const url = new URL(String(input))
+    if (url.pathname === '/api/map' && url.searchParams.get('parent_id') === '2') {
+      town2Maps += 1
+      if (town2Maps === 2) {
+        reachedStale()
+        await staleGate
+      }
+    }
+    return base.fetchImpl(input, init)
+  }
+  const source = await createLiveSource({ placeArg: 2, fetchImpl })
+  assert.equal((await source.read(0, { maxRooms: 1 })).target.id, 2)
+
+  const staleRead = source.read(1, { maxRooms: 1 })
+  await staleReached
+  assert.deepEqual(source.navigate('right'), { ok: true, changed: true })
+  releaseStale()
+  assert.equal((await staleRead).target.id, 2)
+  assert.equal((await source.read(2, { maxRooms: 1 })).target.id, 3)
+})
+
 test('follow navigation is a synchronous no-op', async () => {
   const { fetchImpl, calls } = makeFetch()
   const source = await createLiveSource({ followHandle: 'moss', fetchImpl })

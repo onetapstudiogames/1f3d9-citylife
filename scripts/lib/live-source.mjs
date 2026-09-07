@@ -428,6 +428,7 @@ export async function createLiveSource({ placeArg, followHandle, sceneFile, fail
   if (failAt !== undefined && !sceneFile) throw new TypeError('failAt requires --scene')
   let selectedPlace = placeArg
   let lastSuccessfulRaw = null
+  let selectionGeneration = 0
   if (sceneFile) {
     const scene = await readScene(sceneFile)
     if (failAt !== undefined && (!Number.isFinite(failAt) || failAt < 0)) {
@@ -441,7 +442,10 @@ export async function createLiveSource({ placeArg, followHandle, sceneFile, fail
       scene: true,
       getRaw: () => lastSuccessfulRaw,
       getPlaceId: () => selectedPlace ?? lastSuccessfulRaw?.target?.id,
-      setPlaceId: id => { selectedPlace = id },
+      setPlaceId: id => {
+        selectedPlace = id
+        selectionGeneration += 1
+      },
     })
     return {
       frameTimes: [...scene.frameTimes],
@@ -450,6 +454,7 @@ export async function createLiveSource({ placeArg, followHandle, sceneFile, fail
       navigate,
       close: () => {},
       read: async (nowMs, { maxRooms = Number.MAX_SAFE_INTEGER } = {}) => {
+        const readGeneration = selectionGeneration
         const selectedIndex = scene.moments.findLastIndex((moment) => moment.atMs <= nowMs)
         const momentIndex = Math.max(0, selectedIndex)
         if (failAt !== undefined && scene.moments[momentIndex].atMs === failAt) {
@@ -457,7 +462,7 @@ export async function createLiveSource({ placeArg, followHandle, sceneFile, fail
         }
         const raw = rawForMoment(scene, momentIndex)
         const result = normalizeRaw(raw, maxRooms, { placeArg: selectedPlace, followHandle })
-        if (result.ok) {
+        if (result.ok && readGeneration === selectionGeneration) {
           lastSuccessfulRaw = raw
           if (!followHandle) selectedPlace = result.target.id
         }
@@ -477,16 +482,21 @@ export async function createLiveSource({ placeArg, followHandle, sceneFile, fail
     scene: false,
     getRaw: () => lastSuccessfulRaw,
     getPlaceId: () => selectedPlace ?? lastSuccessfulRaw?.target?.id,
-    setPlaceId: id => { selectedPlace = id },
+    setPlaceId: id => {
+      selectedPlace = id
+      selectionGeneration += 1
+    },
   })
   return {
     navigate,
     close: () => controller.abort(),
     read: async (_nowMs, { maxRooms = 9, size } = {}) => {
-      const collected = await collectPublicRaw({ placeArg: selectedPlace, followHandle, fetchImpl: sourceFetch, drawingCache, maxRooms, size })
+      const readGeneration = selectionGeneration
+      const readPlace = selectedPlace
+      const collected = await collectPublicRaw({ placeArg: readPlace, followHandle, fetchImpl: sourceFetch, drawingCache, maxRooms, size })
       if (!collected.ok) return collected
       const result = normalizeRaw(collected.raw, maxRooms)
-      if (result.ok) {
+      if (result.ok && readGeneration === selectionGeneration) {
         lastSuccessfulRaw = collected.raw
         if (!followHandle) selectedPlace = result.target.id
       }
