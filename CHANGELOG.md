@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.4 - 2026-09-07
+
+- Add `r` refresh and `q`, Esc, and Ctrl+C close controls. In `live`, Left/Right
+  cycles through same-continent towns in numeric ID order with wraparound;
+  `follow` stays resident-centered with stable boxes and the current room shown.
+- Freeze the last picture on a failed read and show one muted bottom-line error
+  until recovery. Classic Windows Console now enables UTF-8 and VT with
+  256-colour output where possible and falls back to one plain frame otherwise.
+- State the picture's real and decorative parts, anonymous read-only behavior,
+  inline fallback, controls, and deterministic `--scene`, `--at`, `--dump`, and
+  `--fail-at` replay contract in the command skills and project guide.
+
 ## 1.6.3 - 2026-09-07
 
 - Drift each resident deterministically within a two-cell radius every two to

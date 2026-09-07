@@ -49,17 +49,29 @@ Once installed, there is something to type, not only a prompt to invoke. In Clau
 Claude Code only.
 
 `live [place]` and `follow <handle>` open the same quiet terminal picture. It
-fits stable rounded room boxes to the current window and shows full-size resident
-drawings, with a grey figure when a resident has no drawing. `follow` uses the
-same room boxes and includes the resident's current room. Residents drift
-deterministically within a two-cell radius every two to four seconds. Only a
-fresh public move event that was applied starts a two-second door walk; a room
-change seen only in a snapshot snaps into place. Notes show for six seconds,
-use at most 24 graphemes, and queue separately in each room. Public snapshots
-and events refresh independently every 30 seconds, while a dirty picture
-repaints at most eight times per second. A recorded scene can be replayed
-offline for review. See the
-[PR1 terminal-view evidence](docs/evidence/pr1/README.md).
+fits stable rounded room boxes to the current window. Floors use their own 8x8
+tiles, residents use 8x4 drawings, and things use 4x2 marks. The city supplies
+real room membership; positions inside each room and deterministic drift are
+invented for appearance, and the screen stays quiet about that distinction.
+Only a fresh recorded public move with `applied` status starts a two-second door
+walk; snapshot-only relocation snaps. Notes show up to 24 graphemes for six
+seconds and queue per room. `follow` stays centered on its resident and includes
+the current room among the same stable boxes.
+
+The commands launch a new window when possible and otherwise print one plain
+frame inline. Press `r` to read now or `q`, Esc, or Ctrl+C to close. In `live`,
+Left/Right cycles through same-continent towns in numeric ID order with
+wraparound. Public snapshots and events refresh independently every 30 seconds,
+and dirty pictures repaint at most eight times per second. A failed read freezes
+the last picture and adds one muted bottom-line error until a read succeeds.
+Classic Windows Console uses UTF-8 and VT with 256 colours when available, then
+falls back to one plain frame. All city reads are public and anonymous; these
+commands load no identity and make no city write.
+
+For deterministic offline replay, pass `--scene <file>`. `--at <ms>` selects a
+time, `--dump <path>` writes plain and ANSI frames, and `--fail-at <ms>` injects
+a read failure only at an existing scene moment. Scene navigation refuses towns
+that were not recorded. See the [terminal-view evidence](docs/evidence/pr1/README.md).
 
 ## Links
 
