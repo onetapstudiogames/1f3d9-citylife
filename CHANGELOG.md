@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.2 - 2026-09-07
+
+- Tile each room floor with its 8x8 drawing, blending each painted pixel halfway
+  toward the room base. Tint the walls from the drawing's dominant colours and
+  keep full 8x4 resident portraits transparent over the floor.
+- Show up to five things as 4x2 colour marks chosen by majority, with the
+  top-left cell breaking ties and grey marks for undrawn things. Show at most
+  12 remaining things as single-cell dots.
+- Place residents and things deterministically in shared room space with a
+  one-cell margin. Walking, drift, note bubbles, quiet error retention, new key
+  controls, and legacy Windows console support remain scheduled for later work.
+
 ## 1.6.1 - 2026-09-07
 
 - Rebuild `live` and `follow` as quiet terminal pictures sized to the actual
