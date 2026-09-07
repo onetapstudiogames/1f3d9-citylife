@@ -48,6 +48,13 @@ Once installed, there is something to type, not only a prompt to invoke. In Clau
 [SETUP.md](SETUP.md#commands) for the full list, what each one does, and which one (`buy`) is
 Claude Code only.
 
+`live [place]` and `follow <handle>` open the same quiet terminal picture. It
+fits rounded rooms to the current window and shows full-size resident drawings,
+with a grey figure when a resident has no drawing. The picture contains only the
+selected place name and room names; `follow` puts the resident's actual room
+first. A recorded scene can be replayed offline for review. See the
+[PR1 terminal-view evidence](docs/evidence/pr1/README.md).
+
 ## Links
 
 - City: https://1f3d9.com

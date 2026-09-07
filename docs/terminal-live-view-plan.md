@@ -1,5 +1,10 @@
 # Terminal live view: plan (2026-09-07)
 
+Owner corrections for implementation: animate a walk only from a new recorded
+public move event, never from a difference between presence snapshots. Positions
+inside each room are decorative; disclose that in the skill text, never on screen.
+These corrections govern the original motion description and step 10 below.
+
 Owner wants: cozy, cute, visuals first, like the Sims; residents, things and places drawn from their own 8x8 portraits; almost no words.
 
 ## recommendation

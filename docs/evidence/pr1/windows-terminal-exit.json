@@ -1,0 +1,25 @@
+{
+  "host": "Windows Terminal 1.24.11911.0",
+  "method": "A fresh terminal ran the shared controller against the fixture; a local proof driver emitted its q keypress after one second. No global keyboard input or browser was used.",
+  "session": {
+    "result": {
+      "ok": true
+    },
+    "log": [],
+    "flow": false,
+    "handles": [
+      {
+        "kind": "ReadStream",
+        "ref": true
+      },
+      {
+        "kind": "WriteStream",
+        "ref": true
+      }
+    ]
+  },
+  "processExit": {
+    "nodeExitCode": 0,
+    "log": []
+  }
+}
