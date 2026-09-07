@@ -1,10 +1,73 @@
 import assert from 'node:assert/strict'
+import { EventEmitter } from 'node:events'
 import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, delimiter } from 'node:path'
 import test from 'node:test'
 
 import { openTerminalRunning } from '../scripts/lib/terminal.mjs'
+
+const fakeChild = (pid, code) => {
+  const child = new EventEmitter()
+  child.pid = pid
+  child.unref = () => {}
+  queueMicrotask(() => child.emit('exit', code, null))
+  return child
+}
+
+test('Windows fallback transports public argv without embedding it in PowerShell source', async () => {
+  const calls = []
+  const malicious = '$([IO.File]::WriteAllText("owned", "yes")); `Get-Process`; line\r\nnext'
+  const result = await openTerminalRunning('C:\\city view\\live-feed.mjs', [malicious], {
+    title: '1F3D9 live & calc.exe',
+    platform: 'win32',
+    executable: 'C:\\Program Files\\nodejs\\node.exe',
+    env: { SystemRoot: 'C:\\Windows' },
+    spawnImpl: (command, args, options) => {
+      calls.push({ command, args, options })
+      return fakeChild(100 + calls.length, calls.length === 1 ? 1 : 0)
+    },
+  })
+
+  assert.equal(result.opened, true)
+  assert.equal(calls.length, 2)
+  assert.match(calls[0].command, /wt\.exe$/iu)
+  assert.match(calls[1].command, /cmd\.exe$/iu)
+  assert.deepEqual(calls[1].args.slice(0, 4), ['/d', '/s', '/c', 'start'])
+  assert.equal(calls[1].args[4], '1F3D9 live')
+  assert.equal(calls[1].args.includes('1F3D9 live & calc.exe'), false)
+  assert.equal(calls[1].args.includes('-NoExit'), true)
+  const payload = JSON.parse(Buffer.from(calls[1].options.env.ONEF3D9_LEGACY_CONSOLE_PAYLOAD, 'base64').toString('utf8'))
+  assert.deepEqual(payload.argv, ['C:\\city view\\live-feed.mjs', malicious])
+  const source = Buffer.from(calls[1].args.at(-1), 'base64').toString('utf16le')
+  assert.equal(source.includes(malicious), false)
+  assert.equal(calls[1].args.join(' ').includes(malicious), false)
+})
+
+test('macOS launcher keeps public argv out of AppleScript and shell source', async () => {
+  const calls = []
+  const malicious = '\"; do shell script \"touch owned\"; $() `cmd` \' line\r\nnext'
+  const result = await openTerminalRunning('/city view/live-feed.mjs', [malicious], {
+    platform: 'darwin',
+    executable: '/opt/node bin/node',
+    env: {},
+    spawnImpl: (command, args, options) => {
+      calls.push({ command, args, options })
+      return fakeChild(201, 0)
+    },
+  })
+
+  assert.equal(result.opened, true)
+  assert.equal(calls.length, 1)
+  const appleScript = calls[0].args.at(-1)
+  assert.equal(appleScript.includes(malicious), false)
+  const encoded = /echo ([A-Za-z0-9+/=]+) \|/u.exec(appleScript)?.[1]
+  assert.ok(encoded)
+  const command = Buffer.from(encoded, 'base64').toString('utf8')
+  const quote = value => `'${value.replaceAll("'", "'\\''")}'`
+  assert.equal(command, `exec ${['/opt/node bin/node', '/city view/live-feed.mjs', malicious].map(quote).join(' ')}`)
+  assert.equal(command.includes("'\\''"), true, 'apostrophes use the standard POSIX literal escape')
+})
 
 // `openTerminalRunning` is exercised for real (a genuine, visible window, not
 // a background process) on Windows as part of manual verification for this
