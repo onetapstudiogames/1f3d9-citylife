@@ -187,6 +187,14 @@ const paintEffects = (grid, effects, roomStates, poses) => {
       }
       continue
     }
+    if (effect.type === 'looking') {
+      const pose = residentPose(poses, effect.residentId)
+      if (!pose || !sameId(pose.roomId, state.room.id)) continue
+      const x = Math.max(state.box.x + 1, Math.min(pose.x + Math.floor(pose.width / 2), state.box.x + state.box.width - 2))
+      const y = Math.max(state.box.y + 1, pose.y - 1)
+      grid.put(x, y, '◉', DARK.hi)
+      continue
+    }
     if (effect.type === 'glow' || effect.type === 'puff' || effect.type === 'crumbs') {
       const anchor = effectAnchor(effect, roomStates)
       if (!anchor) continue
@@ -341,7 +349,9 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
   for (const pose of visiblePoses) {
     const walkingFocus = sameId(pose.resident?.id, observation?.focus?.id) &&
       (pose.walking === true || (motionFrame?.doors?.length ?? 0) > 0)
-    const sleeping = Boolean(observation?.focus) && !walkingFocus
+    const activeLooking = pose.resident?.looking && pose.resident.looking.suppressed !== true &&
+      Number(pose.resident.looking.expiresAtMs) > Number(motionFrame?.nowMs)
+    const sleeping = Boolean(observation?.focus) && !walkingFocus && !activeLooking
     overlayPixels(grid, pose.x, pose.y, residentPixels(pose.resident, sleeping), pose.opacity ?? 1)
   }
 

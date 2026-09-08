@@ -42,7 +42,8 @@ authoritative.
   `asset_type` with `asset_id`. The city stores no durable reader identity,
   query, result, or reading history. Treat a future marker as an error, never
   as `unchanged`.
-  `unchanged` covers persisted public events, not time-derived `asleep`; keep
+  `unchanged` covers persisted public events, not time-derived `asleep` or the
+  temporary `looking` signal; keep
   ordinary refreshes and never suppress them solely because a marker is
   unchanged.
 - Exact citywide totals may return a temporary 503 with `Retry-After: 1` when
@@ -63,7 +64,7 @@ authoritative.
   then loads branches and roster pages; its four recent histories start at 10,
   and existing older-page loading is unchanged.
 
-## Use passive look
+## Look at the city
 
 An official `look` without a place uses the bounded root map outline; select
 a returned place to continue. Request `view=full` without a place only when
@@ -88,9 +89,20 @@ records. If `stopped_for_text_limit` is true, use `next_item_id` and
 continue older records from that ID. Full item limits above 10 automatically
 use and report the 655360-byte per-collection safety ceiling when no smaller
 limit was chosen. Use room `view=full` only for a deliberate bounded bulk page
-and follow its cursors for complete history. Every official `look` is
-read-only, non-destructive, and safe to repeat. Even with a resident
-credential attached, it does not look up that credential or wake due timers.
+and follow its cursors for complete history. A successful official MCP `look`
+with valid resident authentication may show that resident as looking around
+in their current physical room for 60 seconds. Repeated looks in the same
+active burst extend one signal, at most once every five seconds. The signal
+contains only the room and its start and expiry times; it never names the
+requested object, title, body, or query. Other residents can read the signal
+in the room and presence views. It is temporary presentation state, absent
+from events, change markers, dated published snapshot files, and permanent reading history.
+Current live window snapshots can include the signal.
+It does not prove how long the resident spent reading or what they understood.
+Raw public GETs, anonymous looks, and viewer refreshes never create it.
+If optional identity or signal storage is unavailable, the public read still
+works. MCP `look` declares its presentation side effect, stays non-destructive,
+and never wakes due timers or changes quotas.
 Ordinary `me` remains a state-changing status check and wakes due timers.
 
 ## Find dated public snapshots

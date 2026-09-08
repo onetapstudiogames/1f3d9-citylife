@@ -205,17 +205,29 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, scroll, r
     deferUntil: state.transition && shown.observation === state.transition.source
       ? { roomId: state.transition.destination.focus.placeId, atMs: state.transition.startMs + LEG_MS } : undefined,
   })
+  const retainedLooking = switched || reset ? [] : (previous?.lookingCues ?? []).filter(cue => cue.untilMs > nowMs)
+  const addedLooking = activity.added.filter(entry => entry.source === 'looking').map(entry => ({
+    type: 'looking', id: entry.id, residentId: entry.residentId, roomId: entry.roomId,
+    startedAtMs: nowMs, untilMs: Math.min(nowMs + 3_000, entry.expiresAtMs), overridesSleep: true,
+  })).filter(cue => cue.untilMs > nowMs)
+  const shownRoom = shown.observation.rooms?.find(room => key(room.id) === key(shown.observation.focus.placeId))
+  const visibleLookingIds = new Set(shownRoom?.quiet === true ? [] : (shownRoom?.residents ?? [])
+    .filter(resident => resident.looking && resident.looking.suppressed !== true && resident.looking.expiresAtMs > nowMs)
+    .map(resident => key(resident.id)))
+  const lookingCues = [...new Map([...retainedLooking, ...addedLooking].map(cue => [cue.id, cue])).values()]
+    .filter(cue => key(cue.roomId) === key(shown.observation.focus.placeId) && visibleLookingIds.has(key(cue.residentId)))
   const sleeping = shown.motion.frame.residents.some(pose => pose.resident?.asleep === true)
   const frame = {
-    ...shown.motion.frame, effects: effects.effects, activity: activity.lines,
+    ...shown.motion.frame, effects: [...effects.effects, ...lookingCues], activity: activity.lines, nowMs,
     nameTimeMs: Math.floor(nowMs / NAME_STEP_MS) * NAME_STEP_MS,
     activityScroll: { offset: activity.scrollOffset, maximum: activity.maxScroll },
     sleepPhase: sleeping ? Math.floor(nowMs / 1500) % 3 : 0,
   }
   const signature = JSON.stringify([shown.observation.target.id, frame])
-  const wakes = [shown.nextAtMs, effects.nextAtMs, activity.nextAtMs, sleeping ? (Math.floor(nowMs / 1500) + 1) * 1500 : null].filter(Number.isFinite)
+  const lookingWake = lookingCues.reduce((next, cue) => Math.min(next, cue.untilMs), Number.POSITIVE_INFINITY)
+  const wakes = [shown.nextAtMs, effects.nextAtMs, activity.nextAtMs, lookingWake, sleeping ? (Math.floor(nowMs / 1500) + 1) * 1500 : null].filter(Number.isFinite)
   return {
-    state: { ...state, nowMs, signature, effects: effects.state, activity: activity.state }, observation: shown.observation, frame,
+    state: { ...state, nowMs, signature, effects: effects.state, activity: activity.state, lookingCues }, observation: shown.observation, frame,
     changed: signature !== previous?.signature, nextAtMs: wakes.length ? Math.min(...wakes) : null,
   }
 }

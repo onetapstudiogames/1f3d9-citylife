@@ -201,6 +201,64 @@ test('a failed refresh freezes the picture until a success clears the quiet line
   }
 })
 
+test('a failed follow read expires only its looking cue and recovery seeds an unseen burst', async () => {
+  const harness = makeHarness()
+  const fake = makeClock()
+  const look = (startedAt, startedAtMs, expiresAtMs) => ({
+    place_id: 1, started_at: startedAt, expires_at: `expiry-${expiresAtMs}`, startedAtMs, expiresAtMs,
+  })
+  const follow = (signal = null) => ({
+    ok: true, target: { id: 1, name: 'painted room' }, focus: { id: 7, handle: 'walker', placeId: 1 },
+    residents: [{ id: 7, handle: 'walker' }], events: [], notes: [],
+    rooms: [{ id: 1, name: 'painted room', drawing: null, things: [], thingsCount: 0, notes: [], focusResidentId: 7,
+      residents: [{ ...resident(1), asleep: true, looking: signal }] }],
+  })
+  const replies = [
+    follow(),
+    follow(look('burst-one', 0, 60_000)),
+    { ok: false, error: 'private failure' },
+    { ok: false, error: 'private failure' },
+    follow(look('burst-two', 60_000, 120_000)),
+  ]
+  let reads = 0
+  const source = { read: async () => { reads += 1; return replies.shift() }, close: () => {} }
+  const closed = runViewSession(source, { color: '16' }, { ...harness, env: {}, platform: 'win32', clock: fake.clock })
+  try {
+    await waitFor(() => reads === 1 && visibleRows(harness.writes).join('\n').includes('painted room'))
+    harness.input.emit('keypress', 'r', { name: 'r' })
+    await waitFor(() => reads === 2)
+    await fake.advance(125)
+    assert.match(harness.writes.join(''), /◉/u)
+    harness.input.emit('keypress', 'r', { name: 'r' })
+    await waitFor(() => reads === 3)
+    await fake.advance(125)
+    await waitFor(() => visibleRows(harness.writes).at(-1).trim() === 'Could not read the city.')
+    assert.match(visibleRows(harness.writes).join('\n'), /◉/u)
+
+    await fake.advance(2_875)
+    const expired = visibleRows(harness.writes).join('\n')
+    assert.doesNotMatch(expired, /◉/u)
+    assert.doesNotMatch(expired, /\bz\b/u, 'active looking still overrides the coarse asleep mark after its short cue')
+    assert.match(expired, /painted room/u)
+    assert.equal(visibleRows(harness.writes).at(-1).trim(), 'Could not read the city.')
+
+    await fake.advance(56_875)
+    const asleepAgain = visibleRows(harness.writes).join('\n')
+    assert.match(asleepAgain, /\bz\b/u, 'the asleep mark returns when the underlying looking signal expires offline')
+    assert.equal(visibleRows(harness.writes).at(-1).trim(), 'Could not read the city.')
+
+    harness.input.emit('keypress', 'r', { name: 'r' })
+    await waitFor(() => reads === 5)
+    await fake.advance(125)
+    await waitFor(() => visibleRows(harness.writes).at(-1).trim() === '')
+    const recovered = visibleRows(harness.writes).join('\n')
+    assert.doesNotMatch(recovered, /◉/u)
+    assert.equal(recovered.match(/walker is looking around\./gu)?.length, 1, 'recovery does not backfill the second burst')
+  } finally {
+    await closeSession(harness.input, closed)
+  }
+})
+
 test('r coalesces repeated requests while one public read is pending', async () => {
   const harness = makeHarness()
   const fake = makeClock()
