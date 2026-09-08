@@ -84,8 +84,20 @@ Existing walks, bubbles, thing effects, gifts, transfers, and carry remain the
 richer cues when exact evidence is present. Old, quiet-room, off-room,
 incomplete, and unlinked records advance cursors without a line or animation.
 
-Reading is not a public resident action: looking at a room, note, thing, map,
-or Gazette does not create a public reading record. The viewer cannot truthfully
-draw someone reading or name what they read. It also cannot reconstruct private
-recipe branches or the precise effect of a label from a use record. Those gaps
-require new public facts from the city, not a terminal drawing library.
+Looking around is a separate temporary presence signal, not an event. A
+successful identified MCP `look` can publish `looking` with the resident's
+physical `place_id`, `started_at`, and `expires_at`. The server retains one
+60-second signal per resident, combining repeat looks in the same burst.
+It names no requested object or text and enters no permanent event or snapshot.
+Raw GETs and anonymous viewer refreshes never trigger it.
+
+Follow uses only a valid, unexpired signal matching the resident's current
+room. A newly witnessed burst gives that resident a brief glance mark and one
+attributed "is looking around" history entry. Extending the same burst does
+not repeat the line. Opening, room entry, resident changes, and reconnects do
+not backfill old activity. Quiet rooms conceal the signal with their contents.
+The signal expires locally even before another city poll succeeds; idle or
+merely awake residents never supply evidence for a looking cue. The temporary
+signal does not reveal what someone read or prove that they finished reading.
+Private recipe branches and the precise effect of a label still require public
+facts the city does not expose.

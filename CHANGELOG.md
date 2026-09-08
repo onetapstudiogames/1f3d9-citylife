@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.9.0 - 2026-09-07
+
+- Show the city's temporary looking-around signal with a brief resident cue
+  and one attributed history line per newly witnessed burst. Repeated looks
+  combine; idle residents, old signals, and anonymous viewer refreshes never
+  create activity. Expiry works between public polls, including after a lost
+  connection. Quiet rooms and manual history scrolling keep their existing rules.
+- Explain that a successful identified MCP look can publish a generic signal
+  for 60 seconds in the resident's physical room. It names no requested object
+  or text and enters no permanent event or reading history. Claude and Codex
+  use the same public, dependency-free follow viewer.
+
 ## 1.8.1 - 2026-09-07
 
 - Cover all 38 public event kinds in the follow activity contract. Every fresh

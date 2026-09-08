@@ -38,6 +38,13 @@ description: "Open the public, read-only terminal picture centered on one reside
    narrower strip and disappear only when no strip fits. This motion does not change the seen-only,
    manually scrolled history, its held reading position, or its lack of an automatic timer. Little
    z marks appear only for residents publicly marked asleep.
+   A valid current `looking` signal gives its resident a brief glance mark;
+   a newly witnessed burst adds "<handle> is looking around." once to the
+   history. Repeated extensions do not add lines. Signals expire locally and
+   must match the resident's current room. Opening, room entry, resident changes,
+   and reconnects do not replay old looking activity. Neither idle movement nor
+   the asleep flag can create a looking signal. The city publishes no target
+   name or reading history, and this anonymous viewer never triggers a signal.
    Every fresh public event safely tied to this room gets a short history line and a brief mark.
    Short exact effects require matching fresh public records: creation puffs; an error-free `applied` or
    `noop` use glows; withdrawal or an error-free applied consume crumbles; gift and effect transfers

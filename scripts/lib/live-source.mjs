@@ -12,6 +12,36 @@ const DURATION_MS = 68000
 const byId = (a, b) => Number(a.id) - Number(b.id)
 const drawingKey = (type, id) => `${type}:${id}`
 
+export const normalizeLookingPresence = (value, currentPlaceId, { nowMs, observedAtEpochMs } = {}) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const placeId = Number(value.place_id)
+  const currentId = Number(currentPlaceId)
+  const startedEpochMs = Date.parse(value.started_at)
+  const expiresEpochMs = Date.parse(value.expires_at)
+  const observedEpoch = Number(observedAtEpochMs)
+  const clock = Number(nowMs)
+  const futureSkewMs = startedEpochMs - observedEpoch
+  if (!Number.isSafeInteger(placeId) || placeId < 1 || placeId !== currentId ||
+    !Number.isFinite(startedEpochMs) || !Number.isFinite(expiresEpochMs) ||
+    !Number.isFinite(observedEpoch) || !Number.isFinite(clock) ||
+    expiresEpochMs <= observedEpoch ||
+    expiresEpochMs <= startedEpochMs || futureSkewMs > 60_000 ||
+    expiresEpochMs - Math.max(observedEpoch, startedEpochMs) > 60_000) return null
+  return {
+    place_id: placeId,
+    started_at: new Date(startedEpochMs).toISOString(),
+    expires_at: new Date(expiresEpochMs).toISOString(),
+    startedAtMs: clock + Math.min(0, futureSkewMs),
+    expiresAtMs: clock + expiresEpochMs - observedEpoch,
+    ...(futureSkewMs > 5_000 ? { suppressed: true } : {}),
+  }
+}
+
+const withLooking = (resident, clock) => ({
+  ...resident,
+  looking: normalizeLookingPresence(resident?.looking, resident?.current_place_id, clock),
+})
+
 const responseError = (label, response) => `${label}: ${response?.error ?? `HTTP ${response?.status ?? 0}`}`
 
 const readPresencePages = async (fetchImpl, afterMarker = null) => {
@@ -342,7 +372,7 @@ const residentForHandle = (residents, handle) => {
 }
 const quietAncestor = (placeId, directoryIndex) => directoryIndex.ancestorsOf(placeId)
   .some((id) => directoryIndex.byId.get(id)?.quiet === true)
-const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [] }) => {
+const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [], clock }) => {
   const drawings = drawingMapFromRaw(raw)
   const residents = residentsFromPages(raw.presence?.pages ?? [])
   const picker = pickerFromResidents(residents)
@@ -378,7 +408,7 @@ const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [] }) => {
   const roomResidents = hidden ? [] : residents
     .filter((resident) => Number(resident.current_place_id) === placeId)
     .sort(byId)
-    .map((resident) => ({ ...resident, drawing: drawings.get(drawingKey('resident', resident.id)) ?? null }))
+    .map((resident) => ({ ...withLooking(resident, clock), drawing: drawings.get(drawingKey('resident', resident.id)) ?? null }))
   return {
     ok: true,
     target,
@@ -573,7 +603,8 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
         if (failAt !== undefined && scene.moments[index].atMs === failAt) return { ok: false, error: 'Injected scene read failure.' }
         const raw = rawForMoment(scene, index)
         const residents = residentsFromPages(raw.presence?.pages ?? [])
-        const result = normalizedFollowRoom({ raw, selectedHandle })
+        const observedAtEpochMs = Date.parse(scene.metadata?.recordedAt) + nowMs
+        const result = normalizedFollowRoom({ raw, selectedHandle, clock: { nowMs, observedAtEpochMs } })
         if (readGeneration === generation) {
           latestResidents = residents
           if (result.ok && selectedHandle === null) selectedHandle = result.focus.handle
@@ -599,6 +630,7 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
   return {
     selectResident, navigate, close: () => controller.abort(),
     read: async (_nowMs, { size } = {}) => {
+      const readStartedEpochMs = Date.now()
       const readGeneration = generation
       const readHandle = selectedHandle
       const baseline = marker === null
@@ -676,7 +708,12 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
       const failedDrawing = drawings.find((entry) => entry.response.status < 200 || entry.response.status >= 300)
       if (failedDrawing) return { ok: false, error: `drawing ${failedDrawing.key}: ${failedDrawing.response.error ?? `HTTP ${failedDrawing.response.status}`}` }
       const raw = { directory, presence: { pages: presenceResult.pages }, rooms: hidden ? [] : [{ placeId, response: roomResponse }], notes: { notes }, events: { events }, contextEvents: { events: contextEvents }, drawings }
-      const result = normalizedFollowRoom({ raw, selectedHandle: readHandle, knownThingIds: priorThingIds })
+      const observedAtEpochMs = Date.now()
+      const elapsedMs = Math.max(0, Math.min(60_000, observedAtEpochMs - readStartedEpochMs))
+      const result = normalizedFollowRoom({
+        raw, selectedHandle: readHandle, knownThingIds: priorThingIds,
+        clock: { nowMs: _nowMs + elapsedMs, observedAtEpochMs },
+      })
       if (readGeneration === generation && result.ok) {
         latestResidents = residents
         selectedHandle = focus.handle

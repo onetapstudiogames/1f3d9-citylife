@@ -55,6 +55,15 @@ const noteText = (note, fallbackAuthor) => {
   return author && body ? `${author}: ${body}` : null
 }
 
+const lookingRows = (observation, roomId) => (currentRoom(observation)?.residents ?? []).flatMap((resident) => {
+  const signal = resident?.looking
+  const id = positiveId(resident?.id)
+  const handle = safeName(resident?.handle)
+  if (id === null || !handle || !signal || !inRoom(positiveId(signal.place_id), roomId)) return []
+  return [{ id: `looking:${id}:${signal.started_at}`, residentId: id, actor: handle, roomId,
+    startedAt: signal.started_at, expiresAtMs: Number(signal.expiresAtMs), active: signal.suppressed !== true }]
+})
+
 const freshEntries = (state, observation, known, roomId, switchedResident, movedRoom) => {
   if (!observation || switchedResident) return []
   const notes = new Map((observation.notes ?? []).map((row) => [key(row?.id), row]))
@@ -195,10 +204,11 @@ export const stepActivity = (previous, { nowMs, observation, columns, rows = 3, 
   const rememberedNoteIds = [...new Set([...(previous?.seenNoteIds ?? []), ...observedNoteIds])]
 
   if (!previous) {
+    const seenLooking = lookingRows(observation, roomId).map(entry => entry.id)
     const state = {
       nowMs: time, columns: width, rows: height, roomId, residentId, quiet,
       cursor: observedCursor, noteCursor: observedNoteCursor, seenNoteIds: rememberedNoteIds, known,
-      history: [], wrappedLines: [], scrollOffset: 0,
+      history: [], wrappedLines: [], scrollOffset: 0, seenLooking,
     }
     return result(state)
   }
@@ -214,11 +224,17 @@ export const stepActivity = (previous, { nowMs, observation, columns, rows = 3, 
       ...state, columns: width, cursor: Math.max(previous.cursor, observedCursor),
       noteCursor: Math.max(previous.noteCursor ?? 0, observedNoteCursor), seenNoteIds: rememberedNoteIds,
       history: [], wrappedLines: [], scrollOffset: 0,
+      seenLooking: [...new Set([...(previous.seenLooking ?? []), ...lookingRows(observation, roomId).map(entry => entry.id)])].slice(-400),
     }
     return result(state)
   }
 
-  const additions = freshEntries(state, observation, known, roomId, switchedResident, movedRoom)
+  const witnessedLooking = lookingRows(observation, roomId)
+  const unseenLooking = movedRoom ? [] : witnessedLooking
+    .filter(entry => entry.active && !(state.seenLooking ?? []).includes(entry.id) && entry.expiresAtMs > time)
+    .map(entry => ({ ...entry, source: 'looking', text: `${entry.actor} is looking around.`, cue: 'looking' }))
+  state = { ...state, seenLooking: [...new Set([...(state.seenLooking ?? []), ...witnessedLooking.map(entry => entry.id)])].slice(-400) }
+  const additions = [...freshEntries(state, observation, known, roomId, switchedResident, movedRoom), ...unseenLooking]
   let enriched = []
   if (additions.length) {
     const roomName = safeName(roomValue?.name) || knownValue(known.places, roomId)

@@ -50,6 +50,8 @@ export const paintAnnotations = (grid, observation, roomStates, visiblePoses, mo
 
   for (const current of poses) {
     if (current.resident?.asleep !== true || current.walking === true) continue
+    if (current.resident?.looking && current.resident.looking.suppressed !== true &&
+      Number(current.resident.looking.expiresAtMs) > Number(motionFrame.nowMs)) continue
     const focusedDoorWalk = sameId(current.resident?.id, observation.focus.id) &&
       (motionFrame.doors?.length ?? 0) > 0
     if (focusedDoorWalk) continue

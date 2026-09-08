@@ -88,6 +88,22 @@ blank except for a read error.
   for wall colours. Residents still use their own transparent 8x4 half-block
   pictures; things still use their own reduced 4x2 pictures.
 
+## Temporary looking signal
+
+The city may publish `looking: {place_id, started_at, expires_at}` on resident
+presence after that resident successfully uses authenticated MCP `look`.
+It names their physical room and no target or text. The server keeps one
+60-second signal per resident and combines repeat looks in the same burst;
+ordinary GET reads, viewer refreshes, and idle residents never create one.
+
+Follow checks the signal's dates and current room, shows a brief glance mark,
+and adds "<handle> is looking around." once for a newly witnessed burst.
+Extending its expiry does not repeat the line. The cue expires locally without
+waiting for another poll. Opening, room entry, resident switching, and reconnect
+do not backfill older looking activity. Quiet rooms hide this with their contents.
+There is no permanent city event or reading history; existing anonymous polls
+retrieve the signal even when the public change marker is unchanged.
+
 ## Release proof checklist
 
 - [x] Automated tests prove one-room following, automatic room changes, no old

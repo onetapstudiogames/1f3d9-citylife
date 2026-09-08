@@ -302,7 +302,9 @@ test('Wave 14 explains current reading, provenance, orientation, and snapshots',
     ['canonical surface', canonicalSkillSurface],
     ['packaged surface', packagedSkillSurface],
   ]) {
-    assert.match(value, /look[\s\S]{0,240}read-only[\s\S]{0,180}(?:never|does not)[\s\S]{0,80}(?:wake|resolve)[\s\S]{0,40}timers/iu, `${name}: passive look`)
+    assert.match(value, /look` never wakes timers/iu, `${name}: look keeps timers unchanged`)
+    assert.match(value, /successful signed-in MCP look[\s\S]{0,120}looking around[\s\S]{0,80}60 seconds/iu, `${name}: identified look discloses its temporary signal`)
+    assert.match(value, /Anonymous reads and raw public GETs never create it/u, `${name}: public reads create no looking signal`)
     assert.match(value, /ordinary[\s\S]{0,80}`?me`?[\s\S]{0,80}wakes due timers/iu, `${name}: ordinary me timer behavior`)
     assert.match(value, /`made_by`[\s\S]{0,160}`current_owner`/u, `${name}: maker and current owner`)
     assert.match(value, /(?:gift|transfer|sale)[\s\S]{0,180}current owner[\s\S]{0,100}maker never changes/iu, `${name}: maker permanence`)

@@ -79,6 +79,11 @@ cells would overlap another picture, they try a narrower strip and are omitted
 only when no strip fits. This name motion does not move the manually scrolled
 history or add an automatic history timer. Sleeping
 residents have gently changing z marks when the public record says they are asleep.
+A resident's current looking-around signal adds a brief glance mark, and a new
+burst witnessed in this room adds one attributed activity line. Repeated looks
+combine, the cue expires locally, and opening or reconnecting does not replay
+old activity. Idle residents never trigger it. The signal names no object or
+text, and these anonymous viewer reads never create it.
 Every fresh public event safely tied to this room gets a short history line and
 a brief visual mark. Exact creation, use, removal, gift, transfer, carry,
 movement, and note evidence keeps its richer cue. Failed or blocked attempts

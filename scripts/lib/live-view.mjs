@@ -69,6 +69,21 @@ const readObservation = async (source, nowMs, size) => {
   return observation
 }
 
+const lookingIds = observation => (observation?.rooms ?? []).flatMap(room => (room?.residents ?? []).flatMap(resident =>
+  resident?.looking?.started_at ? [`looking:${resident.id}:${resident.looking.started_at}`] : []))
+
+const seedRecoveredLooking = (state, observation) => {
+  if (!state?.activity) return state
+  return {
+    ...state,
+    lookingCues: [],
+    activity: {
+      ...state.activity,
+      seenLooking: [...new Set([...(state.activity.seenLooking ?? []), ...lookingIds(observation)])].slice(-400),
+    },
+  }
+}
+
 const quietFrame = (picture, size, message) => {
   const grid = new Grid(size.columns, size.rows, DARK.bg)
   for (let y = 0; y < Math.min(picture?.height ?? 0, grid.height - 1); y += 1) {
@@ -285,8 +300,28 @@ export const runViewSession = (source, options, {
   }
   const scheduleMotion = () => {
     clock.clearTimeout(motionTimer)
+    if (quietError) {
+      const time = now()
+      const cueExpiries = (motion?.frame?.effects ?? []).filter(effect => effect.type === 'looking' && effect.untilMs > time)
+        .map(effect => effect.untilMs)
+      const signalExpiries = (observation?.rooms ?? []).flatMap(room => (room?.residents ?? []).flatMap(resident =>
+        resident?.looking?.suppressed !== true && Number(resident?.looking?.expiresAtMs) > time ? [Number(resident.looking.expiresAtMs)] : []))
+      const lookingExpiry = Math.min(...cueExpiries, ...signalExpiries)
+      if (!stopped && options.at === undefined && Number.isFinite(lookingExpiry)) {
+        motionTimer = clock.setTimeout(() => {
+          const time = now()
+          motion = {
+            ...motion,
+            frame: { ...motion.frame, nowMs: time, effects: motion.frame.effects.filter(effect => effect.type !== 'looking' || effect.untilMs > time) },
+          }
+          frozenPicture = paintMotion(observation, sizeOf(options, output), motion)
+          present()
+        }, Math.max(FRAME_MS, lookingExpiry - now()))
+      }
+      return
+    }
     const wakeTimes = [motion?.nextAtMs, nextNameAtMs].filter(Number.isFinite)
-    if (stopped || quietError || options.at !== undefined || !wakeTimes.length) return
+    if (stopped || options.at !== undefined || !wakeTimes.length) return
     const nextAtMs = Math.min(...wakeTimes)
     if (nextAtMs > (source.durationMs ?? Infinity)) return
     motionTimer = clock.setTimeout(() => animate(), Math.max(FRAME_MS, nextAtMs - now()))
@@ -318,9 +353,11 @@ export const runViewSession = (source, options, {
       }
       observation = result.observation
       pickerResidents = observation.residents ?? []
+      const recovering = Boolean(quietError)
       quietError = null
       frozenPicture = null
-      motion = result.motion ?? stepViewMotion(resetMotion ? null : motion?.state ?? null, {
+      const priorState = recovering ? seedRecoveredLooking(motion?.state, observation) : motion?.state
+      motion = result.motion ?? stepViewMotion(resetMotion ? null : priorState ?? null, {
         nowMs: now(), observation, size: sizeOf(options, output),
       })
       resetMotion = false
