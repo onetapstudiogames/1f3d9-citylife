@@ -1,5 +1,5 @@
 const FRAME_MS = 125
-const DURATIONS = Object.freeze({ puff: 900, glow: 800, crumbs: 700, gift: 1_200, transfer: 1_200 })
+const DURATIONS = Object.freeze({ puff: 900, glow: 800, crumbs: 700, gift: 1_200, transfer: 1_200, activity: 3_000 })
 
 const positiveId = (value) => {
   const number = Number(value)
@@ -75,8 +75,9 @@ const timed = (row, type, roomId, thingId, nowMs, extra = {}) => ({
 const effectForThing = (row, type, roomId, thingId, nowMs, knownThings, placements) => {
   const known = thingRecord(knownThings, thingId)
   const placed = placementRecord(placements, thingId)
-  if (!known && !placed) return null
-  return timed(row, type, roomId ?? known?.roomId ?? placed?.roomId, thingId, nowMs, {
+  const resolvedRoom = roomId ?? known?.roomId ?? placed?.roomId
+  if (!placed || roomKey(placed.roomId) !== roomKey(resolvedRoom)) return null
+  return timed(row, type, resolvedRoom, thingId, nowMs, {
     thing: known?.item ?? null,
     anchor: placed?.anchor ?? null,
   })
@@ -217,6 +218,36 @@ const carryStillActive = (effect, activeWalks) => {
     keyOf(walk.actor) === keyOf(effect.actor))
 }
 
+const effectRoomStillVisible = (effect, observation) => effect.type !== 'activity' || Boolean(visibleRoom(observation, effect.roomId))
+
+const activityEventId = (activity) => positiveId(activity?.eventId)
+
+const fallbackActivityEffect = (activity, nowMs, observation, motionFrame, knownThings, placements) => {
+  const id = activityEventId(activity)
+  const roomId = positiveId(activity?.roomId)
+  if (id === null || roomId === null || !visibleRoom(observation, roomId)) return null
+  const thingId = positiveId(activity?.thingId)
+  const placed = thingId === null ? null : placementRecord(placements, thingId)
+  const known = thingId === null ? null : thingRecord(knownThings, thingId)
+  const person = residents(observation).find((entry) =>
+    positiveId(activity?.residentId) === positiveId(entry?.id) || keyOf(activity?.actor).trim() === keyOf(entry?.handle).trim())
+  const pose = person && poseFor(motionFrame, person.id)
+  const recordedAtMs = Number(activity?.atMs)
+  const startedAtMs = Number.isFinite(recordedAtMs) && recordedAtMs >= 0 && recordedAtMs <= nowMs ? recordedAtMs : nowMs
+  return {
+    id,
+    type: 'activity',
+    cue: keyOf(activity?.cue) || 'action',
+    roomId,
+    thingId,
+    residentId: pose && roomKey(pose.roomId) === roomKey(roomId) ? positiveId(person.id) : null,
+    anchor: placed && roomKey(placed.roomId) === roomKey(roomId) ? placed.anchor : null,
+    thing: known?.item ?? null,
+    startedAtMs,
+    untilMs: startedAtMs + DURATIONS.activity,
+  }
+}
+
 const deferredRoomId = (row) => {
   const detail = row?.detail ?? {}
   if (row?.kind === 'thing_created' || row?.kind === 'transfer') return positiveId(detail.place_id)
@@ -238,7 +269,7 @@ const shouldDefer = (row, deferUntil) => {
 }
 
 /** Pure reducer for visual facts in the selected resident's current room. */
-export const stepRoomEffects = (previous, { nowMs, observation, motionFrame, activeWalks = [], deferUntil = null }) => {
+export const stepRoomEffects = (previous, { nowMs, observation, motionFrame, activeWalks = [], deferUntil = null, activities = [] }) => {
   const time = Number.isFinite(Number(nowMs)) ? Number(nowMs) : 0
   const events = [...(observation?.events ?? [])].sort(compareEvents)
   const people = observation ? residents(observation) : previous?.people ?? []
@@ -249,14 +280,18 @@ export const stepRoomEffects = (previous, { nowMs, observation, motionFrame, act
   const knownThings = capturedThings(previous?.knownThings, observation)
   const placements = capturedPlacements(previous?.placements, motionFrame)
   if (!previous) {
-    const state = { cursor: maxEventId(events), active: [], deferred: [], knownThings, placements, carryRows: [], people, rooms }
+    const state = {
+      cursor: maxEventId(events), activityCursor: Math.max(0, ...activities.map((entry) => activityEventId(entry) ?? 0)),
+      active: [], deferred: [], knownThings, placements, carryRows: [], people, rooms,
+    }
     return { state, effects: [], nextAtMs: null }
   }
 
+  const representedSpecials = new Set(previous.representedSpecials ?? [])
   const fresh = events.filter((row) => (eventId(row) ?? 0) > previous.cursor)
   const active = (previous.active ?? []).filter((effect) =>
     effect.untilMs > time && transferStillVisible(effect, currentObservation, motionFrame, activeWalks) &&
-    carryStillActive(effect, activeWalks))
+    carryStillActive(effect, activeWalks) && effectRoomStillVisible(effect, currentObservation))
   const deferred = [
     ...(previous.deferred ?? []),
     ...fresh.filter((row) => shouldDefer(row, deferUntil)).map((row) => ({
@@ -272,6 +307,7 @@ export const stepRoomEffects = (previous, { nowMs, observation, motionFrame, act
   for (const { row, atMs } of [...immediate, ...due]) {
     const effect = simpleThingEffect(row, atMs, currentObservation, knownThings, placements) ??
       transferEffect(row, atMs, currentObservation, motionFrame, activeWalks, knownThings)
+    if (effect) representedSpecials.add(effect.id)
     if (effect && effect.untilMs > time) active.push(effect)
   }
   const carryRows = [...(previous.carryRows ?? []), ...fresh]
@@ -281,9 +317,28 @@ export const stepRoomEffects = (previous, { nowMs, observation, motionFrame, act
     if (!active.some((effect) => effect.type === 'carry' && effect.id === carry.id && effect.thingId === carry.thingId)) active.push(carry)
   }
 
+  const activityCursor = previous.activityCursor ?? 0
+  const freshActivities = activities.filter((entry) => (activityEventId(entry) ?? 0) > activityCursor)
+  const represented = new Set([
+    ...representedSpecials,
+    ...active.map((effect) => positiveId(effect.id)),
+    ...activeWalks.map((walk) => positiveId(walk.eventId)),
+  ].filter((id) => id !== null))
+  for (const activity of freshActivities) {
+    const id = activityEventId(activity)
+    if (represented.has(id) || activity.visualHandled === true) continue
+    const effect = fallbackActivityEffect(activity, time, currentObservation, motionFrame, knownThings, placements)
+    if (effect?.untilMs > time) {
+      active.push(effect)
+      represented.add(id)
+    }
+  }
+
   const effects = frameEffects(active, time)
   const state = {
     cursor: Math.max(previous.cursor, maxEventId(events)),
+    representedSpecials: [...representedSpecials].slice(-200),
+    activityCursor: Math.max(activityCursor, ...activities.map((entry) => activityEventId(entry) ?? 0)),
     active,
     deferred: remainingDeferred,
     knownThings,

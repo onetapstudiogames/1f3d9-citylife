@@ -161,10 +161,10 @@ test('quiet reopening does not reveal a snapshot note when its event arrives lat
   assert.deepEqual(shown.state.history, [])
 })
 
-test('known public records produce labels while failures remain hidden', () => {
+test('room-linked failures are described as attempts without claiming success', () => {
   let shown = at(null, 0, observation())
   shown = at(shown, 1, observation({ events: [event(1, 'thing_created', { thing_id: 30, place_id: 1 }), event(2, 'action', { action: 'use', status: 'applied', source_thing_id: 30, place_id: 1 }), event(3, 'action', { action: 'use', status: 'refused', source_thing_id: 30, place_id: 1, error: 'no' })] }), 80, 4)
-  assert.deepEqual(shown.state.history.map(({ text }) => text), ['alice created blue lantern.', 'alice used blue lantern.'])
+  assert.deepEqual(shown.state.history.map(({ text }) => text), ['alice created blue lantern.', 'alice used blue lantern.', 'alice tried to use blue lantern; refused: no.'])
 })
 
 test('all successful public action shapes retain exact labels without carry duplicates', () => {
@@ -184,7 +184,7 @@ test('all successful public action shapes retain exact labels without carry dupl
   assert.deepEqual(shown.state.history.map(({ text }) => text), [
     'alice created blue lantern.', 'alice used blue lantern.', 'alice withdrew blue lantern.',
     'alice moved to sun room.', 'alice carried blue lantern to sun room.',
-    'alice gave blue lantern to bob.', 'alice used blue lantern.',
+    'alice gave blue lantern to bob.', 'alice used blue lantern; no change.',
     'alice transferred blue lantern to bob.', 'alice consumed blue lantern.',
   ])
 })

@@ -36,13 +36,17 @@ test('quiet rooms and observations without a focus reveal no annotations', () =>
   assert.deepEqual(paint({ focus: null }).rectangles, [])
 })
 
-test('sanitizes, clips, and measures wide Unicode names to eighteen cells', () => {
-  const result = paint({ poses: [pose(resident(1, '猫猫猫\u001b[31m enormously long resident name'))] })
+test('sanitizes and scrolls wide Unicode resident names through stable eighteen-cell labels', () => {
+  const handle = '猫猫猫\u001b[31m enormously long resident name'
+  const start = paint({ poses: [pose(resident(1, handle))], frame: { nameTimeMs: 0 } })
+  const end = paint({ poses: [pose(resident(1, handle))], frame: { nameTimeMs: 11_000 } })
+  const result = start
   assert.equal(result.rectangles.length, 1)
-  assert.ok(result.rectangles[0].width <= 18)
+  assert.equal(result.rectangles[0].width, 18)
+  assert.deepEqual(end.rectangles, start.rectangles)
   assert.doesNotMatch(result.plain, /\u001b/)
-  assert.match(result.plain, /…/u)
   assert.equal(result.grid.cells[result.rectangles[0].y][result.rectangles[0].x][0], '猫')
+  assert.match(end.plain, /resident name/)
 })
 
 test('labels things below floor marks and removes a carried thing label', () => {
@@ -50,6 +54,26 @@ test('labels things below floor marks and removes a carried thing label', () => 
   const states = [state({ plan: { things: [thing] } })]
   assert.match(paint({ states }).plain, /teapot/)
   assert.doesNotMatch(paint({ states, frame: { effects: [{ type: 'carry', thingId: 7, carrierResidentId: 1 }] } }).plain, /teapot/)
+})
+
+test('scrolls long thing names to their ending without moving the label', () => {
+  const thing = { item: { id: 7, name: 'ceremonial copper teapot' }, x: 20, y: 5, width: 4, height: 2 }
+  const states = [state({ plan: { things: [thing] } })]
+  const start = paint({ states, frame: { nameTimeMs: 0 } })
+  const end = paint({ states, frame: { nameTimeMs: 4_000 } })
+  assert.deepEqual(end.rectangles, start.rectangles)
+  assert.match(start.plain, /ceremonial copper/)
+  assert.match(end.plain, /copper teapot/)
+})
+
+test('shrinks a seventeen-cell name into a scrolling slot when its full width collides', () => {
+  const long = pose(resident(1, 'abcdefghijklmnopq'), { x: 5 })
+  const blocker = pose(resident(2, ''), { x: 18, y: 9, width: 8, height: 4 })
+  const result = paint({ poses: [long, blocker] })
+  assert.equal(result.rectangles.length, 1)
+  assert.ok(result.rectangles[0].width >= 2)
+  assert.ok(result.rectangles[0].width < 17)
+  assert.equal(result.grid.nextNameAtMs, 400)
 })
 
 test('omits labels outside room bounds or blocked by another portrait', () => {
@@ -76,4 +100,16 @@ test('annotations avoid each other and all entity rectangles', () => {
     for (let j = i + 1; j < result.rectangles.length; j++) assert.equal(intersects(result.rectangles[i], result.rectangles[j]), false)
     for (const entity of [...poses, thing]) assert.equal(intersects(result.rectangles[i], entity), false)
   }
+})
+
+test('same-row labels keep one blank cell between their rectangles', () => {
+  const poses = [
+    pose(resident(1, 'abcdefghij'), { x: 5 }),
+    pose(resident(2, 'klmnopqrst'), { x: 15 }),
+  ]
+  const result = paint({ poses })
+  assert.equal(result.rectangles.length, 2)
+  const labels = [...result.rectangles].sort((left, right) => left.x - right.x)
+  assert.equal(labels[0].y, labels[1].y)
+  assert.ok(labels[0].x + labels[0].width + 1 <= labels[1].x)
 })

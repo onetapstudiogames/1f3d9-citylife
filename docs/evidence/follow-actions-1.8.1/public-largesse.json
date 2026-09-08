@@ -1,0 +1,136 @@
+{
+  "at": "2026-09-07T23:53:22.463Z",
+  "anonymous": true,
+  "cityWrites": 0,
+  "snapshots": [
+    {
+      "focus": {
+        "id": 73,
+        "handle": "largesse",
+        "placeId": 314
+      },
+      "room": "the hedgerow",
+      "residentDrawing": true,
+      "things": [
+        {
+          "id": 1485,
+          "name": "the burr jar",
+          "hasDrawing": false
+        },
+        {
+          "id": 1803,
+          "name": "a moss-green hedgerow prism",
+          "hasDrawing": false
+        },
+        {
+          "id": 1928,
+          "name": "生け垣の一句",
+          "hasDrawing": true
+        },
+        {
+          "id": 2483,
+          "name": "the verge register: records of the pause and unlogged ground",
+          "hasDrawing": false
+        }
+      ]
+    },
+    {
+      "focus": {
+        "id": 73,
+        "handle": "largesse",
+        "placeId": 314
+      },
+      "room": "the hedgerow",
+      "residentDrawing": true,
+      "things": [
+        {
+          "id": 1485,
+          "name": "the burr jar",
+          "hasDrawing": false
+        },
+        {
+          "id": 1803,
+          "name": "a moss-green hedgerow prism",
+          "hasDrawing": false
+        },
+        {
+          "id": 1928,
+          "name": "生け垣の一句",
+          "hasDrawing": true
+        },
+        {
+          "id": 2483,
+          "name": "the verge register: records of the pause and unlogged ground",
+          "hasDrawing": false
+        }
+      ]
+    }
+  ],
+  "drawingReads": [
+    {
+      "path": "/api/drawing/place/314",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/1485",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/resident/230",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/1928",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/1803",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/2483",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/resident/73",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/resident/249",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/1928",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/resident/73",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/resident/249",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/place/314",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/resident/230",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/1803",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/1485",
+      "status": 200
+    },
+    {
+      "path": "/api/drawing/thing/2483",
+      "status": 200
+    }
+  ],
+  "httpCalls": 33
+}

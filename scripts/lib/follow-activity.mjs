@@ -1,4 +1,5 @@
 import { bubbleTextWidth, sanitizeBubbleText, wrapBubbleText } from './bubble-text.mjs'
+import { describeRoomEvent, extendEventContext } from './follow-event-text.mjs'
 
 const HISTORY_LIMIT = 200
 
@@ -11,7 +12,6 @@ const eventId = (row) => positiveId(row?.id) ?? positiveId(row?.change_id)
 const maximumEventId = (rows) => (rows ?? []).reduce((maximum, row) => Math.max(maximum, eventId(row) ?? 0), 0)
 const maximumNoteId = (rows) => (rows ?? []).reduce((maximum, row) => Math.max(maximum, positiveId(row?.id) ?? 0), 0)
 const safeName = (value) => sanitizeBubbleText(value)
-const hasError = (detail) => detail?.error !== null && detail?.error !== undefined
 const currentRoom = (observation) => (observation?.rooms ?? []).find((candidate) =>
   key(candidate?.id) === key(observation?.focus?.placeId)) ?? observation?.rooms?.[0] ?? null
 
@@ -24,6 +24,9 @@ const mergeKnown = (previous, observation) => {
     const name = safeName(resident?.handle)
     if (id !== null && name) residents.set(key(id), name)
   }
+  for (const place of observation?.directory?.places ?? []) {
+    if (positiveId(place.id) && safeName(place.name)) places.set(key(place.id), safeName(place.name))
+  }
   for (const room of observation?.rooms ?? []) {
     const roomId = positiveId(room?.id)
     const roomName = safeName(room?.name)
@@ -34,7 +37,7 @@ const mergeKnown = (previous, observation) => {
       if (thingId !== null && thingName) things.set(key(thingId), { name: thingName, roomId })
     }
   }
-  for (const row of observation?.events ?? []) {
+  for (const row of observation?.contextEvents ?? observation?.events ?? []) {
     const thingId = positiveId(row?.thing?.id)
     const thingName = safeName(row?.thing?.name ?? row?.detail?.name)
     const roomId = positiveId(row?.thing?.place_id) ?? positiveId(row?.detail?.place_id)
@@ -46,59 +49,6 @@ const mergeKnown = (previous, observation) => {
 const knownValue = (entries, id) => id === null ? null : new Map(entries).get(key(id)) ?? null
 const inRoom = (roomId, currentRoomId) => roomId !== null && key(roomId) === key(currentRoomId)
 
-const matchingCarryNotice = (row, rows) => (rows ?? []).some((notice) => {
-  const action = row.detail ?? {}
-  const detail = notice?.detail ?? {}
-  return notice?.kind === 'thing_moved' && notice.actor === row.actor && detail.mode === 'carry' && !hasError(detail) &&
-    positiveId(detail.action_id) === positiveId(action.action_id) && positiveId(detail.thing_id) === positiveId(action.thing_id) &&
-    positiveId(detail.from_place_id) === positiveId(action.from_place_id) && positiveId(detail.place_id) === positiveId(action.to_place_id)
-})
-
-const actionText = (row, known, roomId, rows) => {
-  const detail = row?.detail ?? {}
-  const actor = safeName(row?.actor)
-  if (!actor || hasError(detail)) return null
-  if (row.kind === 'thing_created') {
-    const thing = knownValue(known.things, positiveId(detail.thing_id))
-    return thing && inRoom(positiveId(detail.place_id), roomId) ? `${actor} created ${thing.name}.` : null
-  }
-  if (row.kind === 'thing_withdrawn') {
-    const thing = knownValue(known.things, positiveId(detail.thing_id))
-    return thing && inRoom(thing.roomId, roomId) ? `${actor} withdrew ${thing.name}.` : null
-  }
-  if (row.kind === 'transfer' && detail.mode === 'gift' && detail.asset_type === 'thing') {
-    const thing = knownValue(known.things, positiveId(detail.asset_id))
-    const recipient = knownValue(known.residents, positiveId(detail.resident_id))
-    return thing && recipient && inRoom(positiveId(detail.place_id), roomId)
-      ? `${actor} gave ${thing.name} to ${recipient}.` : null
-  }
-  if (row.kind === 'transfer' && detail.mode === 'effect' && detail.type === 'thing') {
-    const thing = knownValue(known.things, positiveId(detail.id))
-    const recipient = knownValue(known.residents, positiveId(detail.resident_id))
-    return thing && recipient && inRoom(positiveId(detail.place_id), roomId)
-      ? `${actor} transferred ${thing.name} to ${recipient}.` : null
-  }
-  if (row.kind !== 'action' || !['applied', 'noop'].includes(detail.status)) return null
-  if (detail.action === 'use') {
-    const thing = knownValue(known.things, positiveId(detail.source_thing_id))
-    return thing && inRoom(positiveId(detail.place_id), roomId) ? `${actor} used ${thing.name}.` : null
-  }
-  if (detail.action === 'consume' && detail.status === 'applied') {
-    const thing = knownValue(known.things, positiveId(detail.source_thing_id))
-    return thing && inRoom(positiveId(detail.place_id), roomId) ? `${actor} consumed ${thing.name}.` : null
-  }
-  if (detail.action === 'move' && detail.status === 'applied' && inRoom(positiveId(detail.to_place_id), roomId)) {
-    const place = knownValue(known.places, positiveId(detail.to_place_id))
-    if (!place) return null
-    if (detail.mode === 'carry' && matchingCarryNotice(row, rows)) {
-      const thing = knownValue(known.things, positiveId(detail.thing_id))
-      return thing ? `${actor} carried ${thing.name} to ${place}.` : null
-    }
-    return `${actor} moved to ${place}.`
-  }
-  return null
-}
-
 const noteText = (note, fallbackAuthor) => {
   const author = safeName(note?.author ?? fallbackAuthor)
   const body = safeName(note?.body)
@@ -108,7 +58,7 @@ const noteText = (note, fallbackAuthor) => {
 const freshEntries = (state, observation, known, roomId, switchedResident, movedRoom) => {
   if (!observation || switchedResident) return []
   const notes = new Map((observation.notes ?? []).map((row) => [key(row?.id), row]))
-  const rows = [...(observation.events ?? [])]
+  const rows = [...(observation.contextEvents ?? observation.events ?? [])]
     .filter((row) => (eventId(row) ?? 0) > state.cursor)
     .sort((left, right) => (eventId(left) ?? 0) - (eventId(right) ?? 0))
   const eventNoteIds = new Set()
@@ -122,10 +72,11 @@ const freshEntries = (state, observation, known, roomId, switchedResident, moved
       if (!note || !inRoom(positiveId(row.detail?.place_id), roomId) || !inRoom(positiveId(note.place_id), roomId)) return []
       const text = noteText(note, row.actor)
       if (text) eventNoteIds.add(key(noteId))
-      return text ? [{ id: `note:${id}`, source: 'note', text }] : []
+      return text ? [{ id: `note:${id}`, source: 'note', text, eventId: id, noteId,
+        actor: safeName(note.author ?? row.actor), roomId, cue: 'note' }] : []
     }
-    const text = actionText(row, known, roomId, rows)
-    return text ? [{ id: `event:${id}`, source: 'event', text }] : []
+    const described = describeRoomEvent(row, known, roomId, rows)
+    return described ? [{ id: `event:${id}`, source: 'event', ...described }] : []
   })
   if (movedRoom) return fromEvents
   const noteOnly = [...notes.values()]
@@ -156,6 +107,10 @@ const entryParts = (entry) => {
     const separator = entry.text.indexOf(': ')
     if (separator > 0) return { actor: entry.text.slice(0, separator), action: '', body: entry.text.slice(separator + 2) }
   } else {
+    if (entry.actor && entry.text.startsWith(`${entry.actor} `)) {
+      const match = /^(\S+)\s+(.+)$/u.exec(entry.text.slice(entry.actor.length + 1))
+      if (match) return { actor: entry.actor, action: match[1], body: match[2] }
+    }
     const match = /^(\S+)\s+(\S+)\s+(.+)$/u.exec(entry.text)
     if (match) return { actor: match[1], action: match[2], body: match[3] }
   }
@@ -165,7 +120,7 @@ const entryParts = (entry) => {
 const fittingPrefix = ({ actor, action }, columns) => {
   const full = `${actor}${action ? ` ${action}` : ''}:`
   if (bubbleTextWidth(full) + 5 <= columns) return full
-  const actorInitial = [...actor][0] ?? '?'
+  const actorInitial = actor === 'the Gazette printer' ? 'Gazette' : actor === 'the city' ? 'city' : [...actor][0] ?? '?'
   const compact = action ? `${actorInitial} ${[...action][0] ?? '?'}:` : `${actorInitial}:`
   return bubbleTextWidth(compact) + 5 <= columns ? compact : ''
 }
@@ -213,12 +168,12 @@ const scrollBy = (offset, maximum, rows, command) => {
   return offset
 }
 
-const result = (state) => {
+const result = (state, added = []) => {
   const all = state.wrappedLines
   const maxScroll = Math.max(0, all.length - state.rows)
   const scrollOffset = Math.min(state.scrollOffset, maxScroll)
   const end = all.length - scrollOffset
-  return { state: { ...state, scrollOffset }, lines: state.rows ? all.slice(Math.max(0, end - state.rows), end).map(({ text }) => text) : [], nextAtMs: null, scrollOffset, maxScroll }
+  return { state: { ...state, scrollOffset }, added, lines: state.rows ? all.slice(Math.max(0, end - state.rows), end).map(({ text }) => text) : [], nextAtMs: null, scrollOffset, maxScroll }
 }
 
 /** Pure, deterministic reducer for the small bottom activity log. */
@@ -232,8 +187,8 @@ export const stepActivity = (previous, { nowMs, observation, columns, rows = 3, 
   const roomId = positiveId(observation?.focus?.placeId) ?? previous?.roomId ?? null
   const residentId = positiveId(observation?.focus?.id) ?? previous?.residentId ?? null
   const quiet = observation ? roomValue?.quiet === true : previous?.quiet === true
-  const known = mergeKnown(previous?.known, observation)
-  const observedCursor = maximumEventId(observation?.events)
+  const known = extendEventContext(mergeKnown(previous?.known, observation), previous?.known, observation, roomId)
+  const observedCursor = maximumEventId(observation?.contextEvents ?? observation?.events)
   const observedNoteCursor = maximumNoteId(observation?.notes)
   const observedNoteIds = (observation?.notes ?? []).flatMap(note =>
     positiveId(note?.id) !== null && inRoom(positiveId(note?.place_id), roomId) ? [key(note.id)] : [])
@@ -287,5 +242,5 @@ export const stepActivity = (previous, { nowMs, observation, columns, rows = 3, 
     noteCursor: Math.max(state.noteCursor ?? 0, observedNoteCursor),
     seenNoteIds: rememberedNoteIds,
   }
-  return result(state)
+  return result(state, enriched)
 }

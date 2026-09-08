@@ -158,7 +158,7 @@ test('the real move starts at the exact prior pose without moving any unchanged 
   }
 })
 
-test('failed, same-room, go-home, and unknown-actor events never start walks', () => {
+test('failed, same-room, unknown actions, and unknown-actor events never start walks', () => {
   const alice = resident(1, 'alice', 1)
   const before = observation({ rooms: [room(1, [alice]), room(2)] })
   const after = observation({
@@ -166,7 +166,7 @@ test('failed, same-room, go-home, and unknown-actor events never start walks', (
     events: [
       moveEvent(1, 'alice', 1, 2, { status: 'refused' }),
       moveEvent(2, 'alice', 1, 1),
-      { ...moveEvent(3, 'alice', 1, 2), detail: { ...moveEvent(3, 'alice', 1, 2).detail, action: 'go_home' } },
+      { ...moveEvent(3, 'alice', 1, 2), detail: { ...moveEvent(3, 'alice', 1, 2).detail, action: 'read' } },
       moveEvent(4, 'nobody', 1, 2),
     ],
   })

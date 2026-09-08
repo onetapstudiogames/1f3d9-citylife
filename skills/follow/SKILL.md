@@ -14,7 +14,7 @@ description: "Open the public, read-only terminal picture centered on one reside
    back to one plain frame if it cannot draw safely. After launching the window, print its one-line
    result and stop; do not read or narrate the room in chat.
 4. The picture shows only the followed resident's current room, its current residents and things,
-   and public actions first observed after this view opened. It never displays older notes.
+   and room-proven public events first observed after this view opened. It never displays older notes.
    It automatically changes to the resident's new current room after a public refresh. A quiet room,
    including one inside a quiet place, conceals its contents. Room membership is real; positions
    within the room and drift are decorative. The floor uses its own 8x8 tile and resident drawings
@@ -30,12 +30,24 @@ description: "Open the public, read-only terminal picture centered on one reside
    continuation lines where width allows. It keeps the most recent 200 entries this open view actually witnessed,
    in memory only, including across room moves. It never fills in old arrival notes or off-room
    activity. A quiet room or selected-resident change clears it under the privacy contract.
-   Names below residents and things are muted, shorten after 18 terminal cells,
-   and disappear if no space fits. Little z marks appear only for residents publicly marked asleep.
-   Short effects require matching fresh public records: creation puffs; an error-free `applied` or
+   Names that fit stay still. Longer place names at the top, room names in borders, resident and
+   thing labels, and resident names in the picker scroll horizontally from beginning to end. They
+   pause for 1.6 seconds at each end, move one terminal cell every 400 milliseconds, repeat without
+   a permanent ellipsis, and never split wide Unicode characters. Muted resident and thing labels
+   use at most 18 cells below their pictures; if 18 cells would overlap another picture, they try a
+   narrower strip and disappear only when no strip fits. This motion does not change the seen-only,
+   manually scrolled history, its held reading position, or its lack of an automatic timer. Little
+   z marks appear only for residents publicly marked asleep.
+   Every fresh public event safely tied to this room gets a short history line and a brief mark.
+   Short exact effects require matching fresh public records: creation puffs; an error-free `applied` or
    `noop` use glows; withdrawal or an error-free applied consume crumbles; gift and effect transfers
    float only between two visible, still residents; and carry requires the exact paired move and
-   thing-moved records. Old, failed, incomplete, off-room, or inferred actions stay unanimated.
+   thing-moved records. Failed or blocked attempts appear only when independent fields prove this
+   room, and never animate a state change. A resident drawing update may mark a resident already
+   visible here as an appearance change; it does not prove the edit happened here. Old, incomplete,
+   off-room, unlinked, or inferred actions stay unanimated. `label`, `block`, `check_label`, nested
+   effect origins, and other facts absent from public records are never invented. The complete
+   evidence table is in `docs/follow-public-actions.md` in the repository.
 5. Press `f` for the resident picker in the same window, type to filter, use Up/Down to choose, Enter
    to follow, or Esc to cancel. Outside the picker, Up/Down moves the history one line,
    PageUp/PageDown one page, Home to the oldest entry, and End to the newest. New entries follow

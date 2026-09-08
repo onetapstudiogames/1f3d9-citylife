@@ -471,3 +471,51 @@ test('selecting another resident clears witnessed history even if the new read f
     await closeSession(harness.input, closed)
   }
 })
+
+test('long names keep scrolling between reads and the picker scrolls independently', async () => {
+  const harness = makeHarness()
+  const fake = makeClock()
+  harness.output.columns = 38
+  harness.output.rows = 18
+  const longName = 'the observatory above the orchard where the lanterns sleep'
+  const longHandle = 'keeper-of-the-orchard-and-the-quiet-lantern'
+  let reads = 0
+  let fail = false
+  const source = {
+    read: async () => {
+      reads++
+      if (fail) return { ok: false }
+      return {
+        ok: true, target: { id: 1, name: longName }, focus: { id: 7, handle: 'walker', placeId: 1 },
+        residents: [{ id: 7, handle: longHandle }], events: [], notes: [],
+        rooms: [{ id: 1, name: longName, residents: [], things: [] }],
+      }
+    }, close: () => {},
+  }
+  const closed = runViewSession(source, { color: '16' }, { ...harness, env: {}, platform: 'win32', clock: fake.clock })
+  const rows = () => visibleRows(harness.writes, 38, 18)
+  try {
+    await waitFor(() => reads === 1 && rows()[0].includes('the observatory'))
+    const opening = rows()[0]
+    await fake.advance(2400)
+    assert.notEqual(rows()[0], opening)
+    assert.equal(reads, 1, 'name animation does not read the city')
+    harness.input.emit('keypress', 'f', { name: 'f' })
+    await fake.advance(125)
+    const initialPicker = rows().find(row => row.includes('›'))
+    await fake.advance(2400)
+    assert.notEqual(rows().find(row => row.includes('›')), initialPicker)
+    harness.input.emit('keypress', undefined, { name: 'escape' })
+    await fake.advance(125)
+    fail = true
+    harness.input.emit('keypress', undefined, { name: 'r' })
+    await new Promise(resolve => setImmediate(resolve))
+    await fake.advance(250)
+    assert.equal(rows().at(-1).trim(), 'Could not read the city.')
+    const frozen = rows()
+    await fake.advance(2400)
+    assert.deepEqual(rows(), frozen, 'a read error still freezes the picture')
+  } finally {
+    await closeSession(harness.input, closed)
+  }
+})

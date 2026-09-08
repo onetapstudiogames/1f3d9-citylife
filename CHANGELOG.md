@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.8.1 - 2026-09-07
+
+- Cover all 38 public event kinds in the follow activity contract. Every fresh
+  record with safe room evidence gets a history line and brief mark; exact
+  movement, note, thing, gift, transfer, and carry evidence keeps its richer
+  cue. Failed or blocked attempts require separate room evidence and never
+  animate a state change.
+- Treat a public resident drawing update as an appearance change only when that
+  resident is already visible in the room. Do not invent reading, editing,
+  label, block, branch, delayed-effect origin, or room facts the public record
+  does not expose. This coverage adds no dependency, identity read, or city write.
+- Let long place, room, resident, thing, and resident-picker names scroll through
+  their full text instead of staying permanently clipped. Short names remain
+  still; long names pause for 1.6 seconds at both ends, move one terminal cell
+  every 400 milliseconds, repeat, and never split wide Unicode characters.
+- Keep resident and thing labels in strips of at most 18 cells below their
+  pictures. They try a narrower strip when the full strip would overlap a
+  picture and remain omitted only when no label strip fits at all.
+- Keep the history seen-only and manually controlled, including its held reading
+  position and lack of an automatic timer. Read failures still freeze the last
+  picture. This visual fix adds no dependency, key, city write, identity access,
+  or website change.
+
 ## 1.8.0 - 2026-09-07
 
 - Keep complete new notes and supported recorded activity in a manually scrollable

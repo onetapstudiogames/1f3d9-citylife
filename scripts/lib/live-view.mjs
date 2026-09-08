@@ -157,6 +157,7 @@ export const runViewSession = (source, options, {
   let motion = null
   let lastPaintMs = -Infinity
   let lastPicture = null
+  let nextNameAtMs = null
   let frozenPicture = null
   let quietError = null
   let generation = 0
@@ -267,11 +268,13 @@ export const runViewSession = (source, options, {
     const picture = quietError || (resetMotion && !observation)
       ? quietFrame(frozenPicture, size, quietError ?? '')
       : paintMotion(observation, size, motion)
-    const frame = picker ? paintPicker(picture, picker, pickerResidents, observation?.focus?.handle) : picture
+    const frame = picker ? paintPicker(picture, picker, pickerResidents, observation?.focus?.handle, now()) : picture
+    nextNameAtMs = frame.nextNameAtMs ?? null
     if (screen.present(frame)) {
       lastPaintMs = clock.now()
       lastPicture = picture
     }
+    scheduleMotion()
   }
   const showError = (message = READ_ERROR) => {
     if (!quietError) frozenPicture = lastPicture
@@ -282,9 +285,11 @@ export const runViewSession = (source, options, {
   }
   const scheduleMotion = () => {
     clock.clearTimeout(motionTimer)
-    if (stopped || quietError || options.at !== undefined || !Number.isFinite(motion?.nextAtMs)) return
-    if (motion.nextAtMs > (source.durationMs ?? Infinity)) return
-    motionTimer = clock.setTimeout(() => animate(), Math.max(FRAME_MS, motion.nextAtMs - now()))
+    const wakeTimes = [motion?.nextAtMs, nextNameAtMs].filter(Number.isFinite)
+    if (stopped || quietError || options.at !== undefined || !wakeTimes.length) return
+    const nextAtMs = Math.min(...wakeTimes)
+    if (nextAtMs > (source.durationMs ?? Infinity)) return
+    motionTimer = clock.setTimeout(() => animate(), Math.max(FRAME_MS, nextAtMs - now()))
   }
   const animate = (force = false) => {
     if (stopped || quietError || !observation) return

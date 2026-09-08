@@ -2,6 +2,7 @@ import { stepMotion } from './live-motion.mjs'
 import { stepRoomEffects } from './follow-effects.mjs'
 import { followActivityRows, followRoomSize } from './live-layout.mjs'
 import { stepActivity } from './follow-activity.mjs'
+import { NAME_STEP_MS } from './scrolling-name.mjs'
 
 const LEG_MS = 1000
 const FRAME_MS = 125
@@ -21,7 +22,7 @@ const moveChain = (state, observation) => {
   for (const event of [...(observation.events ?? [])].sort((a, b) => Number(a.id) - Number(b.id))) {
     const detail = event.detail ?? {}
     if (Number(event.id) <= state.eventCursor || event.actor !== observation.focus.handle || event.kind !== 'action'
-      || detail.action !== 'move' || detail.status !== 'applied') continue
+      || !['move', 'go_home'].includes(detail.action) || detail.status !== 'applied') continue
     if (key(detail.from_place_id) !== key(placeId) || key(detail.from_place_id) === key(detail.to_place_id)) return []
     chain.push(event)
     placeId = detail.to_place_id
@@ -118,6 +119,8 @@ const queueObservation = (pending, incoming, atMs) => ({
   atMs,
   observation: {
     ...incoming,
+    contextEvents: [...new Map([...(pending?.observation.contextEvents ?? pending?.observation.events ?? []), ...(incoming.contextEvents ?? incoming.events ?? [])]
+      .map(event => [key(event.id), event])).values()].sort((a, b) => Number(a.id) - Number(b.id)),
     events: [...new Map([...(pending?.observation.events ?? []), ...(incoming.events ?? [])]
       .map(event => [key(event.id), event])).values()].sort((a, b) => Number(a.id) - Number(b.id)),
   },
@@ -147,14 +150,22 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, scroll, r
   const incoming = observation ? singleRoom(observation) : null
   const switched = incoming && key(incoming.focus.id) !== key(previous?.observation.focus.id)
   let activityState = previous?.activity ?? null
+  const arrivalActivities = []
+  const representedWalkIds = new Set([previous?.motion, previous?.transition?.departure, previous?.transition?.arrival]
+    .flatMap(motion => (motion?.state?.walks ?? []).map(walk => walk.id)))
   const activityOptions = { columns: Math.max(2, nextSize.columns - 4), rows: followActivityRows(nextSize) }
   const observeArrival = transition => {
     if (!transition) return
+    for (const motion of [transition.departure, transition.arrival]) {
+      for (const walk of motion.state.walks) representedWalkIds.add(walk.id)
+    }
     const atMs = transition.startMs + LEG_MS
     if (nowMs < atMs || (activityState && activityState.nowMs >= atMs)) return
-    activityState = stepActivity(activityState, {
+    const arrival = stepActivity(activityState, {
       ...activityOptions, nowMs: atMs, observation: transition.destination,
-    }).state
+    })
+    activityState = arrival.state
+    arrivalActivities.push(...arrival.added.map(entry => ({ ...entry, atMs })))
   }
   let state
   if (!previous || reset || switched || !sameSize(nextSize, previous.size)) {
@@ -175,14 +186,9 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, scroll, r
   }
   observeArrival(state.transition)
   const shown = phaseFrame(state, nowMs)
-  const effects = stepRoomEffects(state.effects, {
-    nowMs,
-    observation: { ...shown.observation, events: state.transition?.destination.events ?? shown.observation.events },
-    motionFrame: shown.motion.frame,
-    activeWalks: walkRecords(state, shown),
-    deferUntil: state.transition && shown.observation === state.transition.source
-      ? { roomId: state.transition.destination.focus.placeId, atMs: state.transition.startMs + LEG_MS } : undefined,
-  })
+  for (const motion of [state.motion, state.transition?.departure, state.transition?.arrival]) {
+    for (const walk of motion?.state?.walks ?? []) representedWalkIds.add(walk.id)
+  }
   const activity = stepActivity(activityState, {
     nowMs, scroll,
     // The departure picture borrows a future move to draw its door leg. Only
@@ -190,9 +196,19 @@ export const stepFollowMotion = (previous, { nowMs, observation, size, scroll, r
     observation: state.transition && shown.observation === state.transition.source ? undefined : shown.observation,
     ...activityOptions,
   })
+  const effects = stepRoomEffects(state.effects, {
+    nowMs, activities: [...arrivalActivities, ...activity.added.map(entry => ({ ...entry, atMs: nowMs }))]
+      .map(entry => ({ ...entry, visualHandled: representedWalkIds.has(entry.eventId) })),
+    observation: { ...shown.observation, events: state.transition?.destination.events ?? shown.observation.events },
+    motionFrame: shown.motion.frame,
+    activeWalks: walkRecords(state, shown),
+    deferUntil: state.transition && shown.observation === state.transition.source
+      ? { roomId: state.transition.destination.focus.placeId, atMs: state.transition.startMs + LEG_MS } : undefined,
+  })
   const sleeping = shown.motion.frame.residents.some(pose => pose.resident?.asleep === true)
   const frame = {
     ...shown.motion.frame, effects: effects.effects, activity: activity.lines,
+    nameTimeMs: Math.floor(nowMs / NAME_STEP_MS) * NAME_STEP_MS,
     activityScroll: { offset: activity.scrollOffset, maximum: activity.maxScroll },
     sleepPhase: sleeping ? Math.floor(nowMs / 1500) % 3 : 0,
   }
