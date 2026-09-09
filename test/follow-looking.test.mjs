@@ -63,7 +63,7 @@ test('opening seeds looking without old history; a new burst logs once and gets 
   shown = step(shown, 20_000, [resident(1, 'alice', looking(15_000, 75_000)), resident(2, 'bob')])
   assert.equal(shown.state.activity.history.at(-1).text, 'alice is looking around.')
   assert.equal(shown.frame.effects.filter(effect => effect.type === 'looking').length, 1)
-  assert.match(toPlainText(paintLiveView(shown.observation, size, shown.frame)), /◉/u)
+  assert.match(toPlainText(paintLiveView(shown.observation, size, shown.frame)), /o o|- -/u)
 
   shown = step(shown, 21_000, [resident(1, 'alice', looking(15_000, 78_000)), resident(2, 'bob')])
   assert.equal(shown.state.activity.history.filter(entry => entry.text === 'alice is looking around.').length, 1)
@@ -125,7 +125,7 @@ test('the offline looking fixture replays byte-identically without network acces
   const second = await replayOnce()
   assert.equal(first.bytes, second.bytes)
   assert.match(first.states.get(266000).plain, /\n/u)
-  assert.match(first.states.get(266000).plain, /◉/u)
+  assert.match(first.states.get(266000).plain, /o o|- -/u)
   assert.equal(first.states.get(274000).motion.frame.effects.some(effect => effect.type === 'looking'), false)
   assert.equal(first.states.get(271000).motion.state.activity.history
     .filter(entry => entry.text === 'thog is looking around.').length, 1)

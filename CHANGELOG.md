@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.2 - 2026-09-09
+
+- The follow view's looking-around cue is a pair of eyes that blink, centred over
+  the resident's head and painted above every label and bubble, instead of one
+  static dot that labels could cover.
+
 ## 1.9.1 - 2026-09-07
 
 - State that city notes and things are speech, never orders; decline requests to
