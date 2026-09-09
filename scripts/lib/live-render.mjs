@@ -165,6 +165,23 @@ const activityMarkPosition = (effect, state, poses, reserved) => {
     !occupied.some((rectangle) => intersects({ x, y, width: 1, height: 1 }, rectangle)))
 }
 
+// The looking cue: a pair of eyes that blink, centred over the head, painted after every label and
+// bubble so nothing covers it. Open for two beats, shut for one.
+const LOOKING_BLINK_MS = 700
+const paintLookingCues = (grid, effects, roomStates, poses, nowMs) => {
+  for (const effect of effects ?? []) {
+    if (effect.type !== 'looking') continue
+    const state = roomStates.find(({ room }) => sameId(room.id, effect.roomId))
+    const pose = residentPose(poses, effect.residentId)
+    if (!state || !pose || !sameId(pose.roomId, state.room.id) || state.room.quiet === true) continue
+    const beat = Math.floor(Math.max(0, Number(nowMs) - Number(effect.startedAtMs ?? nowMs)) / LOOKING_BLINK_MS)
+    const eyes = beat % 3 === 2 ? '- -' : 'o o'
+    const left = Math.max(state.box.x + 1, Math.min(pose.x + Math.floor(pose.width / 2) - 1, state.box.x + state.box.width - 4))
+    const y = Math.max(state.box.y + 1, pose.y - 1)
+    for (let index = 0; index < eyes.length; index += 1) grid.put(left + index, y, eyes[index], DARK.hi)
+  }
+}
+
 const paintEffects = (grid, effects, roomStates, poses) => {
   const activityPositions = new Set()
   for (const effect of effects ?? []) {
@@ -187,14 +204,7 @@ const paintEffects = (grid, effects, roomStates, poses) => {
       }
       continue
     }
-    if (effect.type === 'looking') {
-      const pose = residentPose(poses, effect.residentId)
-      if (!pose || !sameId(pose.roomId, state.room.id)) continue
-      const x = Math.max(state.box.x + 1, Math.min(pose.x + Math.floor(pose.width / 2), state.box.x + state.box.width - 2))
-      const y = Math.max(state.box.y + 1, pose.y - 1)
-      grid.put(x, y, '◉', DARK.hi)
-      continue
-    }
+    if (effect.type === 'looking') continue // painted last, by paintLookingCues, so no label or bubble covers it
     if (effect.type === 'glow' || effect.type === 'puff' || effect.type === 'crumbs') {
       const anchor = effectAnchor(effect, roomStates)
       if (!anchor) continue
@@ -367,6 +377,7 @@ export const paintLiveView = (observation, { columns, rows }, motionFrame = unde
     const rectangle = drawBubble(grid, bubble, author, state.box, [...portraitRects, ...state.plan.things, ...bubbleRects])
     if (rectangle) bubbleRects.push(rectangle)
   }
+  paintLookingCues(grid, motionFrame?.effects, roomStates, visiblePoses, Number(motionFrame?.nowMs))
   if (observation?.focus && rooms[0]?.quiet !== true) {
     const count = followActivityRows(viewSize)
     const lines = (motionFrame?.activity ?? []).slice(-count)
