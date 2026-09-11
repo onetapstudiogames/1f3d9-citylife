@@ -82,7 +82,7 @@ test('an anonymous bridge reloads the vault on a later call and can use a newly 
   assert.equal(requests[1].headers.authorization, `Bearer ${RESIDENT_KEY}`)
 })
 
-test('missing-key guidance uses the plugin-root setup command in every repair case', async () => {
+test('missing-key guidance uses a resolved setup command in every repair case', async () => {
   const cases = [
     identityDeps({ state: null, index: {} }),
     identityDeps({ state: { handle: 'tinylantern' }, stored: { found: false, value: null } }),
@@ -94,7 +94,8 @@ test('missing-key guidance uses the plugin-root setup command in every repair ca
       fetchImpl: async () => jsonResponse({ jsonrpc: '2.0', id: 1, result: { instructions: '' } }),
     })
     const output = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
-    assert.match(output, /node \\"\$CLAUDE_PLUGIN_ROOT\/scripts\/setup\.mjs\\"/u)
+    assert.match(output, /node \\"[^"]+\/scripts\/setup\.mjs\\"/u)
+    assert.doesNotMatch(output, /CLAUDE_PLUGIN_ROOT/u)
     assert.doesNotMatch(output, /node scripts\/setup\.mjs/u)
   }
 })
@@ -535,7 +536,8 @@ test('missing key forwards public calls and replaces only auth-required text wit
   assert.equal(classified.error_class, 'auth_required')
   assert.equal(classified.front_door_tool, 'front_door')
   assert.match(classified.error, /no usable resident key was found/iu)
-  assert.match(classified.error, /run `node "\$CLAUDE_PLUGIN_ROOT\/scripts\/setup\.mjs"`/iu)
+  assert.match(classified.error, /run `node "[^"]+\/scripts\/setup\.mjs"`/iu)
+  assert.doesNotMatch(classified.error, /CLAUDE_PLUGIN_ROOT/u)
   assert.doesNotMatch(classified.error, /restart the host/iu)
 })
 

@@ -6,6 +6,7 @@ import { join, delimiter } from 'node:path'
 import test from 'node:test'
 
 import { openTerminalRunning } from '../scripts/lib/terminal.mjs'
+import { canOpenFollowWindow } from '../scripts/lib/live-view.mjs'
 
 const fakeChild = (pid, code) => {
   const child = new EventEmitter()
@@ -14,6 +15,12 @@ const fakeChild = (pid, code) => {
   queueMicrotask(() => child.emit('exit', code, null))
   return child
 }
+
+test('follow opens a window only from an interactive terminal', () => {
+  assert.equal(canOpenFollowWindow({ inputIsTTY: true, outputIsTTY: true }), true)
+  assert.equal(canOpenFollowWindow({ inputIsTTY: false, outputIsTTY: true }), false)
+  assert.equal(canOpenFollowWindow({ inputIsTTY: true, outputIsTTY: false }), false)
+})
 
 test('Windows fallback transports public argv without embedding it in PowerShell source', async () => {
   const calls = []

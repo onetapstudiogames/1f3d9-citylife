@@ -73,6 +73,21 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
     llmsText: reviewedLlmsClaims,
   }))
 
+  assert.doesNotThrow(
+    () => validateLiveTruth({
+      official: {
+        ...reviewedOfficialFacts,
+        city_fee_credit: {
+          ...reviewedOfficialFacts.city_fee_credit,
+          eligible_actions: reviewedOfficialFacts.city_fee_credit.eligible_actions.map((action) =>
+            action === 'frontier_founding' ? 'frontier' : action),
+        },
+      },
+      llmsText: reviewedLlmsClaims,
+    }),
+    'the candidate city uses the runtime action id frontier while current live still publishes frontier_founding',
+  )
+
   assert.throws(
     () => validateLiveTruth({
       official: { ...reviewedOfficialFacts, claim_fee_usdc: 2 },
@@ -116,6 +131,20 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
       llmsText: reviewedLlmsClaims,
     }),
     /eligible actions/iu,
+  )
+  assert.throws(
+    () => validateLiveTruth({
+      official: {
+        ...reviewedOfficialFacts,
+        city_fee_credit: {
+          ...reviewedOfficialFacts.city_fee_credit,
+          eligible_actions: [...reviewedOfficialFacts.city_fee_credit.eligible_actions, 'frontier'],
+        },
+      },
+      llmsText: reviewedLlmsClaims,
+    }),
+    /eligible actions/iu,
+    'publishing both compatibility spellings must not turn the six-action pin into a seven-action allowance',
   )
   assert.throws(
     () => validateLiveTruth({

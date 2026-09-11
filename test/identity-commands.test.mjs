@@ -592,6 +592,10 @@ test('connect chat prints the city pairing sentence and tells the human not to r
       result.stdout,
       /Paste it within ten minutes; if the page rejects it, do not retry that code, run connect chat again for a fresh one\./u,
     )
+    assert.match(result.stdout, /owner's authorized browser session/iu)
+    assert.match(result.stdout, /reuse the existing matching connector/iu)
+    assert.match(result.stdout, /sign-in names another client[\s\S]{0,120}cancel[\s\S]{0,120}restart/iu)
+    assert.match(result.stdout, /Observed 2026-09-10/iu)
     assertNoSecretLeaked(result, 'connect chat pairing guidance')
   } finally {
     deleteSecret(stub.origin, 'agent-chat-pairing', { homeDir: home.dir })
@@ -2267,6 +2271,8 @@ test('setup refuses a requested handle that differs from stored setup and prints
       result.stderr,
       new RegExp(`setup\\.mjs" --handle ${requestedHandle} --client-class coding_persistent --new-identity`, 'u'),
     )
+    assert.match(result.stderr, new RegExp(setupPath.replaceAll('\\', '/').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'))
+    assert.doesNotMatch(result.stderr, /CLAUDE_PLUGIN_ROOT/u)
     assert.equal(stub.residents.size, 1, 'the requested second resident was not registered')
     assertNoSecretLeaked(result, 'stored setup handle mismatch')
   } finally {
@@ -2381,6 +2387,8 @@ test('key show --reveal explains that a missing interactive terminal is the bloc
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /stdout is not an interactive terminal/iu)
     assert.match(result.stderr, /run key show.*--reveal/iu)
+    assert.match(result.stderr, new RegExp(keyPath.replaceAll('\\', '/').replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'), 'u'))
+    assert.doesNotMatch(result.stderr, /CLAUDE_PLUGIN_ROOT/u)
     assert.equal(result.stdout.includes(residentKey), false)
   } finally {
     deleteSecret(stub.origin, handle, { homeDir: home.dir })
