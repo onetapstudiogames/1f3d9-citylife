@@ -82,9 +82,9 @@ function shellQuoteForSecurityInteractive(value) {
 
 function writeMacKeychainCredential(execImpl, service, account, base64Blob) {
   const script = [
-    `add-generic-password -a ${shellQuoteForSecurityInteractive(account)}`,
-    `-s ${shellQuoteForSecurityInteractive(service)}`,
-    `-w ${shellQuoteForSecurityInteractive(base64Blob)} -U`,
+    `add-generic-password -a ${shellQuoteForSecurityInteractive(account)} ` +
+      `-s ${shellQuoteForSecurityInteractive(service)} ` +
+      `-w ${shellQuoteForSecurityInteractive(base64Blob)} -U`,
     'quit',
     '',
   ].join('\n')

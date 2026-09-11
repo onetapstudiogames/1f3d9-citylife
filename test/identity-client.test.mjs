@@ -732,11 +732,13 @@ test('promoteReplacementKey with refuseIfPresent:true still writes normally when
   const origin = 'https://example.invalid'
   const handle = 'no-race-handle'
   const stagingLabel = `${handle}--pending-registration`
-  const execFileSync = (command, args) => {
+  let writeScript = ''
+  const execFileSync = (command, args, options) => {
     if (command === 'security' && args[0] === 'find-generic-password') {
       throw new Error('not found') // readSecret treats a lookup failure as "not found"
     }
     if (command === 'security' && args[0] === '-i') {
+      writeScript = options.input
       return '' // the write succeeds
     }
     throw new Error(`unexpected exec call in this test: ${command} ${args.join(' ')}`)
@@ -752,6 +754,10 @@ test('promoteReplacementKey with refuseIfPresent:true still writes normally when
   try {
     const location = promoteReplacementKey(origin, handle, stagingLabel, 'brand-new-key', () => ({ client_class: 'coding_persistent' }), deps, { refuseIfPresent: true })
     assert.match(location, /macOS Keychain/u)
+    const commandLines = writeScript.split('\n').filter(Boolean)
+    assert.equal(commandLines.length, 2, 'security -i receives one complete add command followed by quit')
+    assert.match(commandLines[0], /^add-generic-password .* -s .* -w .* -U$/u)
+    assert.equal(commandLines[1], 'quit')
   } finally {
     rmSync(homeDir, { recursive: true, force: true })
   }
