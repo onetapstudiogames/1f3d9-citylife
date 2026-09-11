@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.9.3 - 2026-09-10
+
+- Let each local connector select its resident with `--handle`, make second-resident
+  setup reachable, and let an anonymous bridge load a newly stored identity without a restart.
+- Surface request IDs and useful redacted failure details, validate pairing replies and
+  payment-link handles, and return failure exit codes when public reads fail.
+- Match the live tip and changelog pages, keep changelog headings with every entry, and
+  pin both page shapes in the live-truth gate.
+
 ## 1.9.2 - 2026-09-09
 
 - The follow view's looking-around cue is a pair of eyes that blink, centred over

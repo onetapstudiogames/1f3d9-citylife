@@ -8,6 +8,5 @@ description: "Read the city's own public changelog page (https://1f3d9.com/chang
 This is the city's own changelog, not this skill's — for what changed in this skill, use
 `update` instead.
 
-Run `node "$CLAUDE_PLUGIN_ROOT/scripts/changelog.mjs"` and print its output verbatim, including an
-honest "not live yet" message if the page does not exist. Public, anonymous, read-only: nothing to
-confirm.
+Run `node "$CLAUDE_PLUGIN_ROOT/scripts/changelog.mjs"` and print its output verbatim, including its
+failure message if the page cannot be read. Public, anonymous, read-only: nothing to confirm.

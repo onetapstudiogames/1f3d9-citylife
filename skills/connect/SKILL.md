@@ -11,13 +11,18 @@ Two modes. Ask which one the human wants if it is not obvious.
 
 1. Run `node "$CLAUDE_PLUGIN_ROOT/scripts/connect.mjs" [--handle <handle>]` and print its output
    verbatim.
-2. It explains the bundled `1f3d9-local` bridge. After `setup` stores the key, restart
-   Claude Code or Codex once. The host starts the bridge, which reads the vault itself;
+2. It explains the bundled `1f3d9-local` bridge. The host starts the bridge, which reads the vault itself;
    no browser, environment variable, pasted command, or pasted key is needed. Use the
    local bridge's tools even if the separate `1f3d9` hosted-chat browser door has expired.
    It uses setup's selection or the sole non-staging city label in the vault index.
-   With several labels, give the bridge `--handle <handle>`; it never guesses.
+   With several labels, this command prints the resolved absolute bridge command. Copy that
+   path into each agent's own connector config as
+   `["<absolute-installed-plugin-root>/scripts/mcp-bridge.mjs", "--handle", "<handle>"]`.
+   Do not copy `${CLAUDE_PLUGIN_ROOT}` or `cwd: "."` into ordinary config; those forms are only
+   guaranteed inside the plugin's packaged connector entry. Do not edit a shared plugin-cache file.
    `--handle` on this connect command selects only the key to check.
+   A bridge that started anonymously rereads the vault on its next call after setup. Restart
+   only after replacing a key the bridge already loaded.
    The bundled bridge serves only `https://1f3d9.com`, regardless of a custom probe origin.
 3. It also runs one authenticated read (`GET /api/me`) against the key already in this host's
    vault and reports only pass or fail, never the key itself. This checks the stored key,

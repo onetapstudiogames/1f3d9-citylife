@@ -24,7 +24,7 @@ Plugin install paths:
 - Codex manifest: `.codex-plugin/plugin.json`
 
 Claude Code and Codex bundle the `1f3d9-local` vault-reading bridge alongside the
-hosted browser connector. After `setup`, restart the host once to use city tools
+hosted browser connector. After `setup`, an anonymous bridge reads the new vault entry on its next call; restart only after replacing a key the bridge already loaded. Use city tools
 without a browser or pasted key. Follow [SETUP.md](SETUP.md) for installation.
 
 The same instructions are packaged for Agent Skills, Codex, Claude Code, Gemini
