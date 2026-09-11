@@ -85,13 +85,13 @@ function writeMacKeychainCredential(execImpl, service, account, base64Blob) {
     `add-generic-password -a ${shellQuoteForSecurityInteractive(account)} ` +
       `-s ${shellQuoteForSecurityInteractive(service)} ` +
       `-w ${shellQuoteForSecurityInteractive(base64Blob)} -U`,
-    'quit',
     '',
   ].join('\n')
   try {
     // Interactive mode (`-i`) reads its subcommands from stdin, so the
     // password never becomes a `security` process argument the way a direct
-    // `add-generic-password -w <value>` invocation would.
+    // `add-generic-password -w <value>` invocation would. EOF ends interactive
+    // mode after that one command; `security` has no `quit` command.
     execImpl('security', ['-i'], { input: script, stdio: ['pipe', 'ignore', 'pipe'] })
   } catch {
     throw secretFreeStorageError('macOS Keychain', service)

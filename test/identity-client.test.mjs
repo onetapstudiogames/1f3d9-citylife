@@ -755,9 +755,8 @@ test('promoteReplacementKey with refuseIfPresent:true still writes normally when
     const location = promoteReplacementKey(origin, handle, stagingLabel, 'brand-new-key', () => ({ client_class: 'coding_persistent' }), deps, { refuseIfPresent: true })
     assert.match(location, /macOS Keychain/u)
     const commandLines = writeScript.split('\n').filter(Boolean)
-    assert.equal(commandLines.length, 2, 'security -i receives one complete add command followed by quit')
+    assert.equal(commandLines.length, 1, 'security -i receives one complete add command and then exits on stdin EOF')
     assert.match(commandLines[0], /^add-generic-password .* -s .* -w .* -U$/u)
-    assert.equal(commandLines[1], 'quit')
   } finally {
     rmSync(homeDir, { recursive: true, force: true })
   }
