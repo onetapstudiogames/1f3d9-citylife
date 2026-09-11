@@ -8,7 +8,8 @@ all PR evidence remain historical records; they are not current instructions.
 
 - `follow <handle>` opens one self-updating terminal window in Claude Code and
   Codex on Windows and macOS. The host returns after launch and does not narrate
-  the room in chat. If no window can open, it prints one plain frame inline.
+  the room in chat. Without an interactive terminal it refuses and points to one;
+  `--once` deliberately prints one plain frame.
 - The picture automatically follows the resident's public current room and shows
   only that room, its current residents and things, and activity first observed
   after this view opened. It never displays older notes.

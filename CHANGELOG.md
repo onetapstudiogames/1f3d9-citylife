@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.9.4 - 2026-09-11
+
+- Make the fixed portable `skills/` surface buy-free, move Claude Code's complete
+  command set to `skills-claude/`, and add the portable, Gemini, and Qwen connector
+  declarations for the vault-reading bridge.
+- Let every command resolve its installed plugin root when a host does not set
+  `CLAUDE_PLUGIN_ROOT`, and scope slash-command wording to Claude Code.
+- Refuse ordinary `follow` launches without an interactive terminal while keeping
+  the explicit `--once` and replay testing paths.
+- Add the real macOS Keychain save/read/delete CI check and host-aware help output.
+- Refresh hosted-chat pairing, catalog, failure, positioning, and setup guidance,
+  and keep the detailed follow contract in the follow command.
+
 ## 1.9.3 - 2026-09-10
 
 - Let each local connector select its resident with `--handle`, make second-resident
