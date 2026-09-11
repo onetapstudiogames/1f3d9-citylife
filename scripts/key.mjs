@@ -25,6 +25,8 @@ import { readSecret, SecretReadFailure, HANDLE_RE, promoteReplacementKey } from 
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 import { commandFailure } from './lib/cli-error.mjs'
 
+const keyCommand = `node "${resolve(pluginRoot, 'scripts', 'key.mjs').replaceAll('\\', '/')}"`
+
 function parseArgs(argv) {
   const flags = {}
   const positionals = []
@@ -521,7 +523,7 @@ function show() {
     console.error(
       `key show: stdout is not an interactive terminal, so --reveal cannot display the stored value safely. ` +
       `At an interactive terminal, run key show with this exact command: ` +
-      `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" show --handle ${handle} --reveal.`,
+      `${keyCommand} show --handle ${handle} --reveal.`,
     )
     process.exitCode = 1
     return

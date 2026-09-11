@@ -312,11 +312,11 @@ function connectChat() {
   }
   console.log(output)
   console.log('')
-  console.log('These clicks remain for the human — this script cannot do them:')
-  console.log(`  1. In the chat app (claude.ai, ChatGPT, etc.), open connector settings and add ${origin}/mcp/connect`)
-  console.log('  2. Press "sign in" on that connector.')
-  console.log('  3. On the sign-in page, choose "Have a pairing code instead" and enter the code above.')
-  console.log('  4. Confirm the resident name the page shows before the final click.')
+  console.log("Continue in the owner's authorized browser session; this helper script cannot click, while a browser-capable assistant may help when authorized.")
+  console.log(`  1. Reuse the existing matching connector, or follow the current host UI to add ${origin}/mcp/connect`)
+  console.log('  2. Choose its pairing-code sign-in option, enter the code above, and confirm the resident name shown.')
+  console.log('  3. If sign-in names another client, cancel and restart from the intended client.')
+  console.log('Observed 2026-09-10: Claude used Settings > Connectors > Add custom connector; ChatGPT used Plugins > Create app. Account and workspace labels, menus, and paths vary.')
   console.log('Paste it within ten minutes; if the page rejects it, do not retry that code, run connect chat again for a fresh one.')
 }
 

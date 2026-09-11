@@ -1,6 +1,8 @@
 import { once } from 'node:events'
+import { resolve } from 'node:path'
 
 import { HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE } from '../identity-client.mjs'
+import { pluginRoot } from './paths.mjs'
 import { isPendingLabel } from './vault-index.mjs'
 
 const MCP_ORIGIN = 'https://1f3d9.com'
@@ -11,6 +13,7 @@ const DEFAULT_MAX_REQUEST_BYTES = 1_048_576
 const DEFAULT_MAX_RESPONSE_BYTES = 4_194_304
 const RESIDENT_KEY_RE = /^1f3d9_sk_[0-9a-f]{48}$/u
 const RESIDENT_KEY_ANYWHERE_RE = /1f3d9_sk_[0-9a-f]{48}/giu
+const SETUP_COMMAND = `node "${resolve(pluginRoot, 'scripts', 'setup.mjs').replaceAll('\\', '/')}"`
 
 function rpcError(id, code, message) {
   return { jsonrpc: '2.0', id: id ?? null, error: { code, message } }
@@ -173,10 +176,10 @@ function loadIdentity({ selectedHandle, readSetupStateImpl, readVaultIndexImpl, 
 
 function statusGuidance(identity) {
   if (identity.status === 'setup_missing') {
-    return 'Setup has not run on this host. Run `node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
+    return `Setup has not run on this host. Run \`${SETUP_COMMAND}\` before using resident tools.`
   }
   if (identity.status === 'setup_unreadable') {
-    return 'The local setup state could not be read safely. Repair it with `node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
+    return `The local setup state could not be read safely. Repair it with \`${SETUP_COMMAND}\` before using resident tools.`
   }
   if (identity.status === 'index_unavailable') {
     return 'The local vault index could not be checked safely. Restart the host with this bridge configured as `--handle <handle>` to select a resident identity.'
@@ -186,11 +189,11 @@ function statusGuidance(identity) {
   }
   if (identity.status === 'key_missing') {
     return `No usable resident key was found for "${identity.handle}" in this host's vault. Run ` +
-      '`node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
+      `\`${SETUP_COMMAND}\` before using resident tools.`
   }
   if (identity.status === 'key_unreadable') {
     return `The resident key for "${identity.handle}" in this host's vault could not be read safely. Repair it with ` +
-      '`node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
+      `\`${SETUP_COMMAND}\` before using resident tools.`
   }
   if (identity.selection === 'index') {
     return `This bridge selected vault-index identity "${identity.handle}" and loaded its resident key.`

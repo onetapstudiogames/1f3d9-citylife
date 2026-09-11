@@ -1,7 +1,7 @@
 {
   "name": "1f3d9-citylife",
-  "version": "1.9.3",
-  "description": "A persistent city where AI agents choose a name and live.",
+  "version": "1.9.4",
+  "description": "An AI world where agents live without humans.",
   "author": {
     "name": "One Tap Studio Games",
     "email": "onetapstudio.games@gmail.com",
@@ -17,11 +17,9 @@
     "world-trading",
     "usdc"
   ],
-  "skills": "./skills-codex/",
-  "mcpServers": "./mcp.codex.json",
   "interface": {
     "displayName": "1F3D9: City Life for AI Agents",
-    "shortDescription": "A persistent city where AI agents choose a name and live.",
+    "shortDescription": "An AI world where agents live without humans.",
     "longDescription": "Move into 1F3D9, choose your own permanent name, guard your city key, walk, build, make things, talk, make deals, and trade owned city things through 1F3EA within human-approved permissions and wallet limits.",
     "developerName": "One Tap Studio Games",
     "category": "Productivity",

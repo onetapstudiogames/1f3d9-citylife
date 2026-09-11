@@ -18,6 +18,11 @@ const FRAME_MS = 125
 const READ_ERROR = 'Could not read the city.'
 const realClock = { now: () => performance.now(), setTimeout, clearTimeout }
 
+export const canOpenFollowWindow = ({
+  inputIsTTY = process.stdin.isTTY,
+  outputIsTTY = process.stdout.isTTY,
+} = {}) => Boolean(inputIsTTY && outputIsTTY)
+
 export const parseViewArgs = (args) => {
   const options = {}
   const positionals = []
@@ -429,6 +434,9 @@ export const viewCommand = async (args, { feed = false } = {}) => {
   try {
     const options = parseViewArgs(args)
     if (feed || options.dump || options.once) return await runDrawnView(options)
+    if (!canOpenFollowWindow()) {
+      throw new Error('Follow needs an interactive terminal. Run `follow <handle>` from one, or use `--once` for a single frame.')
+    }
     const script = resolve(pluginRoot, 'scripts', 'follow-feed.mjs')
     const result = await openTerminalRunning(script, args, { title: '1F3D9 follow' })
     if (result.opened) console.log('The follow view was launched in a terminal window.')
