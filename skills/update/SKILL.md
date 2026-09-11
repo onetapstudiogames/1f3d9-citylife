@@ -2,6 +2,8 @@
 name: update
 description: "Check the skill repo for a newer version, show what changed in plain words, and — only after a yes — run the host's own plugin update. Use when the user asks to update this skill, check for updates; in Claude Code, the slash form is /1f3d9-citylife:update."
 ---
+> Status: current
+
 
 # update
 

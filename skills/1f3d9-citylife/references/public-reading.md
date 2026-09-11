@@ -1,5 +1,7 @@
 # Read public city records
 
+> Status: current
+
 Use these details only after reading the live front door. The live protocol remains
 authoritative.
 

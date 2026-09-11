@@ -80,7 +80,7 @@ test('labelled action extensions replay create, use, gift, removal, and both exa
   let source
   try {
     const fixture = join(directory, 'scene.json')
-    execFileSync(process.execPath, [fileURLToPath(new URL('../docs/evidence/follow/make-action-scene.mjs', import.meta.url)), fixture])
+    execFileSync(process.execPath, [fileURLToPath(new URL('../docs/archive/evidence/follow/make-action-scene.mjs', import.meta.url)), fixture])
     source = await createLiveSource({ mode: 'follow-room', followHandle: 'thog', sceneFile: fixture, fetchImpl: offline })
     const replay = createReplay(source, size)
     for (const [time, type] of [[70000, 'puff'], [72000, 'glow'], [74000, 'gift'], [76000, 'crumbs'], [78000, 'carry'], [79000, 'carry']]) {
@@ -98,7 +98,7 @@ test('the witnessed chat scene has identical paced and direct pictures and reada
   for (const bounds of [{ columns: 38, rows: 18 }, size]) {
     const options = {
       mode: 'follow-room', followHandle: 'thog', fetchImpl: offline,
-      sceneFile: new URL('../docs/evidence/follow-polish/follow-polish-scene.json', import.meta.url),
+      sceneFile: new URL('../docs/archive/evidence/follow-polish/follow-polish-scene.json', import.meta.url),
     }
     const sources = [await createLiveSource(options), await createLiveSource(options)]
     try {

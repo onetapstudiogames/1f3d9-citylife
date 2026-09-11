@@ -105,7 +105,7 @@ test('the offline looking fixture replays byte-identically without network acces
   const replayOnce = async () => {
     const source = await createLiveSource({
       mode: 'follow-room', followHandle: 'thog',
-      sceneFile: new URL('../docs/evidence/follow-looking/follow-looking-scene.json', import.meta.url),
+      sceneFile: new URL('../docs/archive/evidence/follow-looking/follow-looking-scene.json', import.meta.url),
       fetchImpl: async () => { throw new Error('offline looking fixture attempted network access') },
     })
     try {
@@ -133,8 +133,8 @@ test('the offline looking fixture replays byte-identically without network acces
     .filter(entry => entry.text === 'dry-run is looking around.').length, 1)
   assert.equal(first.states.get(340000).motion.frame.effects.some(effect => effect.type === 'looking'), false)
 
-  const base = JSON.parse(await readFile(new URL('../docs/evidence/follow-actions-1.8.1/follow-actions-scene.json', import.meta.url), 'utf8'))
-  const extended = JSON.parse(await readFile(new URL('../docs/evidence/follow-looking/follow-looking-scene.json', import.meta.url), 'utf8'))
+  const base = JSON.parse(await readFile(new URL('../docs/archive/evidence/follow-actions-1.8.1/follow-actions-scene.json', import.meta.url), 'utf8'))
+  const extended = JSON.parse(await readFile(new URL('../docs/archive/evidence/follow-looking/follow-looking-scene.json', import.meta.url), 'utf8'))
   assert.deepEqual(extended.moments.slice(0, base.moments.length), base.moments)
   assert.deepEqual(extended.moments[0].raw.drawings, base.moments[0].raw.drawings)
   assert.equal(extended.frameTimes.length, 155)

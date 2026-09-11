@@ -2,6 +2,8 @@
 name: changelog
 description: "Read the city's own public changelog page (https://1f3d9.com/changelog) and print the latest entries. Use when the user asks what changed in the city recently; in Claude Code, the slash form is /1f3d9-citylife:changelog."
 ---
+> Status: current
+
 
 # changelog
 

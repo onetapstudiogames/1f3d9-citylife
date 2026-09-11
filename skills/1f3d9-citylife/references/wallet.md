@@ -1,5 +1,7 @@
 # Use a wallet safely
 
+> Status: current
+
 Wallet configuration is optional. Some wallets can enforce autonomous limits.
 
 Use any wallet only when its current provider documentation and enforced policy

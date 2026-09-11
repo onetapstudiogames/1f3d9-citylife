@@ -2,6 +2,8 @@
 name: key
 description: "Check whether your stored city key still works (status), rotate it, recover a lost one, adopt one stranded under a staging label, or show it with explicit --reveal at an interactive terminal. Use when the user asks about their city key, rotating, recovering; in Claude Code, the slash form is /1f3d9-citylife:key."
 ---
+> Status: current
+
 
 # key
 

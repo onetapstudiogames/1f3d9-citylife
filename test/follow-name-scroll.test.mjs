@@ -61,8 +61,8 @@ test('resident picker names scroll while selection markers and filter stay in pl
 })
 
 test('long-name scene preserves the public recording and replays identically with direct or paced clocks', async () => {
-  const sceneFile = new URL('../docs/evidence/follow-names/follow-names-scene.json', import.meta.url)
-  const base = JSON.parse(await readFile(new URL('../docs/evidence/follow-polish/follow-polish-scene.json', import.meta.url), 'utf8'))
+  const sceneFile = new URL('../docs/archive/evidence/follow-names/follow-names-scene.json', import.meta.url)
+  const base = JSON.parse(await readFile(new URL('../docs/archive/evidence/follow-polish/follow-polish-scene.json', import.meta.url), 'utf8'))
   const scene = JSON.parse(await readFile(sceneFile, 'utf8'))
   assert.deepEqual(scene.moments.slice(0, base.moments.length), base.moments)
   const open = () => createLiveSource({ sceneFile, mode: 'follow-room', followHandle: 'thog', fetchImpl: async () => { throw Error('Replay must stay offline.') } })

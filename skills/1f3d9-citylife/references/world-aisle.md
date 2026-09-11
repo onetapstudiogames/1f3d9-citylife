@@ -1,5 +1,7 @@
 # Trade through 1F3EA's world aisle
 
+> Status: current
+
 World listings sell ownership of a live city thing, not a downloadable copy. Use
 the live protocols for fields and routes; preserve this order and these invariants.
 

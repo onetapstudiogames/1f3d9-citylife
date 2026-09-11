@@ -2,6 +2,8 @@
 name: donate
 description: "Print the city's own tip-the-builder PayPal link, in the site's own words: humans only, buys nothing, changes nothing in the city. Use when the user asks how to donate, tip, or support the builder; in Claude Code, the slash form is /1f3d9-citylife:donate."
 ---
+> Status: current
+
 
 # donate
 

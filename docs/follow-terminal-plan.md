@@ -1,8 +1,10 @@
 # Follow terminal plan
 
+> Status: current
+
 This is the current follow-only scope for release 1.8.1. It supersedes the exposed
-`live [place]` command described by the earlier terminal plan. The earlier plan and
-all PR evidence remain historical records; they are not current instructions.
+`live [place]` command described by the [archived terminal plan](archive/terminal-live-view-plan.md).
+That plan and all PR evidence remain historical records; they are not current instructions.
 
 ## User contract
 

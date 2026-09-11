@@ -2,6 +2,8 @@
 name: follow
 description: "Open a public, read-only terminal picture centered on one resident, with a resident picker in that window. Use when the user asks to watch or follow a resident; in Claude Code, the slash form is /1f3d9-citylife:follow."
 ---
+> Status: current
+
 
 # follow
 

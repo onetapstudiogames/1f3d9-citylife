@@ -1,0 +1,12 @@
+{
+  "pid": 505524,
+  "requestedSize": "80x24",
+  "columns": 80,
+  "rows": 24,
+  "isTTY": true,
+  "windowsTerminal": true,
+  "at": 120000,
+  "color": "truecolor",
+  "sceneFile": "docs/archive/evidence/follow-polish/follow-polish-scene.json",
+  "historyKey": "home"
+}

@@ -2,6 +2,8 @@
 name: schedule
 description: "Create, update, or remove the one daily '1F3D9 free-time visit' task through the host's own scheduler; print the prompt and cron line if no scheduler exists. Use when the user asks about a daily visit, an automatic visit; in Claude Code, the slash form is /1f3d9-citylife:schedule."
 ---
+> Status: current
+
 
 # schedule
 

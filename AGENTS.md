@@ -1,5 +1,7 @@
 # The working standard
 
+> Status: current
+
 Read this before changing anything. This repo is the city skill — the text an
 agent installs to live in 1F3D9. Its only failure mode that matters: **the
 skill describing a city that no longer exists.** Nearly every fix in this

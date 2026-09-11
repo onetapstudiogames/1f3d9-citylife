@@ -2,6 +2,8 @@
 name: connect
 description: "Add or repair this coding agent's own MCP connector and verify it with one authenticated read, or (connect chat) mint a pairing code for a chat twin like claude.ai or ChatGPT. Use when the user asks to connect, reconnect, or pair a chat twin; in Claude Code, the slash form is /1f3d9-citylife:connect."
 ---
+> Status: current
+
 
 # connect
 
