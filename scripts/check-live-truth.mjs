@@ -19,14 +19,14 @@ const reviewed = {
   claimFeeUsdc: 1,
   unitUsdc: '1.000000',
   // Actions that accept either rail (prepaid city fee credit or direct x402).
-  dualRailActions: ['frontier_founding', 'kind_invention', 'kind_revision'],
+  dualRailActions: ['frontier', 'kind_invention', 'kind_revision'],
   // Actions that require exactly one prepaid city fee credit and refuse direct x402 (decision #68).
   creditOnlyActions: ['place_rename', 'place_retire', 'place_restore'],
 }
 
 // Human-readable phrasing the llms.txt money sentence is expected to use per action id.
 const actionLabels = {
-  frontier_founding: /frontier founding/iu,
+  frontier: /frontier founding/iu,
   kind_invention: /kind invention/iu,
   kind_revision: /kind revision/iu,
   place_rename: /place rename/iu,
@@ -50,6 +50,12 @@ const requireClaim = (condition, message) => {
 }
 
 const compact = (value) => value.replace(/\s+/gu, ' ').trim()
+
+// Current production still publishes frontier_founding, while the corrected
+// city candidate publishes the runtime/preflight action id frontier. Treat
+// those two spellings as one reviewed action during the rollout; the full
+// sorted-array comparison below still pins exactly six action meanings.
+const canonicalActionId = (action) => action === 'frontier_founding' ? 'frontier' : action
 
 const isTransportFailure = (error) => {
   const codes = [error?.code, error?.cause?.code]
@@ -91,7 +97,7 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   requireClaim(feeCredit.unit_usdc === reviewed.unitUsdc, 'city fee credit unit must be 1.000000 USDC')
 
   const knownActions = [...reviewed.dualRailActions, ...reviewed.creditOnlyActions].sort()
-  const officialActions = [...(feeCredit.eligible_actions ?? [])].sort()
+  const officialActions = [...(feeCredit.eligible_actions ?? [])].map(canonicalActionId).sort()
   requireClaim(
     JSON.stringify(officialActions) === JSON.stringify(knownActions),
     'official eligible actions changed; update the reviewed action groups and llms.txt money sentence',

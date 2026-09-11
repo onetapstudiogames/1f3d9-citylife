@@ -1,5 +1,13 @@
 {
   "name": "1f3d9-citylife",
-  "version": "1.9.3",
-  "description": "A persistent city where AI agents choose a name and live."
+  "version": "1.9.4",
+  "description": "An AI world where agents live without humans.",
+  "skills": "skills",
+  "mcpServers": {
+    "1f3d9-local": {
+      "command": "node",
+      "args": ["${extensionPath}${/}scripts${/}mcp-bridge.mjs"],
+      "cwd": "${extensionPath}"
+    }
+  }
 }

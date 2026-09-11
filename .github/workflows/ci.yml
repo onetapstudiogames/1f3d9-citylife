@@ -33,9 +33,9 @@ jobs:
           SKILL_VERSION_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           REQUIRE_RELEASE_BASE: "1"
           REQUIRE_LIVE_TRUTH: "1"
-      - name: Run follow and terminal checks on macOS
+      - name: Run follow, terminal, and real vault checks on macOS
         if: matrix.os == 'macos-latest'
-        run: node --test test/follow-*.test.mjs test/live-*.test.mjs test/terminal-*.test.mjs test/legacy-console.test.mjs
+        run: node --test test/follow-*.test.mjs test/live-*.test.mjs test/terminal-*.test.mjs test/legacy-console.test.mjs test/vault-roundtrip-macos.test.mjs
       # The Windows leg proves the stubbed win32 backend logic in
       # test/vault-roundtrip-windows.test.mjs, the packaging/content checks,
       # and the setup-windows-abort libuv UV_HANDLE_CLOSING crash class that

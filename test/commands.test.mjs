@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { access, readFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 
@@ -89,16 +91,17 @@ test('city: directory index resolves ancestor chains and place-argument lookup',
   assert.equal(resolvePlaceArgument(undefined, places), null)
 })
 
-test('every command has a scripts/<name>.mjs entry point and a skills/<name>/SKILL.md', async () => {
+test('every command has a script and Claude skill; portable skills omit buy', async () => {
   for (const name of COMMANDS) {
     await assert.doesNotReject(() => access(new URL(`../scripts/${name}.mjs`, import.meta.url)), `${name}: script exists`)
-    const skillPath = new URL(`../skills/${name}/SKILL.md`, import.meta.url)
+    const skillPath = new URL(name === 'buy' ? '../skills-claude/buy/SKILL.md' : `../skills/${name}/SKILL.md`, import.meta.url)
     await assert.doesNotReject(() => access(skillPath), `${name}: skill folder exists`)
     const skill = await readFile(skillPath, 'utf8')
     assert.match(skill, new RegExp(`^name: ${name}$`, 'mu'), `${name}: frontmatter name matches folder`)
     assert.match(skill, /^description: /mu, `${name}: has a description`)
     assert.match(skill, /CLAUDE_PLUGIN_ROOT/u, `${name}: resolves the plugin root instead of a hardcoded path`)
   }
+  await assert.rejects(() => access(new URL('../skills/buy/', import.meta.url)), 'portable buy skill is absent')
   await assert.rejects(() => access(new URL('../scripts/live.mjs', import.meta.url)), 'retired live script is absent')
   await assert.rejects(() => access(new URL('../scripts/live-feed.mjs', import.meta.url)), 'retired live feed is absent')
   await assert.rejects(() => access(new URL('../skills/live/', import.meta.url)), 'retired live skill is absent')
@@ -116,8 +119,10 @@ test('every command has a scripts/<name>.mjs entry point and a skills/<name>/SKI
 
 test('buy is Claude Code only and SETUP.md says so', async () => {
   const setup = await readFile(new URL('../SETUP.md', import.meta.url), 'utf8')
-  assert.match(setup, /does not carry `buy`/u)
+  assert.match(setup, /do not carry `buy`/u)
   assert.match(setup, /plain[\s\S]{0,10}link/u)
+  await assert.doesNotReject(() => access(new URL('../skills-claude/buy/SKILL.md', import.meta.url)))
+  await assert.rejects(() => access(new URL('../skills/buy/SKILL.md', import.meta.url)))
 })
 
 test('help and SETUP.md list setup, connect, and key as shipped commands', async () => {
@@ -246,5 +251,53 @@ test('setup and help document the working second-resident and per-agent bridge c
   for (const text of [setupSkill, connectSkill, setupDoc]) {
     assert.match(text, /mcp-bridge\.mjs.*"--handle", "<handle>"/su)
     assert.doesNotMatch(text, /give each its own credential path/iu)
+  }
+})
+
+test('help shows buy only on Claude and points every host at live city actions', () => {
+  const helpPath = fileURLToPath(new URL('../scripts/help.mjs', import.meta.url))
+  const portable = spawnSync(process.execPath, [helpPath], { encoding: 'utf8', env: {} })
+  const claude = spawnSync(process.execPath, [helpPath], {
+    encoding: 'utf8', env: { CLAUDE_PLUGIN_ROOT: 'test-claude-root' },
+  })
+  const codex = spawnSync(process.execPath, [helpPath], {
+    encoding: 'utf8',
+    env: { CODEX_HOME: 'test-codex-home' },
+  })
+  assert.equal(portable.status, 0)
+  assert.equal(claude.status, 0)
+  assert.equal(codex.status, 0)
+  assert.doesNotMatch(portable.stdout, /buy <handle>/u)
+  assert.match(claude.stdout, /buy <handle>/u)
+  assert.doesNotMatch(codex.stdout, /buy <handle>/u)
+  for (const output of [portable.stdout, claude.stdout, codex.stdout]) {
+    assert.match(output, /In the city:/u)
+    assert.match(output, /walk[^\n]{0,120}build[^\n]{0,120}talk/iu)
+    assert.match(output, /https:\/\/1f3d9\.com\/api\/help/u)
+    assert.match(output, /https:\/\/1f3d9\.com\/api\/tools/u)
+  }
+})
+
+test('a command fallback resolves ../../ with no Claude root and an unrelated cwd', async () => {
+  const tempRoot = await mkdtemp(join(tmpdir(), '1f3d9-command-root-'))
+  const pluginRoot = join(tempRoot, 'plugin with spaces')
+  const commandSkillPath = join(pluginRoot, 'skills', 'help', 'SKILL.md')
+  const outsideCwd = join(tempRoot, 'outside cwd')
+  try {
+    await mkdir(dirname(commandSkillPath), { recursive: true })
+    await mkdir(join(pluginRoot, 'scripts'), { recursive: true })
+    await mkdir(outsideCwd)
+    await copyFile(new URL('../skills/help/SKILL.md', import.meta.url), commandSkillPath)
+    await copyFile(new URL('../scripts/help.mjs', import.meta.url), join(pluginRoot, 'scripts', 'help.mjs'))
+    const resolvedPluginRoot = resolve(dirname(commandSkillPath), '..', '..')
+    const { CLAUDE_PLUGIN_ROOT: omitted, ...env } = process.env
+    assert.equal(resolvedPluginRoot, pluginRoot)
+    const result = spawnSync(process.execPath, [join(resolvedPluginRoot, 'scripts', 'help.mjs')], {
+      cwd: outsideCwd, env, encoding: 'utf8', windowsHide: true,
+    })
+    assert.equal(result.status, 0, result.stderr)
+    assert.match(result.stdout, /1F3D9 city-life commands/u)
+  } finally {
+    await rm(tempRoot, { recursive: true, force: true })
   }
 })

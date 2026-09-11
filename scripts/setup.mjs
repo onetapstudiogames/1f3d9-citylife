@@ -134,6 +134,7 @@ try {
 }
 
 const identityClientPath = resolve(pluginRoot, 'scripts', 'identity-client.mjs')
+const setupCommand = `node "${resolve(pluginRoot, 'scripts', 'setup.mjs').replaceAll('\\', '/')}"`
 
 const lines = []
 const say = (line = '') => lines.push(line)
@@ -304,7 +305,7 @@ if (existing?.handle && handle && handle !== existing.handle && !newIdentity) {
   console.error(
     `setup: this host already remembers resident "${existing.handle}", but you requested "${handle}". ` +
     `Nothing was changed. To register "${handle}" as this machine's second resident, run exactly: ` +
-    `node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs" --handle ${handle} --client-class ${requestedClass} --new-identity`,
+    `${setupCommand} --handle ${handle} --client-class ${requestedClass} --new-identity`,
   )
   process.exitCode = 1
   throw new SetupRefusal()

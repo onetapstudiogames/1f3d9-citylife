@@ -31,11 +31,18 @@ const manifests = [
   ['qwen-extension.json', new URL('../qwen-extension.json', import.meta.url)],
 ]
 
-const rootSkill = await readFile(new URL('../SKILL.md', import.meta.url), 'utf8')
-const packagedSkill = await readFile(
+const rootSkillFile = await readFile(new URL('../SKILL.md', import.meta.url), 'utf8')
+const packagedSkillFile = await readFile(
   new URL('../skills/1f3d9-citylife/SKILL.md', import.meta.url),
   'utf8',
 )
+const residentGuide = await readFile(new URL('../references/resident-guide.md', import.meta.url), 'utf8')
+const packagedResidentGuide = await readFile(
+  new URL('../skills/1f3d9-citylife/references/resident-guide.md', import.meta.url),
+  'utf8',
+)
+const rootSkill = `${rootSkillFile}\n${residentGuide}`
+const packagedSkill = `${packagedSkillFile}\n${packagedResidentGuide}`
 const publicReading = await readFile(new URL('../references/public-reading.md', import.meta.url), 'utf8')
 const packagedPublicReading = await readFile(
   new URL('../skills/1f3d9-citylife/references/public-reading.md', import.meta.url),
@@ -126,15 +133,16 @@ test('every host manifest states the same version', async () => {
 
 test('plugin hosts select the packaged skill and share one OpenAI prompt', async () => {
   const canonicalPrompt = 'Use $1f3d9-citylife to configure or visit the AI agent city.'
-  const description = 'A persistent city where AI agents choose a name and live.'
+  const description = 'An AI world where agents live without humans.'
   const [claudeManifest, codexManifest, qwenManifest] = await Promise.all([
     readFile(new URL('../.claude-plugin/plugin.json', import.meta.url), 'utf8').then(JSON.parse),
     readFile(new URL('../.codex-plugin/plugin.json', import.meta.url), 'utf8').then(JSON.parse),
     readFile(new URL('../qwen-extension.json', import.meta.url), 'utf8').then(JSON.parse),
   ])
 
-  assert.equal(claudeManifest.skills, './skills/', 'Claude selects the packaged skills directory')
-  assert.equal(codexManifest.skills, './skills-codex/', 'Codex selects its own buy-free skills subset')
+  assert.equal(claudeManifest.skills, './skills-claude/buy/', 'Claude adds only its buy command')
+  assert.equal(codexManifest.skills, undefined, 'Codex does not pretend to override portable skills')
+  assert.equal(codexManifest.mcpServers, undefined, 'Codex does not pretend to override portable MCP discovery')
   assert.deepEqual(
     codexManifest.interface.defaultPrompt,
     [canonicalPrompt],
@@ -148,14 +156,14 @@ test('plugin hosts select the packaged skill and share one OpenAI prompt', async
   assert.equal(qwenManifest.description, description)
   assert.match(
     readme,
-    /root `plugin\.json`[\s\S]{0,180}(?:Codex|Qwen Code)[\s\S]{0,180}(?:Agent Plugins|conforming clients)/iu,
+    /root `skills\/` and `mcp\.json`[\s\S]{0,120}portable Agent Plugins/iu,
   )
   assert.match(readme, /root `SKILL\.md` is the standalone Agent Skill mirror/iu)
   assert.match(readme, /byte-identical copy under `skills\/1f3d9-citylife\/`/iu)
 })
 
 test('the main skill gives a fresh resident the critical path in encounter order', () => {
-  assert.ok(rootSkill.split(/\r?\n/u).length - 1 < 500, 'SKILL.md stays under 500 physical lines')
+  assert.ok(rootSkillFile.split(/\r?\n/u).length - 1 < 160, 'SKILL.md stays a short dispatcher')
   assert.match(rootSkill, /On first activated use, start with \*\*Configure 1F3D9\*\*\./u)
 
   const lowerSkill = rootSkill.toLowerCase()
@@ -234,14 +242,12 @@ test('every packaged skill copy uses first-party browser key capture', () => {
   }
 })
 
-test('the skill matches the city truth release', () => {
+test('the skill matches the observed hosted-chat setup paths', () => {
   for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
-    // ChatGPT setup leads with the official OpenAI guide, not local menu paths
-    assert.match(
-      value,
-      /https:\/\/developers\.openai\.com\/plugins\/deploy\/connect-chatgpt/u,
-      `${name}: official connect guide`,
-    )
+    assert.match(value, /Observed 2026-09-10/u, `${name}: observed date`)
+    assert.match(value, /Plugins -> Create app/u, `${name}: observed ChatGPT path`)
+    assert.match(value, /Settings -> Connectors -> Add custom connector/u, `${name}: observed Claude path`)
+    assert.match(value, /Account and workspace plans can change labels, menus, and paths/u, `${name}: account variation`)
     assert.doesNotMatch(
       value,
       /Scan Tools|Advanced Settings|Workspace settings -> Apps/iu,
@@ -321,9 +327,9 @@ test('Wave 14 explains current reading, provenance, orientation, and snapshots',
 
 test('Wave 14 keeps ChatGPT access and private payment recovery honest', () => {
   for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
-    assert.match(value, /https:\/\/developers\.openai\.com\/plugins\/deploy\/connect-chatgpt/u, `${name}: current OpenAI guide`)
-    assert.match(value, /Settings -> Security and login -> Developer mode/u, `${name}: documented developer mode`)
-    assert.match(value, /ChatGPT Plugins -> \+/u, `${name}: documented plugin page`)
+    assert.match(value, /Observed 2026-09-10/u, `${name}: checked setup date`)
+    assert.match(value, /follow the current host UI and its official remote MCP instructions/iu, `${name}: current host guidance`)
+    assert.doesNotMatch(value, /Settings -> Security and login -> Developer mode|ChatGPT Plugins -> \+/u, `${name}: retired exact path`)
     assert.doesNotMatch(value, /(?:web only|mobile[^\n]{0,80}unsupported|not supported on mobile)/iu, `${name}: unsupported surface claim`)
     assert.match(value, /https:\/\/1f3d9\.com\/mcp\/connect/u, `${name}: hosted connector`)
     assert.match(value, /\/mcp[\s\S]{0,120}key-capable local clients/iu, `${name}: local connector distinction`)
@@ -403,7 +409,7 @@ test('wallet guidance is provider-neutral and preserves explicit authority', () 
 })
 
 test('the Configure workflow keeps money setup and verification as its own steps', async () => {
-  const text = await readFile(new URL('../SKILL.md', import.meta.url), 'utf8');
+  const text = await readFile(new URL('../references/resident-guide.md', import.meta.url), 'utf8');
   const configure = text.indexOf('## Configure 1F3D9');
   const money = text.indexOf('### 6. Configure money separately');
   const verify = text.indexOf('### 7. Verify configuration');

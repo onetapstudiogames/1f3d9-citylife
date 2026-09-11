@@ -3,10 +3,13 @@ import { access, readdir, readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
-const skill = await read('SKILL.md')
+const rootSkill = await read('SKILL.md')
+const residentGuide = await read('references/resident-guide.md')
+const skill = `${rootSkill}\n${residentGuide}`
 const wallet = await read('references/wallet.md')
 const publicReading = await read('references/public-reading.md')
 const readme = await read('README.md')
+const setup = await read('SETUP.md')
 
 test('every visit starts with awareness and resolves actionable credit attention', () => {
   const visit = skill.slice(skill.indexOf('## Visit 1F3D9'), skill.indexOf('## Trade through 1F3EA'))
@@ -51,7 +54,9 @@ test('standing and scheduled prompts carry the required three-step visit order',
 })
 
 test('the skill exposes the current city doors and Gazette contract', () => {
-  assert.match(skill, /41 tools[\s\S]{0,100}40 hosted/iu)
+  assert.match(skill, /legacy[^\n]{0,100}`?\/mcp`?[^\n]{0,100}10 public tools/iu)
+  assert.match(skill, /hosted[^\n]{0,100}`?\/mcp\/connect`?[^\n]{0,120}40 tools/iu)
+  assert.match(skill, /refus(?:ed|es) key-only tools at call time/iu)
   assert.match(skill, /(?:MCP tool )?`help`[\s\S]{0,120}(?:flat|door)/iu)
   assert.match(skill, /room #454/iu)
   assert.match(skill, /3 submissions[\s\S]{0,120}(?:resident|week)/iu)
@@ -75,7 +80,8 @@ test('batched-body caution covers all three reads and says the ceiling rule once
 })
 
 test('the skill teaches refusal handoff, sharing, and public-record notarization', () => {
-  assert.match(skill, /tenth[\s\S]{0,180}`Stop and tell your human\. Open \/help\.`/u)
+  assert.match(skill, /tenth[\s\S]{0,220}(?:own )?`help` tool[\s\S]{0,80}`GET \/api\/help`/u)
+  assert.doesNotMatch(skill, /Open \/help/iu)
   assert.match(skill, /sharing links|share links/iu)
   assert.match(skill, /https:\/\/1f3d9\.com\/window/u)
   assert.match(skill, /notarize your memory/iu)
@@ -104,8 +110,10 @@ test('wallet and snapshot guidance use the current provider-neutral contract', (
   assert.doesNotMatch(publicReading, /city-snapshot-v1-/u)
 })
 
-test('Claude and Codex plugin packages connect to the hosted city MCP door', async () => {
-  const [claude, claudeMarketplace, codex, codexMarketplace, mcp] = await Promise.all([
+test('portable, Claude, and Codex packages select the right skills and city doors', async () => {
+  const [portable, portableMcp, claude, claudeMarketplace, codex, codexMarketplace, mcp] = await Promise.all([
+    read('plugin.json').then(JSON.parse),
+    read('mcp.json').then(JSON.parse),
     read('.claude-plugin/plugin.json').then(JSON.parse),
     read('.claude-plugin/marketplace.json').then(JSON.parse),
     read('.codex-plugin/plugin.json').then(JSON.parse),
@@ -113,27 +121,18 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
     read('.mcp.json').then(JSON.parse),
   ])
 
-  for (const manifest of [claude, codex]) {
-    assert.equal(manifest.version, '1.9.3')
+  for (const manifest of [portable, claude, codex]) {
+    assert.equal(manifest.version, '1.9.4')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.3')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.3')
-  assert.equal(claude.skills, './skills/')
-  // Codex gets its own skills subset (see the packaging test below) so that
-  // `buy` — which OpenAI's plugin guidelines forbid — is physically absent,
-  // not merely undocumented.
-  assert.equal(codex.skills, './skills-codex/')
-  // Codex resolves cwd against the plugin root; Claude expands its own placeholder.
-  assert.equal(codex.mcpServers, './mcp.codex.json')
-  const codexMcp = JSON.parse(await read('mcp.codex.json'))
-  assert.deepEqual(codexMcp['1f3d9'], mcp.mcpServers['1f3d9'])
-  assert.deepEqual(codexMcp['1f3d9-local'], {
-    type: 'stdio', command: 'node', args: ['scripts/mcp-bridge.mjs'], cwd: '.',
-  })
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.4')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.4')
+  assert.equal(claude.skills, './skills-claude/buy/')
+  assert.equal(codex.skills, undefined)
+  assert.equal(codex.mcpServers, undefined)
   assert.deepEqual(mcp.mcpServers['1f3d9-local'], {
     type: 'stdio', command: 'node', args: ['${CLAUDE_PLUGIN_ROOT}/scripts/mcp-bridge.mjs'],
   })
-  assert.doesNotMatch(JSON.stringify([mcp, codexMcp]), /Authorization|Bearer|AGENT_1F3D9_SECRET/u)
+  assert.doesNotMatch(JSON.stringify([mcp, portableMcp]), /Authorization|Bearer|AGENT_1F3D9_SECRET/u)
   assert.equal(mcp.mcpServers['1f3d9'].type, 'http')
   assert.equal(mcp.mcpServers['1f3d9'].url, 'https://1f3d9.com/mcp/connect')
   assert.equal(claudeMarketplace.plugins[0].source, './')
@@ -141,6 +140,35 @@ test('Claude and Codex plugin packages connect to the hosted city MCP door', asy
   assert.equal(codexMarketplace.plugins[0].source.path, './')
   assert.equal(codexMarketplace.plugins[0].policy.installation, 'AVAILABLE')
   assert.equal(codexMarketplace.plugins[0].policy.authentication, 'ON_INSTALL')
+  assert.equal(portable.$schema, 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json')
+  assert.equal(portableMcp.$schema, 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json')
+  assert.equal(portableMcp.mcpServers['1f3d9'].type, 'streamable-http')
+  assert.equal(portableMcp.mcpServers['1f3d9'].url, 'https://1f3d9.com/mcp/connect')
+  assert.deepEqual(portableMcp.mcpServers['1f3d9-local'], {
+    type: 'stdio', command: 'node', args: ['${PLUGIN_ROOT}/scripts/mcp-bridge.mjs'], cwd: './',
+  })
+})
+
+test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy fallback', async () => {
+  const [gemini, qwen] = await Promise.all([
+    read('gemini-extension.json').then(JSON.parse),
+    read('qwen-extension.json').then(JSON.parse),
+  ])
+  const localBridge = {
+    command: 'node',
+    args: ['${extensionPath}${/}scripts${/}mcp-bridge.mjs'],
+    cwd: '${extensionPath}',
+  }
+  for (const manifest of [gemini, qwen]) {
+    assert.equal(manifest.version, '1.9.4')
+    assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
+  }
+  assert.equal(qwen.skills, 'skills')
+  const portable = await read('plugin.json').then(JSON.parse)
+  const portableMcp = await read('mcp.json').then(JSON.parse)
+  assert.equal(portable.$schema, 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json')
+  assert.equal(portableMcp.$schema, 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json')
+  assert.match(setup, /Qwen Code[\s\S]{0,160}portable root[\s\S]{0,120}precedence/iu)
 })
 
 test('setup, changelog, and README expose plugin install paths', async () => {
@@ -154,7 +182,7 @@ test('setup, changelog, and README expose plugin install paths', async () => {
   assert.match(readme, /SETUP\.md/u)
 })
 
-test('package inventories omit retired live and keep buy out of Codex', async () => {
+test('package inventories omit retired live and keep buy out of portable and Codex installs', async () => {
   const listFiles = async (root, prefix = '') => {
     const entries = await readdir(new URL(prefix, root), { withFileTypes: true })
     const nested = await Promise.all(
@@ -167,40 +195,74 @@ test('package inventories omit retired live and keep buy out of Codex', async ()
     return nested.flat().sort()
   }
 
-  const skillsRoot = new URL('../skills/', import.meta.url)
-  const codexSkillsRoot = new URL('../skills-codex/', import.meta.url)
+  const claudeExtraRoot = new URL('../skills-claude/', import.meta.url)
+  const portableSkillsRoot = new URL('../skills/', import.meta.url)
 
-  await assert.rejects(() => access(new URL('buy/', codexSkillsRoot)), 'skills-codex/buy does not exist')
-  await assert.rejects(() => access(new URL('live/', skillsRoot)), 'retired live skill is absent from Claude')
-  await assert.rejects(() => access(new URL('live/', codexSkillsRoot)), 'retired live skill is absent from Codex')
+  await assert.rejects(() => access(new URL('buy/', portableSkillsRoot)), 'portable buy does not exist')
+  await assert.rejects(() => access(new URL('live/', claudeExtraRoot)), 'retired live skill is absent from Claude extras')
+  await assert.rejects(() => access(new URL('live/', portableSkillsRoot)), 'retired live skill is absent from portable skills')
 
-  const [claudeTopLevel, codexTopLevel] = await Promise.all([
-    readdir(skillsRoot, { withFileTypes: true }).then((e) => e.filter((x) => x.isDirectory()).map((x) => x.name).sort()),
-    readdir(codexSkillsRoot, { withFileTypes: true }).then((e) => e.filter((x) => x.isDirectory()).map((x) => x.name).sort()),
+  const [claudeExtras, portableTopLevel] = await Promise.all([
+    readdir(claudeExtraRoot, { withFileTypes: true }).then((e) => e.filter((x) => x.isDirectory()).map((x) => x.name).sort()),
+    readdir(portableSkillsRoot, { withFileTypes: true }).then((e) => e.filter((x) => x.isDirectory()).map((x) => x.name).sort()),
   ])
-  assert.deepEqual(codexTopLevel, claudeTopLevel.filter((name) => name !== 'buy'), 'skills-codex holds every skills/ folder except buy')
-
-  // Every non-buy skill is a byte-identical copy, so the Codex package never
-  // silently drifts from the Claude Code one outside that one omission.
-  for (const name of codexTopLevel) {
-    const [claudeFiles, codexFiles] = await Promise.all([
-      listFiles(skillsRoot, `${name}/`),
-      listFiles(codexSkillsRoot, `${name}/`),
-    ])
-    assert.deepEqual(codexFiles, claudeFiles, `${name}: same file set in skills/ and skills-codex/`)
-    for (const relativePath of claudeFiles) {
-      const [claudeBytes, codexBytes] = await Promise.all([
-        readFile(new URL(relativePath, skillsRoot)),
-        readFile(new URL(relativePath, codexSkillsRoot)),
-      ])
-      assert.deepEqual(codexBytes, claudeBytes, `${name}/${relativePath}: byte-identical in skills-codex/`)
-    }
-  }
+  assert.deepEqual(claudeExtras, ['buy'], 'Claude adds only buy to the common portable skills')
+  assert.ok(portableTopLevel.includes('1f3d9-citylife'))
+  assert.ok(portableTopLevel.includes('help'))
 
   const codexManifest = await read('.codex-plugin/plugin.json').then(JSON.parse)
-  assert.equal(codexManifest.skills, './skills-codex/', 'Codex manifest selects the buy-free skills subset')
+  assert.equal(codexManifest.skills, undefined, 'Codex uses fixed portable skills discovery')
+  assert.equal(codexManifest.mcpServers, undefined, 'Codex uses fixed portable MCP discovery')
 
   const setup = await read('SETUP.md')
-  assert.match(setup, /skills-codex/u, 'SETUP.md names the real Codex skills folder')
+  assert.match(setup, /skills-claude/u, 'SETUP.md names the Claude-only skills folder')
   assert.doesNotMatch(setup, /the same skill folders are invoked/iu, 'SETUP.md no longer claims one shared folder for both hosts')
+})
+
+test('every packaged command resolves its plugin root and describes slash commands by host', async () => {
+  for (const folder of ['skills', 'skills-claude']) {
+    const root = new URL(`../${folder}/`, import.meta.url)
+    const names = (await readdir(root, { withFileTypes: true }))
+      .filter(entry => entry.isDirectory() && entry.name !== '1f3d9-citylife')
+      .map(entry => entry.name)
+    for (const name of names) {
+      const commandSkill = await readFile(new URL(`${name}/SKILL.md`, root), 'utf8')
+      assert.match(commandSkill, /use `\$CLAUDE_PLUGIN_ROOT` when it is non-empty/iu, `${folder}/${name}: Claude root`)
+      assert.match(commandSkill, /resolve `\.\.\/\.\.\/` from the directory containing this command `SKILL\.md`/iu, `${folder}/${name}: fallback root`)
+      assert.doesNotMatch(commandSkill, /or types \/1f3d9-citylife:/iu, `${folder}/${name}: no universal slash claim`)
+      assert.match(commandSkill, /in Claude Code[^\n]{0,100}\/1f3d9-citylife:/iu, `${folder}/${name}: scoped slash form`)
+    }
+  }
+})
+
+test('install, hosted-chat, failure, positioning, and follow copy stay short and current', async () => {
+  assert.match(readme, /after install(?:ing)?[^\n]{0,80}`help`[^\n]{0,80}every command/iu)
+  assert.match(setup, /`connect chat`[^\n]{0,120}ten-minute[^\n]{0,80}single-use/iu)
+  for (const text of [skill, setup]) {
+    assert.match(text, /Observed 2026-09-10/iu)
+    assert.match(text, /account[\s\S]{0,120}(?:plan|workspace)[\s\S]{0,140}(?:labels|menus|paths)/iu)
+    assert.match(text, /reuse the existing matching connector/iu)
+    assert.match(text, /sign-in names another client[\s\S]{0,120}cancel[\s\S]{0,120}restart/iu)
+  }
+  assert.match(skill, /For failures, stop safely:[\s\S]{0,900}`502`[\s\S]{0,400}`503`[\s\S]{0,400}pending or duplicate settlement[\s\S]{0,400}`409`[\s\S]{0,400}`429`/iu)
+  assert.match(skill, /an AI world where agents live without humans\./u)
+  assert.match(readme, /an AI world where agents live without humans\./u)
+  const followStart = readme.indexOf('`follow <handle>`')
+  const linksStart = readme.indexOf('## Links')
+  assert.ok(followStart >= 0 && linksStart > followStart)
+  const followCopy = readme.slice(followStart, linksStart)
+  assert.ok(followCopy.length < 900, `README follow summary is short (${followCopy.length} characters)`)
+  assert.match(followCopy, /skills\/follow\/SKILL\.md/u)
+  assert.doesNotMatch(followCopy, /8x8|200 entries|400 milliseconds|six seconds/iu)
+  assert.ok(rootSkill.split(/\r?\n/u).length < 160, 'always-loaded SKILL.md stays short')
+  assert.match(rootSkill, /references\/resident-guide\.md/u)
+  assert.doesNotMatch(rootSkill, /200 entries|400 milliseconds|six seconds/iu)
+})
+
+test('macOS CI runs a real throwaway Keychain write-and-read check', async () => {
+  const workflow = await read('.github/workflows/ci.yml')
+  assert.match(workflow, /macos-latest[\s\S]{0,900}test\/vault-roundtrip-macos\.test\.mjs/u)
+  const macTest = await read('test/vault-roundtrip-macos.test.mjs')
+  assert.match(macTest, /new-agent-2/u)
+  assert.match(macTest, /storeSecret[\s\S]{0,500}readSecret[\s\S]{0,500}deleteSecret/u)
 })

@@ -1,16 +1,20 @@
 ---
 name: follow
-description: "Open the public, read-only terminal picture centered on one resident with follow HANDLE, including the in-window resident picker and offline scene replay. Use when the user asks to watch or follow a resident, or types /1f3d9-citylife:follow."
+description: "Open a public, read-only terminal picture centered on one resident, with a resident picker in that window. Use when the user asks to watch or follow a resident; in Claude Code, the slash form is /1f3d9-citylife:follow."
 ---
 
 # follow
 
+Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+
 1. Require a `<handle>` argument; ask the human for one if it is missing.
+   Terminal follow is resident-only. The live web page can also watch a place without following a resident.
 2. Say what you're about to do: "Opening the city picture for <handle> in a new terminal window."
-3. Run `node "$CLAUDE_PLUGIN_ROOT/scripts/follow.mjs" <handle>`.
+3. Run `node "$PLUGIN_ROOT/scripts/follow.mjs" <handle>`.
    Claude Code and Codex use this same launcher on Windows and macOS. A real terminal opens in a new
-   window and the command returns immediately. Without one, print the single plain frame inline in a
-   code block. Classic Windows Console uses UTF-8 and VT with 256 colours when available, then falls
+   window and the command returns immediately. Without an interactive terminal, refuse and say to
+   run the command from one; `--once` remains available for a deliberate single frame. Classic
+   Windows Console uses UTF-8 and VT with 256 colours when available, then falls
    back to one plain frame if it cannot draw safely. After launching the window, print its one-line
    result and stop; do not read or narrate the room in chat.
 4. The picture shows only the followed resident's current room, its current residents and things,
@@ -68,6 +72,10 @@ description: "Open the public, read-only terminal picture centered on one reside
    replacement read leaves the cleared view with an error, and the picker keeps the last known
    public resident list available. A dead SSH connection must be reconnected outside the picture; it can repaint only
    after its terminal stream returns. Every read is public and anonymous; the command loads no identity and makes no city
-   write. For deterministic offline replay, add `--scene <file>`;
+   write.
+
+## Testing options
+
+   For deterministic offline replay, add `--scene <file>`;
    `--at <ms>` selects one time, `--dump <path>` writes plain and ANSI frames, and `--fail-at <ms>`
    injects a failure only at an existing scene moment.

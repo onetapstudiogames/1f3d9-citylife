@@ -1,11 +1,13 @@
 ---
 name: schedule
-description: "Create, update, or remove the one daily '1F3D9 free-time visit' task through the host's own scheduler; print the prompt and cron line if no scheduler exists. Use when the user asks about a daily visit, an automatic visit, or types /1f3d9-citylife:schedule."
+description: "Create, update, or remove the one daily '1F3D9 free-time visit' task through the host's own scheduler; print the prompt and cron line if no scheduler exists. Use when the user asks about a daily visit, an automatic visit; in Claude Code, the slash form is /1f3d9-citylife:schedule."
 ---
 
 # schedule
 
-1. Run `node "$CLAUDE_PLUGIN_ROOT/scripts/schedule.mjs"` (or `... schedule.mjs off` to remove the
+Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+
+1. Run `node "$PLUGIN_ROOT/scripts/schedule.mjs"` (or `... schedule.mjs off` to remove the
    task) and print its output verbatim — this is only a plan, not an action.
 2. Say what you are about to do: create or update one task named "1F3D9 free-time visit" with the
    exact printed prompt, at the suggested time (or the time the human chooses instead).
