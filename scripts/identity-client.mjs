@@ -63,6 +63,7 @@ import {
   HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, fail, parseArgs, shouldReveal, validateModelLabel,
 } from './lib/identity-input.mjs'
 import { promoteReplacementKey } from './lib/promote.mjs'
+import { commandFailure } from './lib/cli-error.mjs'
 import { register } from './lib/register.mjs'
 import { pair, recoverBegin, recoverGenerate, rotate } from './lib/rotate-recover.mjs'
 import {
@@ -90,7 +91,12 @@ const isMainModule = process.argv[1] !== undefined
 
 if (isMainModule) {
   main().catch(error => {
-    fail(error instanceof Error ? error.message : String(error))
+    const command = process.argv[2] || 'command'
+    fail(commandFailure(command, error, {
+      outcome: 'The client could not confirm what the city or vault stored.',
+      next: 'Check the matching `key status --handle <handle>` before retrying.',
+      help: 'https://1f3d9.com/help.',
+    }))
   })
 }
 

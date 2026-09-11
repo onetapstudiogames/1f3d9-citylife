@@ -2,10 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { bridgeGuidance } from '../scripts/lib/bridge-guidance.mjs'
 
-test('the bundled local door needs one restart and no pasted command or key', () => {
+test('the bundled local door reloads fresh setup and only asks for restart after replacing a loaded key', () => {
   const text = bridgeGuidance('https://1f3d9.com').join('\n')
   assert.match(text, /1f3d9-local/u)
   assert.match(text, /[Rr]estart.*once/u)
+  assert.match(text, /fresh setup.*next call; no restart is needed/iu)
   assert.match(text, /vault/u)
   assert.match(text, /setup/u)
   assert.match(text, /sole non-staging/u)

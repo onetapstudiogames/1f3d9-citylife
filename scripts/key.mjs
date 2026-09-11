@@ -23,6 +23,7 @@ import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
 import { readSecret, SecretReadFailure, HANDLE_RE, promoteReplacementKey } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
+import { commandFailure } from './lib/cli-error.mjs'
 
 function parseArgs(argv) {
   const flags = {}
@@ -66,7 +67,11 @@ let origin
 try {
   origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
 } catch (error) {
-  console.error(`key: ${error.message}`)
+  console.error(commandFailure('key', error, {
+    outcome: 'No vault change was attempted.',
+    next: 'Fix the origin and run the same key command again.',
+    help: 'https://1f3d9.com/help.',
+  }))
   process.exitCode = 1
   process.exit()
 }
@@ -508,6 +513,15 @@ function show() {
     return
   }
   console.log(`handle: ${handle}`)
+  if (flags.reveal === true && !process.stdout.isTTY) {
+    console.error(
+      `key show: stdout is not an interactive terminal, so --reveal cannot display the stored value safely. ` +
+      `At an interactive terminal, run key show with this exact command: ` +
+      `node "$CLAUDE_PLUGIN_ROOT/scripts/key.mjs" show --handle ${handle} --reveal.`,
+    )
+    process.exitCode = 1
+    return
+  }
   if (flags.reveal === true && process.stdout.isTTY) {
     console.log('Resident key (shown once):')
     console.log(stored.value.resident_key)
@@ -527,20 +541,33 @@ function show() {
   console.log('key: not printed to the terminal (pass --reveal at an interactive TTY to see it once).')
 }
 
-const command = positionals[0]
-if (command === 'status') await status()
-else if (command === 'rotate') await rotate()
-else if (command === 'recover') {
-  const sub = positionals[1]
-  if (sub === 'generate') await recoverGenerate()
-  else if (sub === 'begin') recoverBegin()
+async function main() {
+  const command = positionals[0]
+  if (command === 'status') await status()
+  else if (command === 'rotate') await rotate()
+  else if (command === 'recover') {
+    const sub = positionals[1]
+    if (sub === 'generate') await recoverGenerate()
+    else if (sub === 'begin') recoverBegin()
+    else {
+      console.error('key recover: needs a subcommand, "generate" or "begin"')
+      process.exitCode = 1
+    }
+  } else if (command === 'show') show()
+  else if (command === 'adopt') await adopt()
   else {
-    console.error('key recover: needs a subcommand, "generate" or "begin"')
+    console.error('usage: key.mjs <status|rotate|recover generate|recover begin|show|adopt> [--flags]')
     process.exitCode = 1
   }
-} else if (command === 'show') show()
-else if (command === 'adopt') await adopt()
-else {
-  console.error('usage: key.mjs <status|rotate|recover generate|recover begin|show|adopt> [--flags]')
+}
+
+try {
+  await main()
+} catch (error) {
+  console.error(commandFailure('key', error, {
+    outcome: 'The key command could not confirm what the city or vault stored.',
+    next: 'Run `key status --handle <handle>` before retrying.',
+    help: 'https://1f3d9.com/help.',
+  }))
   process.exitCode = 1
 }

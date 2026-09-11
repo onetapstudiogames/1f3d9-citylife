@@ -28,6 +28,7 @@ import { probeMe } from './lib/identity-probe.mjs'
 import { readSecret, SecretReadFailure } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 import { bridgeGuidance } from './lib/bridge-guidance.mjs'
+import { commandFailure } from './lib/cli-error.mjs'
 
 const UNSAFE_LINE_CHARACTER_RE = /[\x00-\x1f\x7f\u2028\u2029]/u
 const BIDI_CONTROL_RE = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u
@@ -180,7 +181,11 @@ let origin
 try {
   origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
 } catch (error) {
-  console.error(`connect: ${error.message}`)
+  console.error(commandFailure('connect', error, {
+    outcome: 'No connector or vault state was changed.',
+    next: 'Fix the origin and run the same connect command again.',
+    help: 'https://1f3d9.com/help.',
+  }))
   process.exitCode = 1
   process.exit()
 }
@@ -235,11 +240,13 @@ async function connectHost() {
   }
   if (!stored.found || typeof stored.value?.resident_key !== 'string') {
     console.log(`one me read: skipped — no vault entry found for "${handle}" at ${origin}.`)
+    process.exitCode = 1
     return
   }
   const probe = await probeMe(origin, stored.value.resident_key, { allowOrigin })
   if (!probe.ok) {
     console.log(`one me read: FAILED (${probe.error})`)
+    process.exitCode = 1
     return
   }
   if (probe.handle && probe.handle !== handle) {
@@ -247,6 +254,7 @@ async function connectHost() {
       `one me read: MISMATCH — the vault entry labelled "${handle}" actually authenticates as ` +
       `"${probe.handle}". Pass --handle ${probe.handle} instead, or fix the entry.`,
     )
+    process.exitCode = 1
     return
   }
   console.log(`one me read: OK (handle: ${probe.handle ?? handle}) — this read wakes any due timers and`)
@@ -285,7 +293,11 @@ function connectChat() {
   )
   const output = (result.stdout || '').trim()
   if (result.status !== 0 || !output) {
-    console.error((result.stderr || 'connect chat: pairing failed').trim())
+    console.error(commandFailure('connect chat', new Error((result.stderr || 'pairing failed').trim()), {
+      outcome: 'No usable pairing code was printed or stored by this command.',
+      next: 'Run `connect chat` again after checking the city door.',
+      help: 'https://1f3d9.com/help.',
+    }))
     process.exitCode = 1
     return
   }
@@ -299,8 +311,17 @@ function connectChat() {
   console.log('Paste it within ten minutes; if the page rejects it, do not retry that code, run connect chat again for a fresh one.')
 }
 
-if (positionals[0] === 'chat') {
-  connectChat()
-} else {
-  await connectHost()
+try {
+  if (positionals[0] === 'chat') {
+    connectChat()
+  } else {
+    await connectHost()
+  }
+} catch (error) {
+  console.error(commandFailure('connect', error, {
+    outcome: 'Connect could not confirm a key check or pairing result; no resident key was changed.',
+    next: 'Run `connect --handle <handle>` to check the stored identity before retrying.',
+    help: 'https://1f3d9.com/help.',
+  }))
+  process.exitCode = 1
 }

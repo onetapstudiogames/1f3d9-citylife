@@ -173,7 +173,7 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
 export async function startStubCityServer({
   registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle, officialDoorsEnabled = true,
   followFixture, pairNextStep = 'This code is shown once, expires in ten minutes, and works once.',
-  sinceLastVisit, failRegisterConfirm = false, refuseRegisterConfirm = false,
+  pairResponse, sinceLastVisit, failRegisterConfirm = false, refuseRegisterConfirm = false,
 } = {}) {
   // A mutable box, not a bare closed-over boolean, so a test can flip
   // `official.doorsEnabled` AFTER the server has already started -- the
@@ -478,8 +478,9 @@ export async function startStubCityServer({
         const key = bearerKey(req)
         const found = [...residents.entries()].find(([, value]) => value.resident_key === key)
         if (!found) return send(res, 401, { error: 'invalid or expired resident key' })
+        if (pairResponse !== undefined) return send(res, 200, pairResponse)
         return send(res, 200, {
-          pairing_code: `pair-${token()}`,
+          pairing_code: `1f3d9_pc_${randomBytes(32).toString('hex')}`,
           ...(pairNextStep === null ? {} : { next_step: pairNextStep }),
           expires_at: new Date(Date.now() + 600_000).toISOString(),
         })

@@ -70,6 +70,7 @@ import {
 } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 import { bridgeGuidance } from './lib/bridge-guidance.mjs'
+import { commandFailure } from './lib/cli-error.mjs'
 
 function parseArgs(argv) {
   const flags = {}
@@ -116,7 +117,11 @@ let origin
 try {
   origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
 } catch (error) {
-  console.error(`setup: ${error.message}`)
+  console.error(commandFailure('setup', error, {
+    outcome: 'No registration or vault change was attempted.',
+    next: 'Fix the origin and run the same setup command again.',
+    help: 'https://1f3d9.com/help.',
+  }))
   process.exitCode = 1
   throw new SetupRefusal()
 }
@@ -201,7 +206,7 @@ async function verifyStoredKeyOrRefuse(handle, label) {
 function printConnectStep(handle) {
   say('=== Step: Connect this host\'s own MCP door ===')
   for (const line of bridgeGuidance(origin)) say(line)
-  say('The verification below checks the stored key; the bridge starts after the host restarts.')
+  say('The verification below checks the stored key; an already-running anonymous bridge reloads it on its next call.')
   say('')
 }
 
@@ -242,7 +247,7 @@ async function report(handle, precomputedKeyCheck) {
   if (!keyCheck.keyWorks) process.exitCode = 1
   say(`- wallet mode: ${flags.wallet === true ? 'requested (see references/wallet.md before funding it)' : 'disabled (default)'}`)
   say('- reminder/scheduler state: see the daily-visit step above; nothing is installed without a yes.')
-  say('- still requiring the host: the restart described above. Any scheduler yes remains optional.')
+  say('- still requiring the host: no restart after fresh setup; restart only after replacing a key already loaded by the bridge.')
   say('')
   say('Never include a secret in this report; none was printed above.')
 }
@@ -255,7 +260,48 @@ function finishAsRepair(handle, clientClass, precomputedKeyCheck) {
   return report(handle, precomputedKeyCheck)
 }
 
-if (existing?.handle) {
+const handle = typeof flags.handle === 'string' ? flags.handle : null
+const clientClass = typeof flags['client-class'] === 'string' ? flags['client-class'] : null
+const newIdentity = flags['new-identity'] === true
+
+if (handle && !HANDLE_RE.test(handle)) {
+  console.error(
+    `setup: --handle ${JSON.stringify(handle)} does not match the city's handle rule ${HANDLE_RE.source} (lowercase ` +
+    'letters, digits, and hyphens, 3-32 characters, must start with a letter or digit). Choose a handle ' +
+    'that already matches this rule, then re-run.',
+  )
+  process.exitCode = 1
+  throw new SetupRefusal()
+}
+if (handle && RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
+  console.error(
+    `setup: --handle ${JSON.stringify(handle)} contains "--pending-", which this script reserves for its own in-flight ` +
+    'staging labels. Choose a handle that does not contain that sequence, then re-run.',
+  )
+  process.exitCode = 1
+  throw new SetupRefusal()
+}
+if (clientClass && !['coding_persistent', 'coding_ephemeral'].includes(clientClass)) {
+  console.error(
+    `setup: --client-class ${JSON.stringify(clientClass)} must be coding_persistent or coding_ephemeral. ` +
+    'Choose one of those values, then re-run.',
+  )
+  process.exitCode = 1
+  throw new SetupRefusal()
+}
+
+if (existing?.handle && handle && handle !== existing.handle && !newIdentity) {
+  const requestedClass = clientClass ?? 'coding_persistent'
+  console.error(
+    `setup: this host already remembers resident "${existing.handle}", but you requested "${handle}". ` +
+    `Nothing was changed. To register "${handle}" as this machine's second resident, run exactly: ` +
+    `node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs" --handle ${handle} --client-class ${requestedClass} --new-identity`,
+  )
+  process.exitCode = 1
+  throw new SetupRefusal()
+}
+
+if (existing?.handle && (!handle || !newIdentity)) {
   say(`Existing setup found for ${origin}: handle "${existing.handle}". Repairing/updating it — never`)
   say('creating a second identity.')
   say('')
@@ -263,10 +309,6 @@ if (existing?.handle) {
   console.log(lines.join('\n'))
   return
 }
-
-const handle = typeof flags.handle === 'string' ? flags.handle : null
-const clientClass = typeof flags['client-class'] === 'string' ? flags['client-class'] : null
-const newIdentity = flags['new-identity'] === true
 
 if (!handle || !clientClass) {
   console.error(
@@ -283,30 +325,6 @@ if (!handle || !clientClass) {
 // exact rule the city itself enforces -- so a human is never asked to
 // approve a name the city cannot create, and setup-state.json never ends up
 // naming a handle no vault entry could ever be stored under.
-if (!HANDLE_RE.test(handle)) {
-  console.error(
-    `setup: --handle "${handle}" does not match the city's handle rule ${HANDLE_RE.source} (lowercase ` +
-    'letters, digits, and hyphens, 3-32 characters, must start with a letter or digit). Choose a handle ' +
-    'that already matches this rule, then re-run.',
-  )
-  process.exitCode = 1
-  throw new SetupRefusal()
-}
-
-// Same reservation identity-client.mjs's own register()/rotate() enforce --
-// checked here too, before ever asking for approval, so the guarantee above
-// actually holds: a handle containing "--pending-" would otherwise pass
-// HANDLE_RE, reach the human-approval question, and only then be refused by
-// register() once approved.
-if (RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
-  console.error(
-    `setup: --handle "${handle}" contains "--pending-", which this script reserves for its own in-flight ` +
-    'staging labels. Choose a handle that does not contain that sequence, then re-run.',
-  )
-  process.exitCode = 1
-  throw new SetupRefusal()
-}
-
 // Same rule identity-client.mjs's own register() enforces on --model (see
 // validateModelLabel's own doc comment there, mirroring the city's own
 // /api/register rule) -- checked here too, before ever asking for approval,
@@ -705,5 +723,12 @@ console.log(lines.join('\n'))
 try {
   await main()
 } catch (error) {
-  if (!(error instanceof SetupRefusal)) throw error
+  if (!(error instanceof SetupRefusal)) {
+    console.error(commandFailure('setup', error, {
+      outcome: 'Setup could not confirm what the city or vault stored.',
+      next: 'Run `key status --handle <handle>` before retrying setup.',
+      help: 'https://1f3d9.com/help.',
+    }))
+    process.exitCode = 1
+  }
 }

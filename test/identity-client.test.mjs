@@ -44,6 +44,25 @@ const runCli = (args, input) => spawnSync(process.execPath, [identityClientPath,
   env: { ...process.env, AGENT_1F3D9_STUB_ONLY: '0' },
 })
 
+test('Windows vault enumeration warns before falling back to the non-secret index', () => {
+  const homeDir = mkdtempSync(join(tmpdir(), 'vault-warning-'))
+  const warnings = []
+  try {
+    const labels = listVaultLabels('https://1f3d9.com', {
+      platform: 'win32',
+      homeDir,
+      execFileSync() { throw new Error('cmdkey unavailable') },
+      warn(message) { warnings.push(message) },
+    })
+    assert.deepEqual(labels, [])
+    assert.equal(warnings.length, 1)
+    assert.match(warnings[0], /Windows Credential Manager lookup failed/iu)
+    assert.match(warnings[0], /falling back to the non-secret vault index/iu)
+  } finally {
+    rmSync(homeDir, { recursive: true, force: true })
+  }
+})
+
 // --- Refusals: every one of these must fail before any network call -------
 
 test('rotate refuses a bare --resident-key flag', () => {

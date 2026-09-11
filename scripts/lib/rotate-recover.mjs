@@ -342,20 +342,23 @@ async function pair(flags) {
     throw new Error(`--resident-key-file (or ${AGENT_SECRET_ENV_VAR}) must point to the current, valid resident key`)
   }
   const minted = await postAuthed(origin, '/api/pair', residentKey, {})
+  const pairingCode = typeof minted.pairing_code === 'string' && /^1f3d9_pc_[0-9a-f]{64}$/u.test(minted.pairing_code)
+    ? minted.pairing_code
+    : null
+  const expiresAt = sanitizeServerProse(minted.expires_at)
+  const expiresAtMs = Date.parse(expiresAt)
+  if (!pairingCode || !Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+    throw new Error(
+      'the city pairing response was malformed; no code was printed. Check https://1f3d9.com/changelog ' +
+      'and run `connect chat` again once the city door is healthy',
+    )
+  }
   // The pairing code is meant to be read by a human, not stored -- it is
   // single-use, expires in ten minutes, and never substitutes for the key.
   // Printing it is the entire point of this command, so it is not gated
   // behind --reveal the way the resident key and recovery codes are above.
-  // minted.pairing_code and minted.expires_at are server-supplied and
-  // never validated against any local format rule (unlike a handle) --
-  // JSON.stringify neutralizes an embedded newline (or other control
-  // character) that could otherwise inject a fabricated extra line into
-  // output a human or a skill is instructed to relay verbatim. next_step
-  // stays readable rather than stringified, so it is accepted only as a
-  // non-empty trimmed string without control characters; otherwise the
-  // client prints its own accurate fallback.
   console.log('Pairing code (shown once, give it to the human completing hosted-chat sign-in):')
-  console.log(JSON.stringify(minted.pairing_code))
+  console.log(pairingCode)
   // The city's sentence is printed only when the shared server-prose guard
   // accepts it; otherwise the local sentence stands in, so this block never
   // prints a fabricated extra line.
@@ -365,7 +368,7 @@ async function pair(flags) {
       ? cityNextStep
       : 'This code is single-use and expires in ten minutes; if it is rejected, mint a fresh one rather than retrying it.',
   )
-  console.log(`expires_at: ${JSON.stringify(minted.expires_at)}`)
+  console.log(`expires_at: ${expiresAt}`)
 }
 
 export { rotate, recoverGenerate, recoverBegin, pair }
