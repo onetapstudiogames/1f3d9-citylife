@@ -107,14 +107,21 @@ class SetupRefusal extends Error {}
 
 async function main() {
 const flags = parseArgs(process.argv.slice(2))
-const rawOrigin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
 const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
+const handle = typeof flags.handle === 'string' ? flags.handle : null
+const clientClass = typeof flags['client-class'] === 'string' ? flags['client-class'] : null
+const newIdentity = flags['new-identity'] === true
 
 // The origin guard runs before ANYTHING else -- including the "Step 1"
 // output below -- so a disallowed origin can never reach a printed MCP
 // connector command, a registration attempt, or any other output at all.
 let origin
 try {
+  const rawOriginValue = flags.origin ?? 'https://1f3d9.com'
+  if (typeof rawOriginValue !== 'string' || rawOriginValue.length === 0) {
+    throw new TypeError('--origin requires a non-empty value')
+  }
+  const rawOrigin = rawOriginValue.replace(/\/+$/u, '')
   origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
 } catch (error) {
   console.error(commandFailure('setup', error, {
@@ -260,16 +267,18 @@ function finishAsRepair(handle, clientClass, precomputedKeyCheck) {
   return report(handle, precomputedKeyCheck)
 }
 
-const handle = typeof flags.handle === 'string' ? flags.handle : null
-const clientClass = typeof flags['client-class'] === 'string' ? flags['client-class'] : null
-const newIdentity = flags['new-identity'] === true
-
 if (handle && !HANDLE_RE.test(handle)) {
   console.error(
     `setup: --handle ${JSON.stringify(handle)} does not match the city's handle rule ${HANDLE_RE.source} (lowercase ` +
     'letters, digits, and hyphens, 3-32 characters, must start with a letter or digit). Choose a handle ' +
     'that already matches this rule, then re-run.',
   )
+  process.exitCode = 1
+  throw new SetupRefusal()
+}
+
+if (Object.hasOwn(flags, 'handle') && (typeof flags.handle !== 'string' || flags.handle.length === 0)) {
+  console.error('setup: --handle requires a non-empty value; nothing was changed.')
   process.exitCode = 1
   throw new SetupRefusal()
 }

@@ -173,12 +173,16 @@ function parseArgs(argv) {
 }
 
 const { flags, positionals } = parseArgs(process.argv.slice(2))
-const rawOrigin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
 const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
 
 // Validate the probe origin before printing guidance or reading the vault.
 let origin
 try {
+  const rawOriginValue = flags.origin ?? 'https://1f3d9.com'
+  if (typeof rawOriginValue !== 'string' || rawOriginValue.length === 0) {
+    throw new TypeError('--origin requires a non-empty value')
+  }
+  const rawOrigin = rawOriginValue.replace(/\/+$/u, '')
   origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
 } catch (error) {
   console.error(commandFailure('connect', error, {
@@ -200,7 +204,12 @@ const identityClientPath = resolve(pluginRoot, 'scripts', 'identity-client.mjs')
  * handle known" — a corrupt file is not proof no identity exists.
  */
 function resolveHandle(label) {
-  if (typeof flags.handle === 'string') return flags.handle
+  if (Object.hasOwn(flags, 'handle')) {
+    if (typeof flags.handle === 'string' && flags.handle.length > 0) return flags.handle
+    console.error(`${label}: --handle requires a non-empty value; no resident was selected.`)
+    process.exitCode = 1
+    return null
+  }
   let state
   try {
     state = readSetupState(origin)

@@ -359,6 +359,50 @@ test('connect.mjs and key.mjs accept --handle=<value> in equals form, not just t
   assert.match(keyResult.stderr, /agent-equals-key/u, 'key.mjs actually used the equals-form --handle, not a fallback')
 })
 
+test('setup and connect reject a bare --handle instead of falling back to remembered identity', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('bare-handle-')
+  const origin = stub.origin
+  try {
+    mkdirSync(join(home.dir, '.1f3d9'), { recursive: true })
+    writeFileSync(join(home.dir, '.1f3d9', 'setup-state.json'), JSON.stringify({
+      [origin]: { handle: 'remembered-agent', client_class: 'coding_persistent' },
+    }))
+    const setupResult = await runNode(setupPath, [
+      '--origin', origin, '--allow-origin', origin, '--handle', '--client-class', 'coding_persistent', '--new-identity',
+    ], { env: home.env })
+    assert.notEqual(setupResult.status, 0)
+    assert.match(setupResult.stderr, /--handle requires a non-empty value/iu)
+    assert.doesNotMatch(setupResult.stdout, /remembered-agent|Repairing\/updating|1f3d9-local/iu)
+
+    const connectResult = await runNode(connectPath, [
+      '--origin', origin, '--allow-origin', origin, '--handle',
+    ], { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } })
+    assert.notEqual(connectResult.status, 0)
+    assert.match(connectResult.stderr, /--handle requires a non-empty value/iu)
+    assert.doesNotMatch(connectResult.stdout, /remembered-agent|1f3d9-local|one me read/iu)
+  } finally {
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('setup, connect, and key wrap a bare --origin without a raw stack trace', async () => {
+  const cases = [
+    ['setup', setupPath, ['--origin']],
+    ['connect', connectPath, ['--origin']],
+    ['key', keyPath, ['status', '--origin']],
+  ]
+  for (const [label, script, args] of cases) {
+    const result = await runNode(script, args)
+    assert.notEqual(result.status, 0, label)
+    assert.match(result.stderr, /--origin requires a non-empty value/iu, label)
+    assert.match(result.stderr, /1f3d9\.com\/help/iu, label)
+    assert.doesNotMatch(result.stderr, /TypeError:|\n\s+at /u, label)
+    assertNoSecretLeaked(result, `${label} bare origin`)
+  }
+})
+
 const EMPTY_SINCE_LAST_VISIT = {
   city_updates: { count: 0, href: '/changelog' },
   fee_credit_received: {

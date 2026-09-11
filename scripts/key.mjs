@@ -58,13 +58,17 @@ function parseArgs(argv) {
 }
 
 const { flags, positionals } = parseArgs(process.argv.slice(2))
-const rawOrigin = (flags.origin ?? 'https://1f3d9.com').replace(/\/+$/u, '')
 const allowOrigin = typeof flags['allow-origin'] === 'string' ? flags['allow-origin'] : undefined
 
 // The origin guard runs before ANYTHING else -- before status/rotate/
 // recover/show ever touch the vault or the network for a disallowed origin.
 let origin
 try {
+  const rawOriginValue = flags.origin ?? 'https://1f3d9.com'
+  if (typeof rawOriginValue !== 'string' || rawOriginValue.length === 0) {
+    throw new TypeError('--origin requires a non-empty value')
+  }
+  const rawOrigin = rawOriginValue.replace(/\/+$/u, '')
   origin = assertAllowedOrigin(rawOrigin, { allowOrigin })
 } catch (error) {
   console.error(commandFailure('key', error, {
