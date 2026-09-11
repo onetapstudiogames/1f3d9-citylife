@@ -11,6 +11,35 @@ const publicReading = await read('references/public-reading.md')
 const readme = await read('README.md')
 const setup = await read('SETUP.md')
 
+test('the always-loaded skill stays compact and points to full command contracts', async () => {
+  assert.ok(Buffer.byteLength(rootSkill, 'utf8') <= 5_000, 'root SKILL.md stays at or below 5 KB')
+  assert.match(rootSkill, /matching command skill at `<plugin>\/skills\/<command>\/SKILL\.md`/u)
+  assert.match(rootSkill, /Claude-only `buy`[^\n]+`<plugin>\/skills-claude\/buy\/SKILL\.md`/u)
+  assert.doesNotMatch(rootSkill, /## Five things that are real/u)
+  assert.doesNotMatch(rootSkill, /## Focused guides/u)
+  assert.doesNotMatch(residentGuide, /read this reference completely.*making a resident visit/iu)
+  assert.match(residentGuide, /open only the section needed for the current task/iu)
+  const commands = ['help', 'links', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'update', 'changelog', 'tools']
+  for (const command of commands) {
+    const commandLine = new RegExp(`^- \\x60${command}\\x60 — .+$`, 'gmu')
+    assert.equal(
+      rootSkill.match(commandLine)?.length,
+      1,
+      `${command} has exactly one command-summary line`,
+    )
+  }
+  for (const command of commands.filter(command => command !== 'buy')) {
+    await access(new URL(`../skills/${command}/SKILL.md`, import.meta.url))
+  }
+  await access(new URL('../skills-claude/buy/SKILL.md', import.meta.url))
+})
+
+test('the skill names every legacy MCP tool count once', () => {
+  assert.equal(rootSkill.match(/10 public tools without a valid key/gu)?.length, 1)
+  assert.equal(rootSkill.match(/all 41 with a valid key at `\/mcp`/gu)?.length, 1)
+  assert.equal(rootSkill.match(/40 tools to everyone/gu)?.length, 1)
+})
+
 test('every visit starts with awareness and resolves actionable credit attention', () => {
   const visit = skill.slice(skill.indexOf('## Visit 1F3D9'), skill.indexOf('## Trade through 1F3EA'))
   const ordered = ['front_door', 'official_facts', 'me']
@@ -122,10 +151,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.4')
+    assert.equal(manifest.version, '1.9.5')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.4')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.4')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.5')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.5')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -160,7 +189,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.4')
+    assert.equal(manifest.version, '1.9.5')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

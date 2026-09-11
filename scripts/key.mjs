@@ -108,7 +108,7 @@ function requireHandle() {
   return handle
 }
 
-function requireStoredKey(handle) {
+function requireStoredKey(handle, { showMissingStatus = false } = {}) {
   let stored
   try {
     stored = readSecret(origin, handle)
@@ -123,6 +123,10 @@ function requireStoredKey(handle) {
   }
   if (!stored.found) {
     console.error(`key: no vault entry found for "${handle}" at ${origin}.`)
+    if (showMissingStatus) {
+      console.error('stored key: no vault entry.')
+      console.error('next: Run setup, or run `key status --handle <the handle you meant>`.')
+    }
     process.exitCode = 1
     return null
   }
@@ -137,7 +141,7 @@ function requireStoredKey(handle) {
 async function status() {
   const handle = requireHandle()
   if (!handle) return
-  const residentKey = requireStoredKey(handle)
+  const residentKey = requireStoredKey(handle, { showMissingStatus: true })
   if (!residentKey) return
   const probe = await probeMe(origin, residentKey, { allowOrigin })
   console.log(`handle: ${handle}`)
