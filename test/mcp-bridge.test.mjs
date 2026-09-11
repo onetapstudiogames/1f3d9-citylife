@@ -7,6 +7,7 @@ import {
   MCP_ORIGIN,
   MCP_URL,
   createMcpBridge,
+  formatBridgeStop,
   parseBridgeArgs,
   runMcpBridge,
 } from '../scripts/lib/mcp-bridge.mjs'
@@ -56,6 +57,125 @@ test('startup reads the fixed city setup and its handle-labelled vault entry onc
   ])
   await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"ping"}')
   assert.equal(identity.calls.length, 2, 'identity is not reread while the host process stays alive')
+})
+
+test('an anonymous bridge reloads the vault on a later call and can use a newly stored identity without restart', async () => {
+  let state = null
+  let stored = { found: false, value: null }
+  const requests = []
+  const bridge = await createMcpBridge({
+    readSetupStateImpl: () => state,
+    readVaultIndexImpl: () => ({}),
+    readSecretImpl: () => stored,
+    fetchImpl: async (_url, init) => {
+      requests.push(init)
+      return jsonResponse({ jsonrpc: '2.0', id: requests.length, result: {} })
+    },
+  })
+
+  await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"ping"}')
+  state = { handle: 'tinylantern' }
+  stored = { found: true, value: { resident_key: RESIDENT_KEY } }
+  await bridge.handleLine('{"jsonrpc":"2.0","id":2,"method":"tools/call"}')
+
+  assert.equal(requests[0].headers.authorization, undefined)
+  assert.equal(requests[1].headers.authorization, `Bearer ${RESIDENT_KEY}`)
+})
+
+test('missing-key guidance uses the plugin-root setup command in every repair case', async () => {
+  const cases = [
+    identityDeps({ state: null, index: {} }),
+    identityDeps({ state: { handle: 'tinylantern' }, stored: { found: false, value: null } }),
+    identityDeps({ state: { handle: 'tinylantern' }, stored: { found: true, value: {} } }),
+  ]
+  for (const deps of cases) {
+    const bridge = await createMcpBridge({
+      ...deps,
+      fetchImpl: async () => jsonResponse({ jsonrpc: '2.0', id: 1, result: { instructions: '' } }),
+    })
+    const output = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
+    assert.match(output, /node \\"\$CLAUDE_PLUGIN_ROOT\/scripts\/setup\.mjs\\"/u)
+    assert.doesNotMatch(output, /node scripts\/setup\.mjs/u)
+  }
+})
+
+test('relayed JSON-RPC errors include the safe x-vercel-id response header', async () => {
+  const bridge = await createMcpBridge({
+    ...identityDeps(),
+    fetchImpl: async () => jsonResponse(
+      { jsonrpc: '2.0', id: 9, error: { code: -32000, message: 'city refusal' } },
+      { headers: { 'content-type': 'application/json', 'x-vercel-id': 'cle1::iad1::request-123' } },
+    ),
+  })
+  const output = JSON.parse(await bridge.handleLine('{"jsonrpc":"2.0","id":9,"method":"tools/call"}'))
+  assert.match(output.error.message, /x-vercel-id: cle1::iad1::request-123/u)
+})
+
+test('bridge-generated errors from a city response include its x-vercel-id', async () => {
+  const bridge = await createMcpBridge({
+    ...identityDeps(),
+    fetchImpl: async () => new Response('not json', {
+      status: 502,
+      headers: { 'content-type': 'text/plain', 'x-vercel-id': 'cle1::iad1::request-456' },
+    }),
+  })
+  const output = JSON.parse(await bridge.handleLine('{"jsonrpc":"2.0","id":10,"method":"tools/call"}'))
+  assert.match(output.error.message, /x-vercel-id: cle1::iad1::request-456/u)
+})
+
+test('an empty MCP error content array still receives the x-vercel-id', async () => {
+  const bridge = await createMcpBridge({
+    ...identityDeps(),
+    fetchImpl: async () => jsonResponse(
+      { jsonrpc: '2.0', id: 11, result: { isError: true, content: [] } },
+      { headers: { 'content-type': 'application/json', 'x-vercel-id': 'cle1::iad1::request-789' } },
+    ),
+  })
+  const output = JSON.parse(await bridge.handleLine('{"jsonrpc":"2.0","id":11,"method":"tools/call"}'))
+  assert.deepEqual(output.result.content, [{ type: 'text', text: 'x-vercel-id: cle1::iad1::request-789' }])
+})
+
+test('malformed error payload shapes still receive the x-vercel-id', async () => {
+  const replies = [
+    { jsonrpc: '2.0', id: 13, error: { code: -32000 } },
+    { jsonrpc: '2.0', id: 14, result: { isError: true } },
+  ]
+  for (const reply of replies) {
+    const bridge = await createMcpBridge({
+      ...identityDeps(),
+      fetchImpl: async () => jsonResponse(reply, {
+        headers: { 'content-type': 'application/json', 'x-vercel-id': `cle1::iad1::request-${reply.id}` },
+      }),
+    })
+    const output = JSON.parse(await bridge.handleLine(JSON.stringify({
+      jsonrpc: '2.0', id: reply.id, method: 'tools/call',
+    })))
+    if (reply.error) assert.equal(output.error.response_id, `cle1::iad1::request-${reply.id}`)
+    else assert.deepEqual(output.result.content, [{ type: 'text', text: `x-vercel-id: cle1::iad1::request-${reply.id}` }])
+  }
+})
+
+test('an unavailable identity refresh updates its handle even when the status is unchanged', async () => {
+  let state = { handle: 'agent-one' }
+  const bridge = await createMcpBridge({
+    readSetupStateImpl: () => state,
+    readVaultIndexImpl: () => ({}),
+    readSecretImpl: () => ({ found: false, value: null }),
+    fetchImpl: async () => jsonResponse({ jsonrpc: '2.0', id: 12, result: {} }),
+  })
+  state = { handle: 'agent-two' }
+  const output = JSON.parse(await bridge.handleLine('{"jsonrpc":"2.0","id":12,"method":"initialize"}'))
+  assert.match(output.result.instructions, /agent-two/u)
+  assert.doesNotMatch(output.result.instructions, /agent-one/u)
+})
+
+test('a stopped bridge names the cause and gives one safe line to copy to the human', () => {
+  const secret = `1f3d9_sk_${'b'.repeat(48)}`
+  const lines = formatBridgeStop(new Error(`input stream closed near ${secret}`))
+  assert.equal(lines.length, 2)
+  assert.match(lines[0], /input stream closed/iu)
+  assert.match(lines[1], /Copy this line to the human:/u)
+  assert.equal(lines.join('\n').includes(secret), false)
 })
 
 test('authenticated calls use the one fixed URL and keep the key only in the Bearer header', async () => {
@@ -142,7 +262,7 @@ test('missing setup stays anonymous so initialize and server-selected public too
   assert.equal(initialized.result.instructions.startsWith('City rules.'), true)
   assert.match(initialized.result.instructions, new RegExp(BRIDGE_NAME, 'u'))
   assert.match(initialized.result.instructions, /setup has not run on this host/iu)
-  assert.match(initialized.result.instructions, /restart the host/iu)
+  assert.doesNotMatch(initialized.result.instructions, /restart the host/iu)
   assert.match(initialized.result.instructions, /do not use browser sign-in as a fallback/iu)
   assert.deepEqual(listed.result.tools, [{ name: 'look' }])
 })
@@ -194,7 +314,8 @@ test('an index-selected identity with no key uses neutral repair guidance', asyn
   const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
 
   assert.match(initialized, /no usable resident key was found for \\"bridge-buyer\\"/iu)
-  assert.match(initialized, /setup\.mjs.*restart the host/iu)
+  assert.match(initialized, /setup\.mjs/iu)
+  assert.doesNotMatch(initialized, /restart the host/iu)
   assert.doesNotMatch(initialized, /setup did not find/iu)
 })
 
@@ -308,7 +429,8 @@ test('an explicit identity with an unreadable key does not claim setup selected 
   const initialized = await bridge.handleLine('{"jsonrpc":"2.0","id":1,"method":"initialize"}')
 
   assert.match(initialized, /resident key for \\"bridge-buyer\\".*could not be read safely/iu)
-  assert.match(initialized, /setup\.mjs.*restart the host/iu)
+  assert.match(initialized, /setup\.mjs/iu)
+  assert.doesNotMatch(initialized, /restart the host/iu)
   assert.doesNotMatch(initialized, /setup did not find/iu)
 })
 
@@ -413,8 +535,8 @@ test('missing key forwards public calls and replaces only auth-required text wit
   assert.equal(classified.error_class, 'auth_required')
   assert.equal(classified.front_door_tool, 'front_door')
   assert.match(classified.error, /no usable resident key was found/iu)
-  assert.match(classified.error, /run `node scripts\/setup\.mjs`/iu)
-  assert.match(classified.error, /restart the host/iu)
+  assert.match(classified.error, /run `node "\$CLAUDE_PLUGIN_ROOT\/scripts\/setup\.mjs"`/iu)
+  assert.doesNotMatch(classified.error, /restart the host/iu)
 })
 
 test('notifications are forwarded once and an empty upstream response emits no JSON line', async () => {

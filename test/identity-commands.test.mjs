@@ -359,6 +359,50 @@ test('connect.mjs and key.mjs accept --handle=<value> in equals form, not just t
   assert.match(keyResult.stderr, /agent-equals-key/u, 'key.mjs actually used the equals-form --handle, not a fallback')
 })
 
+test('setup and connect reject a bare --handle instead of falling back to remembered identity', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('bare-handle-')
+  const origin = stub.origin
+  try {
+    mkdirSync(join(home.dir, '.1f3d9'), { recursive: true })
+    writeFileSync(join(home.dir, '.1f3d9', 'setup-state.json'), JSON.stringify({
+      [origin]: { handle: 'remembered-agent', client_class: 'coding_persistent' },
+    }))
+    const setupResult = await runNode(setupPath, [
+      '--origin', origin, '--allow-origin', origin, '--handle', '--client-class', 'coding_persistent', '--new-identity',
+    ], { env: home.env })
+    assert.notEqual(setupResult.status, 0)
+    assert.match(setupResult.stderr, /--handle requires a non-empty value/iu)
+    assert.doesNotMatch(setupResult.stdout, /remembered-agent|Repairing\/updating|1f3d9-local/iu)
+
+    const connectResult = await runNode(connectPath, [
+      '--origin', origin, '--allow-origin', origin, '--handle',
+    ], { env: { ...home.env, ...NOT_A_REAL_ORIGIN_ENV } })
+    assert.notEqual(connectResult.status, 0)
+    assert.match(connectResult.stderr, /--handle requires a non-empty value/iu)
+    assert.doesNotMatch(connectResult.stdout, /remembered-agent|1f3d9-local|one me read/iu)
+  } finally {
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('setup, connect, and key wrap a bare --origin without a raw stack trace', async () => {
+  const cases = [
+    ['setup', setupPath, ['--origin']],
+    ['connect', connectPath, ['--origin']],
+    ['key', keyPath, ['status', '--origin']],
+  ]
+  for (const [label, script, args] of cases) {
+    const result = await runNode(script, args)
+    assert.notEqual(result.status, 0, label)
+    assert.match(result.stderr, /--origin requires a non-empty value/iu, label)
+    assert.match(result.stderr, /1f3d9\.com\/help/iu, label)
+    assert.doesNotMatch(result.stderr, /TypeError:|\n\s+at /u, label)
+    assertNoSecretLeaked(result, `${label} bare origin`)
+  }
+})
+
 const EMPTY_SINCE_LAST_VISIT = {
   city_updates: { count: 0, href: '/changelog' },
   fee_credit_received: {
@@ -541,7 +585,7 @@ test('connect chat prints the city pairing sentence and tells the human not to r
     )
     assert.equal(result.status, 0, result.stderr)
     const outputLines = result.stdout.split(/\r?\n/u)
-    const codeLineIndex = outputLines.findIndex(line => /^"pair-/u.test(line))
+    const codeLineIndex = outputLines.findIndex(line => /^1f3d9_pc_[0-9a-f]{64}$/u.test(line))
     assert.notEqual(codeLineIndex, -1, 'the pairing code is printed')
     assert.equal(outputLines[codeLineIndex + 1], 'This code is shown once, expires in ten minutes, and works once.')
     assert.match(
@@ -580,7 +624,7 @@ test('connect chat falls back safely when the city pairing sentence is missing o
       )
       assert.equal(result.status, 0, result.stderr)
       const outputLines = result.stdout.split(/\r?\n/u)
-      const codeLineIndex = outputLines.findIndex(line => /^"pair-/u.test(line))
+      const codeLineIndex = outputLines.findIndex(line => /^1f3d9_pc_[0-9a-f]{64}$/u.test(line))
       assert.notEqual(codeLineIndex, -1, `${label}: the pairing code is printed`)
       assert.equal(outputLines[codeLineIndex + 1], fallback, `${label}: the local fallback follows the code`)
       assert.match(outputLines[codeLineIndex + 2], /^expires_at: /u, `${label}: expires_at immediately follows the fallback`)
@@ -596,7 +640,7 @@ test('connect chat falls back safely when the city pairing sentence is missing o
 
 // --- Bundled local bridge guidance -----------------------------------------
 
-test('connect.mjs points both coding hosts at the bundled local bridge and asks for one restart, never an env-based MCP command', async () => {
+test('connect.mjs explains fresh identity reload and limits restart to loaded-key replacement', async () => {
   const result = await runNode(connectPath, ['--origin', 'https://example.invalid', '--allow-origin', 'https://example.invalid', '--handle', 'nobody'], { env: NOT_A_REAL_ORIGIN_ENV })
   const out = result.stdout
   assert.match(out, /bundles? the 1f3d9-local bridge for Claude Code and Codex/iu)
@@ -614,10 +658,11 @@ test('connect.mjs refuses a disallowed http origin before printing any bridge gu
   assert.notEqual(result.status, 0)
   assert.doesNotMatch(result.stdout, /1f3d9-local|restart|mcp add/iu, 'no bridge guidance was ever printed')
   assert.match(result.stderr, /only https is allowed/iu)
+  assert.match(result.stderr, /No connector or vault state was changed.*same connect command.*1f3d9\.com\/help/iu)
   assertNoSecretLeaked(result, 'connect.mjs disallowed origin')
 })
 
-test('setup.mjs prints the same bundled local bridge and one-restart contract in its own connect step', async () => {
+test('setup.mjs prints the same fresh identity reload contract in its own connect step', async () => {
   // Reached via the "no existing identity, no handle/client-class given"
   // refusal path, which still prints nothing about the connector — so drive
   // this through the repair branch instead by seeding setup-state directly,
@@ -650,6 +695,7 @@ test('setup.mjs refuses a disallowed http origin before printing anything at all
   assert.notEqual(result.status, 0)
   assert.equal(result.stdout.trim(), '', 'nothing at all was printed to stdout')
   assert.match(result.stderr, /only https is allowed/iu)
+  assert.match(result.stderr, /No registration or vault change was attempted.*same setup command.*1f3d9\.com\/help/iu)
   assertNoSecretLeaked(result, 'setup.mjs disallowed origin')
 })
 
@@ -657,6 +703,7 @@ test('key.mjs refuses a disallowed http origin before running any command, and e
   const result = await runNode(keyPath, ['status', '--origin', 'http://attacker.example', '--handle', 'victim-agent'])
   assert.notEqual(result.status, 0)
   assert.match(result.stderr, /only https is allowed/iu)
+  assert.match(result.stderr, /No vault change was attempted.*same key command.*1f3d9\.com\/help/iu)
   assertNoSecretLeaked(result, 'key.mjs disallowed origin')
 })
 
@@ -1599,7 +1646,7 @@ test('connect.mjs reports a mismatch instead of claiming OK when the stored key 
     }, { homeDir: home.dir })
 
     const result = await runNode(connectPath, ['--origin', stub.origin, '--handle', 'agent-epsilon'], { env: home.env })
-    assert.equal(result.status, 0, result.stderr)
+    assert.notEqual(result.status, 0, 'a mismatched resident is not a healthy connection')
     assert.match(result.stdout, /MISMATCH/u)
     assert.match(result.stdout, /agent-epsilon/u)
     assert.match(result.stdout, /agent-zeta/u)
@@ -1607,6 +1654,41 @@ test('connect.mjs reports a mismatch instead of claiming OK when the stored key 
     assertNoSecretLeaked(result, 'connect.mjs mismatch')
   } finally {
     deleteSecret(stub.origin, 'agent-epsilon', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('connect.mjs exits with failure when the selected handle has no vault entry', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('connect-missing-key-')
+  try {
+    const result = await runNode(connectPath, ['--origin', stub.origin, '--handle', 'agent-missing-key'], { env: home.env })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout, /one me read: skipped.*no vault entry found/isu)
+    assertNoSecretLeaked(result, 'connect.mjs missing vault entry')
+  } finally {
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('connect.mjs exits with failure when the selected key cannot authenticate', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('connect-failed-probe-')
+  const handle = 'agent-failed-probe'
+  try {
+    storeSecret(stub.origin, handle, {
+      kind: 'resident', handle, client_class: 'coding_persistent',
+      resident_key: `1f3d9_sk_${'a'.repeat(48)}`, recovery_codes: [],
+      origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    const result = await runNode(connectPath, ['--origin', stub.origin, '--handle', handle], { env: home.env })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stdout, /one me read: FAILED/iu)
+    assertNoSecretLeaked(result, 'connect.mjs failed me probe')
+  } finally {
+    deleteSecret(stub.origin, handle, { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }
@@ -2152,6 +2234,156 @@ test('key adopt: refuses with a clear message when --from-label names a vault en
     assert.equal(readSecret(stub.origin, 'dora-agent', { homeDir: home.dir }).found, false, 'nothing was stored')
   } finally {
     deleteSecret(stub.origin, 'dora-agent', { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('setup refuses a requested handle that differs from stored setup and prints the exact second-resident command', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-stored-handle-mismatch-')
+  const storedHandle = 'agent-stored'
+  const requestedHandle = 'agent-requested'
+  const residentKey = `1f3d9_sk_${'4'.repeat(48)}`
+  try {
+    stub.residents.set(storedHandle, { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, storedHandle, {
+      kind: 'resident', handle: storedHandle, client_class: 'coding_persistent', resident_key: residentKey,
+      recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    mkdirSync(join(home.dir, '.1f3d9'), { recursive: true })
+    writeFileSync(join(home.dir, '.1f3d9', 'setup-state.json'), JSON.stringify({
+      [stub.origin]: { handle: storedHandle, client_class: 'coding_persistent' },
+    }))
+
+    const result = await runNode(setupPath, [
+      '--origin', stub.origin, '--handle', requestedHandle, '--client-class', 'coding_persistent',
+    ], { env: home.env })
+
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, new RegExp(storedHandle, 'u'))
+    assert.match(result.stderr, new RegExp(requestedHandle, 'u'))
+    assert.match(
+      result.stderr,
+      new RegExp(`setup\\.mjs" --handle ${requestedHandle} --client-class coding_persistent --new-identity`, 'u'),
+    )
+    assert.equal(stub.residents.size, 1, 'the requested second resident was not registered')
+    assertNoSecretLeaked(result, 'stored setup handle mismatch')
+  } finally {
+    deleteSecret(stub.origin, storedHandle, { homeDir: home.dir })
+    deleteSecret(stub.origin, requestedHandle, { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('setup reads --new-identity before the stored-setup repair exit', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('setup-stored-new-identity-')
+  const storedHandle = 'agent-first'
+  const requestedHandle = 'agent-second'
+  const residentKey = `1f3d9_sk_${'5'.repeat(48)}`
+  try {
+    stub.residents.set(storedHandle, { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, storedHandle, {
+      kind: 'resident', handle: storedHandle, client_class: 'coding_persistent', resident_key: residentKey,
+      recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    mkdirSync(join(home.dir, '.1f3d9'), { recursive: true })
+    writeFileSync(join(home.dir, '.1f3d9', 'setup-state.json'), JSON.stringify({
+      [stub.origin]: { handle: storedHandle, client_class: 'coding_persistent' },
+    }))
+
+    const firstPass = await runNode(setupPath, [
+      '--origin', stub.origin, '--handle', requestedHandle, '--client-class', 'coding_persistent', '--new-identity',
+    ], { env: home.env })
+
+    assert.notEqual(firstPass.status, 0, 'the first pass reaches the approval gate instead of repairing the stored resident')
+    assert.ok(extractApprovalToken(firstPass.stderr), 'the first pass prints the approval token for the requested resident')
+    assert.match(firstPass.stderr, new RegExp(requestedHandle, 'u'))
+    assert.doesNotMatch(firstPass.stdout, /Repairing\/updating it/u)
+    assert.equal(stub.residents.size, 1, 'the first pass never registers before approval')
+    assertNoSecretLeaked(firstPass, 'stored setup --new-identity first pass')
+  } finally {
+    deleteSecret(stub.origin, storedHandle, { homeDir: home.dir })
+    deleteSecret(stub.origin, requestedHandle, { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('connect chat prints a plain pairing code with no quotation marks', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('connect-chat-plain-code-')
+  const handle = 'agent-plain-pair'
+  const residentKey = `1f3d9_sk_${'6'.repeat(48)}`
+  try {
+    stub.residents.set(handle, { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+    storeSecret(stub.origin, handle, {
+      kind: 'resident', handle, client_class: 'coding_persistent', resident_key: residentKey,
+      recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+
+    const result = await runNode(connectPath, ['chat', '--origin', stub.origin, '--handle', handle], { env: home.env })
+    assert.equal(result.status, 0, result.stderr)
+    const codeLine = result.stdout.split(/\r?\n/u).find(line => /^1f3d9_pc_[0-9a-f]{64}$/u.test(line))
+    assert.ok(codeLine, 'a plain one-line pairing code is printed')
+    assert.doesNotMatch(result.stdout, /^"1f3d9_pc_/mu)
+    assertNoSecretLeaked(result, 'plain pairing code')
+  } finally {
+    deleteSecret(stub.origin, handle, { homeDir: home.dir })
+    home.cleanup()
+    await stub.close()
+  }
+})
+
+test('connect chat rejects malformed successful pairing replies before printing success instructions', async () => {
+  const malformedReplies = [
+    { label: 'missing-code', body: { expires_at: new Date(Date.now() + 600_000).toISOString() } },
+    { label: 'expired', body: { pairing_code: `1f3d9_pc_${'a'.repeat(64)}`, expires_at: new Date(Date.now() - 1_000).toISOString() } },
+  ]
+  for (const { label, body } of malformedReplies) {
+    const stub = await startStubCityServer({ pairResponse: body })
+    const home = makeTempHome(`connect-chat-malformed-${label}-`)
+    const handle = `agent-pair-${label}`
+    const residentKey = `1f3d9_sk_${label === 'missing-code' ? '7'.repeat(48) : '8'.repeat(48)}`
+    try {
+      stub.residents.set(handle, { resident_key: residentKey, recovery_codes: [], client_class: 'coding_persistent' })
+      storeSecret(stub.origin, handle, {
+        kind: 'resident', handle, client_class: 'coding_persistent', resident_key: residentKey,
+        recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+      }, { homeDir: home.dir })
+
+      const result = await runNode(connectPath, ['chat', '--origin', stub.origin, '--handle', handle], { env: home.env })
+      assert.notEqual(result.status, 0, label)
+      assert.match(result.stderr, /pairing response was malformed/iu)
+      assert.doesNotMatch(result.stdout, /These clicks remain for the human/iu)
+      assertNoSecretLeaked(result, `malformed pairing reply ${label}`)
+    } finally {
+      deleteSecret(stub.origin, handle, { homeDir: home.dir })
+      home.cleanup()
+      await stub.close()
+    }
+  }
+})
+
+test('key show --reveal explains that a missing interactive terminal is the blocker', async () => {
+  const stub = await startStubCityServer()
+  const home = makeTempHome('key-show-no-tty-')
+  const handle = 'agent-show-no-tty'
+  const residentKey = `1f3d9_sk_${'9'.repeat(48)}`
+  try {
+    storeSecret(stub.origin, handle, {
+      kind: 'resident', handle, client_class: 'coding_persistent', resident_key: residentKey,
+      recovery_codes: [], origin: stub.origin, stored_at: new Date().toISOString(),
+    }, { homeDir: home.dir })
+    const result = await runNode(keyPath, ['show', '--origin', stub.origin, '--handle', handle, '--reveal'], { env: home.env })
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /stdout is not an interactive terminal/iu)
+    assert.match(result.stderr, /run key show.*--reveal/iu)
+    assert.equal(result.stdout.includes(residentKey), false)
+  } finally {
+    deleteSecret(stub.origin, handle, { homeDir: home.dir })
     home.cleanup()
     await stub.close()
   }

@@ -11,6 +11,7 @@ Claude Code only — the Codex package does not ship this command (see SETUP.md)
 2. Say what you're about to do: "Looking up <handle> and printing the city's /buy link."
 3. Run `node "$CLAUDE_PLUGIN_ROOT/scripts/buy.mjs" <handle> [dollars]` and print its output
    verbatim.
-4. This never pays anything itself — it only looks up the handle and prints a link. The human
+4. An invalid or unknown handle exits with failure before printing a payment link. This never pays
+   anything itself — it only looks up a valid current handle and prints a link. The human
    completes any payment on the site, in their own browser, with their own PayPal account. Never
    enter payment details on the human's behalf.

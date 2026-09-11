@@ -1,11 +1,15 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CITY_REJECTION_MESSAGE } from './lib/identity-probe.mjs'
+import { extractChangelogEntries, extractDonateLink } from './lib/public-command-output.mjs'
+import { commandFailure } from './lib/cli-error.mjs'
 
 const endpoints = {
   llms: 'https://1f3d9.com/llms.txt',
   official: 'https://1f3d9.com/api/official',
   me: 'https://1f3d9.com/api/me',
+  window: 'https://1f3d9.com/window',
+  changelog: 'https://1f3d9.com/changelog',
 }
 
 const reviewed = {
@@ -152,13 +156,25 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   )
 }
 
+export const validateLivePageTruth = ({ windowHtml, changelogHtml }) => {
+  const tip = extractDonateLink(windowHtml)
+  requireClaim(Boolean(tip), 'window tip button no longer matches donate')
+  requireClaim(
+    tip.href === 'https://www.paypal.com/donate/?hosted_button_id=UE3PGQE3YYN2W',
+    'window tip button PayPal target changed',
+  )
+  requireClaim(extractChangelogEntries(changelogHtml).length > 0, 'changelog entries no longer match changelog')
+}
+
 const fetchText = async (url, fetchImpl) => {
   let response
   try {
     response = await fetchImpl(url, {
       redirect: 'manual',
       signal: globalThis.AbortSignal.timeout(10_000),
-      headers: { accept: url.endsWith('.txt') ? 'text/plain' : 'application/json' },
+      headers: {
+        accept: url.endsWith('.txt') ? 'text/plain' : url.includes('/api/') ? 'application/json' : 'text/html',
+      },
     })
   } catch (error) {
     const message = `${url}: ${error?.message || String(error)}`
@@ -231,6 +247,8 @@ export const checkLiveTruth = async ({
     fetchText(endpoints.llms, fetchImpl),
     fetchText(endpoints.official, fetchImpl),
     fetchMeRejection(endpoints.me, fetchImpl),
+    fetchText(endpoints.window, fetchImpl),
+    fetchText(endpoints.changelog, fetchImpl),
   ])
   const failures = results.filter((result) => result.status === 'rejected')
 
@@ -240,14 +258,14 @@ export const checkLiveTruth = async ({
     if (allUnavailable && !requireNetwork) {
       return {
         skipped: true,
-        notice: `SKIP live truth: ${endpoints.llms}, ${endpoints.official}, and ${endpoints.me} are offline (${failureMessage(results)})`,
+        notice: `SKIP live truth: ${Object.values(endpoints).join(', ')} are offline (${failureMessage(results)})`,
       }
     }
     const prefix = requireNetwork ? 'live truth is required; ' : ''
     throw new Error(`${prefix}${failureMessage(results)}`)
   }
 
-  const [llmsText, officialText] = results.map((result) => result.value)
+  const [llmsText, officialText, , windowHtml, changelogHtml] = results.map((result) => result.value)
   let official
   try {
     official = JSON.parse(officialText)
@@ -255,6 +273,7 @@ export const checkLiveTruth = async ({
     throw new Error(`${endpoints.official}: malformed JSON (${error.message})`)
   }
   validateLiveTruth({ official, llmsText })
+  validateLivePageTruth({ windowHtml, changelogHtml })
   return { valid: true }
 }
 
@@ -262,9 +281,13 @@ const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPat
 if (isDirectRun) {
   try {
     const result = await checkLiveTruth({ requireNetwork: process.env.REQUIRE_LIVE_TRUTH === '1' })
-    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, and anonymous /api/me.')
+    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, anonymous /api/me, /window, and /changelog.')
   } catch (error) {
-    console.error(`Live truth check failed: ${error.message}`)
+    console.error(commandFailure('Live truth check failed', error, {
+      outcome: 'No local or city data was changed.',
+      next: 'Run `npm run check:live-truth` again after checking the named page.',
+      help: 'https://1f3d9.com/help.',
+    }))
     process.exitCode = 1
   }
 }

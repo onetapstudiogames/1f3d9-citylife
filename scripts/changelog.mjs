@@ -1,44 +1,49 @@
 #!/usr/bin/env node
-// `changelog` — reads the city's own public changelog page and prints the
-// latest entries. That page is landing alongside this release; if it is not
-// live yet, this says so plainly instead of pretending.
+// `changelog` — reads each live changelog-entry article, carrying its h2
+// date and current h3 audience heading into every li entry it prints.
 
+import { pathToFileURL } from 'node:url'
 import { fetchTextSafe } from './lib/net.mjs'
 import { stripTags } from './lib/html.mjs'
+import { extractChangelogEntries, truncateMarked } from './lib/public-command-output.mjs'
 
 const URL = 'https://1f3d9.com/changelog'
 const MAX_ENTRIES = 8
 
-console.log(`Reading ${URL} (public, no sign-in) ...`)
-const result = await fetchTextSafe(URL)
+export async function runChangelog({
+  fetchTextSafeImpl = fetchTextSafe,
+  log = console.log,
+  setExitCode = value => { process.exitCode = value },
+} = {}) {
+  log(`Reading ${URL} (public, no sign-in) ...`)
+  const result = await fetchTextSafeImpl(URL)
 
-if (!result.ok) {
-  console.log('')
-  if (result.status === 404) {
-    console.log(`${URL} isn't live yet. The city added this page alongside this skill release; try again later.`)
-  } else {
-    console.log(`Could not read ${URL} (${result.error}).`)
+  if (!result.ok) {
+    log('')
+    if (result.status === 404) log(`${URL} returned not found; try again later.`)
+    else log(`Could not read ${URL} (${result.error}).`)
+    log('')
+    log('One line: the city changelog page is not reachable right now — nothing was printed.')
+    setExitCode(1)
+    return
   }
-  console.log('')
-  console.log('One line: the city changelog page is not reachable right now — nothing was printed.')
-} else {
-  // Best-effort extraction: look for <article>/<li>/<h2..h4> entries; fall
-  // back to a plain-text excerpt if the page shape is not what we expect.
-  const entryPattern = /<(?:article|li)\b[^>]*>([\s\S]*?)<\/(?:article|li)>/giu
-  const entries = [...result.data.matchAll(entryPattern)]
-    .map((m) => stripTags(m[1]))
-    .filter((text) => text.length > 0)
-    .slice(0, MAX_ENTRIES)
 
-  console.log('')
+  const entries = extractChangelogEntries(result.data).slice(0, MAX_ENTRIES)
+  log('')
   if (entries.length) {
-    console.log('Latest entries:')
-    for (const entry of entries) console.log(`  - ${entry.replace(/\s+/gu, ' ').slice(0, 240)}`)
+    log('Latest entries:')
+    for (const entry of entries) {
+      log(`  - [${entry.date} — ${entry.audience}] ${truncateMarked(entry.text, 240)}`)
+    }
   } else {
-    const excerpt = stripTags(result.data).replace(/\s+/gu, ' ').slice(0, 800)
-    console.log("Could not find individual entries in the page's markup; here is a plain-text excerpt instead:")
-    console.log(`  ${excerpt}`)
+    const excerpt = truncateMarked(stripTags(result.data), 800)
+    log("Could not find individual entries in the page's markup; here is a plain-text excerpt instead:")
+    log(`  ${excerpt}`)
+    setExitCode(1)
   }
-  console.log('')
-  console.log(`One line: read the full page yourself at ${URL} for anything cut short above.`)
+  log('')
+  log(`One line: read the full page yourself at ${URL} for anything cut short above.`)
 }
+
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href
+if (isDirectRun) await runChangelog()

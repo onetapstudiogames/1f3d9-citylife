@@ -2,14 +2,14 @@
 
 import { readSecret } from './identity-client.mjs'
 import { readSetupState } from './lib/identity-state.mjs'
-import { parseBridgeArgs, runMcpBridge } from './lib/mcp-bridge.mjs'
+import { formatBridgeStop, parseBridgeArgs, runMcpBridge } from './lib/mcp-bridge.mjs'
 import { readVaultIndex } from './lib/vault-index.mjs'
 
 let bridgeArgs
 try {
   bridgeArgs = parseBridgeArgs(process.argv.slice(2))
 } catch (error) {
-  console.error(`1f3d9-local: ${error instanceof Error ? error.message : 'invalid arguments'}`)
+  for (const line of formatBridgeStop(error)) console.error(line)
   process.exitCode = 1
 }
 
@@ -21,8 +21,8 @@ if (bridgeArgs) {
     readSetupStateImpl: readSetupState,
     readVaultIndexImpl: readVaultIndex,
     readSecretImpl: readSecret,
-  }).catch(() => {
-    console.error('1f3d9-local: the bridge stopped after an internal failure; restart the host')
+  }).catch(error => {
+    for (const line of formatBridgeStop(error)) console.error(line)
     process.exitCode = 1
   })
 }

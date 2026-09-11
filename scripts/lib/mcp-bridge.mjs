@@ -10,9 +10,57 @@ const DEFAULT_TIMEOUT_MS = 15_000
 const DEFAULT_MAX_REQUEST_BYTES = 1_048_576
 const DEFAULT_MAX_RESPONSE_BYTES = 4_194_304
 const RESIDENT_KEY_RE = /^1f3d9_sk_[0-9a-f]{48}$/u
+const RESIDENT_KEY_ANYWHERE_RE = /1f3d9_sk_[0-9a-f]{48}/giu
 
 function rpcError(id, code, message) {
   return { jsonrpc: '2.0', id: id ?? null, error: { code, message } }
+}
+
+function responseId(response) {
+  const value = response?.headers?.get?.('x-vercel-id')?.trim()
+  return typeof value === 'string' && /^[A-Za-z0-9._:-]{1,256}$/u.test(value) ? value : null
+}
+
+function withResponseId(message, id) {
+  return id ? `${message} (x-vercel-id: ${id})` : message
+}
+
+function appendResponseIdToError(value, id) {
+  if (!id || !value || typeof value !== 'object') return value
+  if (value.error && typeof value.error === 'object') {
+    const error = typeof value.error.message === 'string'
+      ? { ...value.error, message: withResponseId(value.error.message, id) }
+      : { ...value.error, response_id: id }
+    return { ...value, error }
+  }
+  if (value.result?.isError !== true) return value
+  const originalContent = Array.isArray(value.result.content) ? value.result.content : []
+  let added = false
+  const content = originalContent.map(item => {
+    if (!item || typeof item !== 'object' || typeof item.text !== 'string') return item
+    added = true
+    try {
+      const parsed = JSON.parse(item.text)
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return { ...item, text: JSON.stringify({ ...parsed, response_id: id }) }
+      }
+    } catch {
+      // Plain-text MCP errors carry the id on their own final line.
+    }
+    return { ...item, text: `${item.text}\nx-vercel-id: ${id}` }
+  })
+  const completeContent = added ? content : [...content, { type: 'text', text: `x-vercel-id: ${id}` }]
+  return { ...value, result: { ...value.result, content: completeContent } }
+}
+
+function formatBridgeStop(error) {
+  const raw = error instanceof Error ? error.message : String(error)
+  const cause = raw.replace(RESIDENT_KEY_ANYWHERE_RE, '[REDACTED]').replace(/[\r\n\u2028\u2029]+/gu, ' ').trim()
+    || 'unknown internal failure'
+  return [
+    `${BRIDGE_NAME}: the bridge stopped because ${cause}. Restart the host.`,
+    `Copy this line to the human: ${BRIDGE_NAME} stopped because ${cause}`,
+  ]
 }
 
 function requestId(value) {
@@ -125,10 +173,10 @@ function loadIdentity({ selectedHandle, readSetupStateImpl, readVaultIndexImpl, 
 
 function statusGuidance(identity) {
   if (identity.status === 'setup_missing') {
-    return 'Setup has not run on this host. Run `node scripts/setup.mjs`, then restart the host before using resident tools.'
+    return 'Setup has not run on this host. Run `node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
   }
   if (identity.status === 'setup_unreadable') {
-    return 'The local setup state could not be read safely. Repair it with `node scripts/setup.mjs`, then restart the host before using resident tools.'
+    return 'The local setup state could not be read safely. Repair it with `node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
   }
   if (identity.status === 'index_unavailable') {
     return 'The local vault index could not be checked safely. Restart the host with this bridge configured as `--handle <handle>` to select a resident identity.'
@@ -138,19 +186,19 @@ function statusGuidance(identity) {
   }
   if (identity.status === 'key_missing') {
     return `No usable resident key was found for "${identity.handle}" in this host's vault. Run ` +
-      '`node scripts/setup.mjs`, then restart the host before using resident tools.'
+      '`node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
   }
   if (identity.status === 'key_unreadable') {
     return `The resident key for "${identity.handle}" in this host's vault could not be read safely. Repair it with ` +
-      '`node scripts/setup.mjs`, then restart the host before using resident tools.'
+      '`node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs"` before using resident tools.'
   }
   if (identity.selection === 'index') {
-    return `This bridge selected vault-index identity "${identity.handle}" and loaded its resident key when the bridge started.`
+    return `This bridge selected vault-index identity "${identity.handle}" and loaded its resident key.`
   }
   if (identity.selection === 'explicit') {
-    return `This bridge selected "${identity.handle}" from --handle and loaded its resident key when the bridge started.`
+    return `This bridge selected "${identity.handle}" from --handle and loaded its resident key.`
   }
-  return `This bridge selected setup identity "${identity.handle}" and loaded its resident key when the bridge started.`
+  return `This bridge selected setup identity "${identity.handle}" and loaded its resident key.`
 }
 
 function bridgeInstructions(identity) {
@@ -342,8 +390,9 @@ async function createMcpBridge({
     throw new TypeError('identity readers are required')
   }
   if (typeof fetchImpl !== 'function') throw new TypeError('fetch is required')
-  const identity = loadIdentity({ selectedHandle, readSetupStateImpl, readVaultIndexImpl, readSecretImpl })
-  const redactSecret = createSecretRedactor(identity.residentKey)
+  const identityReaders = { selectedHandle, readSetupStateImpl, readVaultIndexImpl, readSecretImpl }
+  let identity = loadIdentity(identityReaders)
+  let redactSecret = createSecretRedactor(identity.residentKey)
 
   async function handleLine(line) {
     if (Buffer.byteLength(line, 'utf8') > maxRequestBytes) {
@@ -365,6 +414,10 @@ async function createMcpBridge({
     }
     const id = requestId(request)
     const notification = isNotification(request)
+    if (identity.status !== 'ready') {
+      identity = loadIdentity(identityReaders)
+      redactSecret = createSecretRedactor(identity.residentKey)
+    }
     const headers = { 'content-type': 'application/json', accept: 'application/json' }
     if (identity.residentKey) headers.authorization = `Bearer ${identity.residentKey}`
 
@@ -387,12 +440,13 @@ async function createMcpBridge({
       ))
     }
 
+    const upstreamResponseId = redactSecret(responseId(response) ?? '') || null
     let raw
     try {
       raw = await readBoundedResponse(response, maxResponseBytes)
     } catch {
       if (notification) return null
-      return JSON.stringify(rpcError(id, -32603, `${BRIDGE_NAME} received an unreadable city response`))
+      return JSON.stringify(rpcError(id, -32603, withResponseId(`${BRIDGE_NAME} received an unreadable city response`, upstreamResponseId)))
     }
     if (notification) return null
 
@@ -400,18 +454,19 @@ async function createMcpBridge({
     try {
       parsed = JSON.parse(raw)
     } catch {
-      return JSON.stringify(rpcError(id, -32603, `${BRIDGE_NAME} received an unreadable city response`))
+      return JSON.stringify(rpcError(id, -32603, withResponseId(`${BRIDGE_NAME} received an unreadable city response`, upstreamResponseId)))
     }
     if (!isMatchingJsonRpcResponse(parsed, id)) {
-      return JSON.stringify(rpcError(id, -32603, `${BRIDGE_NAME} received an unreadable city response`))
+      return JSON.stringify(rpcError(id, -32603, withResponseId(`${BRIDGE_NAME} received an unreadable city response`, upstreamResponseId)))
     }
     try {
       parsed = redactValue(parsed, redactSecret)
       parsed = authRequiredGuidance(parsed, identity)
       parsed = appendBridgeInstructions(parsed, request?.method, identity)
+      parsed = appendResponseIdToError(parsed, upstreamResponseId)
       return JSON.stringify(parsed)
     } catch {
-      return JSON.stringify(rpcError(id, -32603, `${BRIDGE_NAME} received an unreadable city response`))
+      return JSON.stringify(rpcError(id, -32603, withResponseId(`${BRIDGE_NAME} received an unreadable city response`, upstreamResponseId)))
     }
   }
 
@@ -479,6 +534,7 @@ export {
   MCP_ORIGIN,
   MCP_URL,
   createMcpBridge,
+  formatBridgeStop,
   parseBridgeArgs,
   runMcpBridge,
 }

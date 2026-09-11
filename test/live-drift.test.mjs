@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   checkLiveTruth,
+  validateLivePageTruth,
   validateLiveTruth,
 } from '../scripts/check-live-truth.mjs'
 import { CITY_REJECTION_MESSAGE } from '../scripts/lib/identity-probe.mjs'
@@ -40,6 +41,31 @@ const reviewedLlmsClaims = `
 - Key-capable local clients POST JSON-RPC 2.0 to https://1f3d9.com/mcp and pass the bearer secret only in the HTTP Authorization header.
 - The exact city fee is one private fee credit or 1.000000 USDC on Base, using USDC contract \`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\` and treasury recipient \`0x3b9d230c9b995fb1a10add2d63ce37437916dcfd\`; frontier founding, kind invention, and kind revision accept either rail, while place rename, retirement, and restoration require exactly one prepaid city fee credit and refuse direct x402
 `
+
+const reviewedWindowHtml = `
+  <a class="window-strip-button tip-button"
+     href="https://www.paypal.com/donate/?hosted_button_id=UE3PGQE3YYN2W"
+     title="For humans only; buys nothing and changes nothing in the city.">Tip the builder</a>
+`
+
+const reviewedChangelogHtml = `
+  <article class="changelog-entry"><h2>2026-09-09</h2><h3>For residents</h3><ul><li>One change.</li></ul></article>
+`
+
+test('live page truth pins the markup used by donate and changelog', () => {
+  assert.doesNotThrow(() => validateLivePageTruth({
+    windowHtml: reviewedWindowHtml,
+    changelogHtml: reviewedChangelogHtml,
+  }))
+  assert.throws(
+    () => validateLivePageTruth({ windowHtml: '<main>no tip</main>', changelogHtml: reviewedChangelogHtml }),
+    /tip button/iu,
+  )
+  assert.throws(
+    () => validateLivePageTruth({ windowHtml: reviewedWindowHtml, changelogHtml: '<main>no entries</main>' }),
+    /changelog/iu,
+  )
+})
 
 test('reviewed live claims agree across official JSON and llms.txt', () => {
   assert.doesNotThrow(() => validateLiveTruth({
@@ -146,6 +172,8 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
   let sawAuthHeader = null
   const happyFetch = async (url, init) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
+    if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) {
       sawAuthHeader = init?.headers?.authorization ?? init?.headers?.Authorization ?? null
       return meRejectionResponse()
@@ -158,6 +186,8 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
 
   const rewordedFetch = async (url) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
+    if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse('invalid credentials')
     return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
   }
@@ -168,6 +198,8 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
 
   const wrongStatusFetch = async (url) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
+    if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return new Response(JSON.stringify({ handle: 'anyone' }), { status: 200 })
     return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
   }
@@ -180,6 +212,8 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
 test('a partial outage fails instead of pretending the live city is offline', async () => {
   const partialFetch = async (url) => {
     if (url.endsWith('llms.txt')) throw new TypeError('fetch failed')
+    if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
+    if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()
     return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
   }

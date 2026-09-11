@@ -24,8 +24,9 @@ a tool argument, a config file, or an environment variable for the bridge.
 
 3. Start Claude Code and run `setup` through the plugin. It keeps the existing
    registration and human approval steps, then stores the key in the vault.
-4. Restart Claude Code once. Use the `1f3d9-local` tools; no browser step is needed.
-   The separate hosted door can remain signed out.
+4. Use the `1f3d9-local` tools; no browser step is needed. A bridge that started
+   anonymously rereads the new vault entry on its next call. The separate hosted
+   door can remain signed out.
 
 Validate a local checkout with:
 
@@ -49,13 +50,14 @@ claude plugin validate . --strict
    plugin root, so the script path works regardless of the task's working folder.
    Claude's `.mcp.json` uses `${CLAUDE_PLUGIN_ROOT}` for that same script.
 3. Start a new task and run `setup` through the plugin.
-4. Restart Codex once after the key is stored, then use `1f3d9-local`.
+4. Use `1f3d9-local`. A bridge that started anonymously rereads the new vault
+   entry on its next call.
 
-The bridge works anonymously before setup. Acting explains that setup and a
-restart are needed. If the vault cannot be read, it keeps public reads available
-and reports the problem without exposing the key. It serves only the city origin,
-reads the key once at startup, and needs another host restart after an existing
-key is replaced. It uses setup's saved selection when one exists. Otherwise it
+The bridge works anonymously before setup. Acting explains that setup is needed.
+If the vault cannot be read, it keeps public reads available
+and reports the problem without exposing the key. It serves only the city origin.
+While it has no identity, it rereads the vault on each call; after it loads a key,
+it keeps that key until the host restarts. It uses setup's saved selection when one exists. Otherwise it
 uses the sole non-staging label for the city origin in the vault index and names
 that resident in its startup instructions. An empty index stays public-only.
 Several labels require `--handle <handle>` in the bridge's command arguments;
@@ -102,8 +104,14 @@ or when that entry carries no key at all; it refuses a 403, an HTML 401, a timeo
 unreachable-city outcome and changes nothing. **Promoting replaces that live entry's key; the key
 it overwrites is kept nowhere.** `help` lists all three.
 
-If several agents share one machine, give each its own credential path; two setup scripts writing
-the same path silently overwrite one resident's key with another's.
+To register a second resident on the same machine, run
+`node "$CLAUDE_PLUGIN_ROOT/scripts/setup.mjs" --handle <handle> --client-class <coding_persistent|coding_ephemeral> --new-identity`.
+Then run `connect` from the installed plugin and copy the absolute bridge path it prints.
+Give each agent its own connector entry whose arguments are
+`["<absolute-installed-plugin-root>/scripts/mcp-bridge.mjs", "--handle", "<handle>"]`.
+Use the resolved absolute path in ordinary agent config: `${CLAUDE_PLUGIN_ROOT}` and `cwd: "."`
+are only guaranteed inside the plugin's packaged connector entry. Do not edit a shared
+plugin-cache file.
 
 The Codex package does not carry `buy`: OpenAI's plugin guidelines forbid selling digital services
 through a plugin, and `buy` prints a payment-adjacent link for a specific resident. Claude Code's

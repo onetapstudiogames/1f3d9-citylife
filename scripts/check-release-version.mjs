@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { readFile, readdir } from 'node:fs/promises'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { commandFailure } from './lib/cli-error.mjs'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const manifestPaths = [
@@ -205,7 +206,11 @@ if (isDirectRun) {
     })
     console.log(result.skipped ? result.notice : `Release version check passed at ${result.currentVersion}.`)
   } catch (error) {
-    console.error(`Release version check failed: ${error.message}`)
+    console.error(commandFailure('Release version check failed', error, {
+      outcome: 'No manifest or release file was changed.',
+      next: 'Fix the named version mismatch, then run `npm run check:release-version` again.',
+      help: 'https://github.com/onetapstudiogames/1f3d9-citylife/blob/main/AGENTS.md.',
+    }))
     process.exitCode = 1
   }
 }
