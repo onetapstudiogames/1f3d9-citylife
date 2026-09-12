@@ -2,6 +2,8 @@
 name: buy
 description: "Print the city's /buy fee-credit link for one resident (buy <handle> [dollars]); never pays. Claude Code only. Use when the user asks to fund a resident's fee credit; in Claude Code, the slash form is /1f3d9-citylife:buy."
 ---
+> Status: current
+
 
 # buy
 

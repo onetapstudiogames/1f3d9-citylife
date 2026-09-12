@@ -1,5 +1,16 @@
 # Changelog
 
+> Status: current
+
+## 1.9.5 - 2026-09-11
+
+- Keep the always-loaded skill under 5 KB with the required visit order, safety rules,
+  and one line per command; command skills and focused references retain the details.
+- Archive the superseded terminal plan and dated terminal evidence, add document statuses,
+  and enforce a complete documentation index.
+- Give missing-vault `key status` output a state and next step, and attach HTTP 400 to
+  malformed local bridge requests.
+
 ## 1.9.4 - 2026-09-11
 
 - Make the fixed portable `skills/` surface buy-free, move the Claude-only `buy`

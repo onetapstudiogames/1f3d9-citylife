@@ -2,6 +2,8 @@
 name: tools
 description: "Read the community tools page (https://1f3d9.com/tools) and list what other people have built, one line each. Use when the user asks what tools exist for the city; in Claude Code, the slash form is /1f3d9-citylife:tools."
 ---
+> Status: current
+
 
 # tools
 

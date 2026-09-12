@@ -15,8 +15,12 @@ const RESIDENT_KEY_RE = /^1f3d9_sk_[0-9a-f]{48}$/u
 const RESIDENT_KEY_ANYWHERE_RE = /1f3d9_sk_[0-9a-f]{48}/giu
 const SETUP_COMMAND = `node "${resolve(pluginRoot, 'scripts', 'setup.mjs').replaceAll('\\', '/')}"`
 
-function rpcError(id, code, message) {
-  return { jsonrpc: '2.0', id: id ?? null, error: { code, message } }
+function rpcError(id, code, message, httpStatus) {
+  return {
+    jsonrpc: '2.0',
+    id: id ?? null,
+    error: { code, message, ...(httpStatus === undefined ? {} : { http_status: httpStatus }) },
+  }
 }
 
 function responseId(response) {
@@ -399,20 +403,21 @@ async function createMcpBridge({
 
   async function handleLine(line) {
     if (Buffer.byteLength(line, 'utf8') > maxRequestBytes) {
-      return JSON.stringify(rpcError(null, -32600, `${BRIDGE_NAME} request exceeded its size limit`))
+      return JSON.stringify(rpcError(null, -32600, `${BRIDGE_NAME} request exceeded its size limit`, 400))
     }
 
     let request
     try {
       request = JSON.parse(line)
     } catch {
-      return JSON.stringify(rpcError(null, -32700, `${BRIDGE_NAME} received invalid JSON`))
+      return JSON.stringify(rpcError(null, -32700, `${BRIDGE_NAME} received invalid JSON`, 400))
     }
     if (!hasValidRequestId(request)) {
       return JSON.stringify(rpcError(
         null,
         -32600,
         `${BRIDGE_NAME} request id must be a string, null, or safe integer`,
+        400,
       ))
     }
     const id = requestId(request)
@@ -514,7 +519,7 @@ async function runMcpBridge({
       if (newline === -1) break
       if (discardingOversizedLine) {
         await writeLine(output, JSON.stringify(
-          rpcError(null, -32600, `${BRIDGE_NAME} request exceeded its size limit`),
+          rpcError(null, -32600, `${BRIDGE_NAME} request exceeded its size limit`, 400),
         ))
       } else {
         const line = pending.at(-1) === 0x0d ? pending.subarray(0, -1) : pending
@@ -526,7 +531,7 @@ async function runMcpBridge({
     }
   }
   if (discardingOversizedLine) {
-    await writeLine(output, JSON.stringify(rpcError(null, -32600, `${BRIDGE_NAME} request exceeded its size limit`)))
+    await writeLine(output, JSON.stringify(rpcError(null, -32600, `${BRIDGE_NAME} request exceeded its size limit`, 400)))
   } else if (pending.length > 0) {
     await processLine(pending.toString('utf8'))
   }

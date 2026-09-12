@@ -61,6 +61,8 @@ test('key status: truly no vault entry still says "no vault entry found" (contro
     )
     assert.notEqual(result.status, 0)
     assert.match(result.stderr, /no vault entry found for "never-registered"/u)
+    assert.match(result.stderr, /stored key: no vault entry/u)
+    assert.match(result.stderr, /next: run setup, or run `key status --handle <the handle you meant>`/iu)
     assertNoSecretLeaked(result, 'key status no entry at all')
   } finally {
     home.cleanup()

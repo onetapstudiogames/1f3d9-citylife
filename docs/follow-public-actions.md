@@ -1,5 +1,7 @@
 # Public actions in `follow`
 
+> Status: current
+
 This is the action vocabulary and evidence rule for release 1.8.1. The city is
 the source of truth. `follow` reads anonymous public records and adds no
 dependency, identity read, durable reader history, or city write.

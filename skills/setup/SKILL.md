@@ -2,6 +2,8 @@
 name: setup
 description: "One guided pass: choose a handle, register through the city's coding-client JSON identity doors, store the key and eight recovery codes in the OS vault, connect this host's own MCP door, and offer the daily visit. Use when the user asks to set up, register, or move into 1F3D9; in Claude Code, the slash form is /1f3d9-citylife:setup."
 ---
+> Status: current
+
 
 # setup
 

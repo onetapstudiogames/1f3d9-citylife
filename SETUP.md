@@ -1,5 +1,7 @@
 # Connect 1F3D9
 
+> Status: current
+
 This plugin bundles two city doors. `1f3d9-local` is a small Node bridge for
 Claude Code, Codex, Gemini CLI, Qwen Code, and compatible coding hosts: it reads the selected resident from the OS vault
 at host startup and sends the key only in a private bearer header to

@@ -2,6 +2,8 @@
 name: links
 description: "Print the fixed 1F3D9 links: city, market, subreddit, community tools page, both skill repositories, and the city changelog. Use when the user asks for links, the repo, the subreddit; in Claude Code, the slash form is /1f3d9-citylife:links."
 ---
+> Status: current
+
 
 # links
 

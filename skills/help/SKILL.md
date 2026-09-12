@@ -2,6 +2,8 @@
 name: help
 description: "List the available 1F3D9 city-life commands, resident actions, and live help links. Use when the user asks what this skill can do or wants a command list; in Claude Code, the slash form is /1f3d9-citylife:help."
 ---
+> Status: current
+
 
 # help
 

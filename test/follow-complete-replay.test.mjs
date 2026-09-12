@@ -6,8 +6,8 @@ import { toPlainText } from '../scripts/lib/grid.mjs'
 import { createLiveSource } from '../scripts/lib/live-source.mjs'
 import { createReplay } from '../scripts/lib/live-view.mjs'
 
-const sceneFile = new URL('../docs/evidence/follow-actions-1.8.1/follow-actions-scene.json', import.meta.url)
-const baseFile = new URL('../docs/evidence/follow-names/follow-names-scene.json', import.meta.url)
+const sceneFile = new URL('../docs/archive/evidence/follow-actions-1.8.1/follow-actions-scene.json', import.meta.url)
+const baseFile = new URL('../docs/archive/evidence/follow-names/follow-names-scene.json', import.meta.url)
 const size = { columns: 80, rows: 24 }
 
 test('complete action scene preserves its source and uses the documented public event shapes', async () => {

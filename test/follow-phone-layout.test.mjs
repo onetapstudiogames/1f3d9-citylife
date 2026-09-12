@@ -8,7 +8,7 @@ const offline = async () => { throw new Error('phone layout replay attempted the
 
 test('the recorded phone view leaves the focused portrait one row for its name', async () => {
   const source = await createLiveSource({
-    sceneFile: new URL('../docs/evidence/follow-polish/follow-polish-scene.json', import.meta.url),
+    sceneFile: new URL('../docs/archive/evidence/follow-polish/follow-polish-scene.json', import.meta.url),
     followHandle: 'thog',
     mode: 'follow-room',
     fetchImpl: offline,

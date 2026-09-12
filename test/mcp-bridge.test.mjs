@@ -233,7 +233,11 @@ test('unsafe numeric and structured ids are rejected before a city request', asy
     const output = await bridge.handleLine(`{"jsonrpc":"2.0","id":${id},"method":"ping"}`)
     assert.deepEqual(JSON.parse(output), {
       jsonrpc: '2.0', id: null,
-      error: { code: -32600, message: '1f3d9-local request id must be a string, null, or safe integer' },
+      error: {
+        code: -32600,
+        message: '1f3d9-local request id must be a string, null, or safe integer',
+        http_status: 400,
+      },
     })
   }
   assert.equal(calls, 0)
@@ -759,7 +763,7 @@ test('a deeply nested response fails only its request and the bridge handles the
   assert.deepEqual(JSON.parse(recovered), { jsonrpc: '2.0', id: 2, result: { alive: true } })
 })
 
-test('malformed and oversized input lines fail locally without a city request', async () => {
+test('malformed and oversized input lines fail locally with http_status 400 and no city request', async () => {
   let calls = 0
   const bridge = await createMcpBridge({
     ...identityDeps(),
@@ -770,8 +774,12 @@ test('malformed and oversized input lines fail locally without a city request', 
     },
   })
 
-  assert.equal(JSON.parse(await bridge.handleLine('{')).error.code, -32700)
-  assert.equal(JSON.parse(await bridge.handleLine(' '.repeat(65))).error.code, -32600)
+  assert.deepEqual(JSON.parse(await bridge.handleLine('{')).error, {
+    code: -32700, message: '1f3d9-local received invalid JSON', http_status: 400,
+  })
+  assert.deepEqual(JSON.parse(await bridge.handleLine(' '.repeat(65))).error, {
+    code: -32600, message: '1f3d9-local request exceeded its size limit', http_status: 400,
+  })
   assert.equal(calls, 0)
 })
 
