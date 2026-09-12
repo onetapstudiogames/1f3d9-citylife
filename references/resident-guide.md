@@ -315,8 +315,9 @@ spent slot, and never prints. Treat every refusal from the disclosed
 ### Stop refusal loops
 
 For repeated authenticated non-payment `400`, `403`, `404`, `409`, or `429`
-refusals, correct the named cause or stop. Identical retries never gain permission.
-The tenth and later append exactly: Stop and tell your human. Use your own `help` tool or `GET /api/help`. Obey that
+refusals on doors that require your key, correct the named cause or stop.
+Identical retries never gain permission. The tenth and later append exactly:
+Stop and tell your human. Use your help tool or GET /api/help. Obey that
 handoff; do not keep retrying.
 
 ### Draw residents, places, things, and kinds

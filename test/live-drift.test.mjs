@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
@@ -285,6 +286,11 @@ test("check:live-truth rejects drift in the city's tenth-refusal handoff", async
   )
   assert.equal(referenceReads, 1)
   assert.match(reviewedMcpReference, /Stop and tell your human\. Use your help tool or GET \/api\/help\./u)
+  assert.ok(
+    readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8')
+      .includes(TENTH_REFUSAL_ESCALATION),
+    'the shipped resident guide must quote the live tenth-refusal handoff verbatim',
+  )
 })
 
 test('a partial outage fails instead of pretending the live city is offline', async () => {
