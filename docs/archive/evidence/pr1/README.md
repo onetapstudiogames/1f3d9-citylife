@@ -1,6 +1,7 @@
 # PR1 terminal live-view evidence
 
 > Status: historical (2026-09-07)
+> Historical. Reproduce only at commit dc46c6dabbbd3873c7e31d24cf5a329599804e3a, where scripts/live-feed.mjs existed.
 
 This evidence covers steps 1 through 5 of the
 [terminal live-view plan](../../terminal-live-view-plan.md):
