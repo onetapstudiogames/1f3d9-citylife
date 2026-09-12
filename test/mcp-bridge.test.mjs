@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { Readable, Writable } from 'node:stream'
 import test from 'node:test'
 
+import { TENTH_REFUSAL_ESCALATION } from '../scripts/check-live-truth.mjs'
 import {
   BRIDGE_NAME,
   MCP_ORIGIN,
@@ -125,7 +126,7 @@ test("the bridge relays the city's tenth identical-refusal handoff to the agent"
     `${cause}\n\nThis identical refusal has now repeated several times.`,
     `${cause}\n\nThe same refusal has repeated again.`,
     `${cause}\n\nThis identical refusal keeps repeating.\n\n` +
-      'Stop and tell your human. Use your help tool or GET /api/help.',
+      TENTH_REFUSAL_ESCALATION,
   ]
   let refusalCount = 0
   const bridge = await createMcpBridge({
