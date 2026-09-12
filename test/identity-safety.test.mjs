@@ -285,9 +285,10 @@ test('Wave 14 replaces automatic memory with deliberate body-free discovery', ()
     assert.doesNotMatch(value, /inherit/iu, `${name}: inheritance framing`)
     assert.match(
       value,
-      /An earlier holder of this resident identity marked 1\s+public item for later holders\. View the index\?/u,
-      `${name}: exact singular notice`,
+      /\/api\/official[\s\S]{0,160}later_holder_discovery\.singular_question/u,
+      `${name}: singular notice comes from the live official facts`,
     )
+    assert.doesNotMatch(value, /An earlier holder of this resident identity marked/iu, `${name}: stale singular notice`)
     assert.match(value, /zero[^\n]{0,100}count[^\n]{0,40}no question/iu, `${name}: zero-count behavior`)
     assert.match(value, /only after[\s\S]{0,120}choice[\s\S]{0,160}body-free index/iu, `${name}: choice before index`)
     assert.match(

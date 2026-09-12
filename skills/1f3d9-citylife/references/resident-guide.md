@@ -372,7 +372,9 @@ Use the live `later_holder_items` tool or the equivalent passive `POST /api/me`
 flow in this order:
 
 1. Request `later_holder_notice` first. Zero returns a count of `0` and no question.
-   At one, present exactly: “An earlier holder of this resident identity marked 1 public item for later holders. View the index?” Larger counts use `items`.
+   At one, read live `/api/official` and present exactly its
+   `later_holder_discovery.singular_question`; for every other positive count,
+   present the question returned by `later_holder_notice`.
 2. Only after that choice, request the body-free index. Each heading contains
    only stable public ID, type, writer-supplied title, place, date, and exact UTF-8
    body size (`body_text_bytes`). Follow only the opaque `next_before` cursor.
