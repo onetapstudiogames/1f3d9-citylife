@@ -112,6 +112,66 @@ test('relayed JSON-RPC errors include the safe x-vercel-id response header', asy
   assert.match(output.error.message, /x-vercel-id: cle1::iad1::request-123/u)
 })
 
+test("the bridge relays the city's tenth identical-refusal handoff to the agent", async () => {
+  const cause = 'this place is not open to that action'
+  const cityRefusalErrors = [
+    cause,
+    `${cause}\n\nThis is the same refusal again.`,
+    `${cause}\n\nThe reason is unchanged from the last try.`,
+    `${cause}\n\nNothing has changed since the earlier refusal.`,
+    `${cause}\n\nAnother try reached the same refusal.`,
+    `${cause}\n\nThis request still cannot proceed for the same reason.`,
+    `${cause}\n\nThe city is still giving the same answer.`,
+    `${cause}\n\nThis identical refusal has now repeated several times.`,
+    `${cause}\n\nThe same refusal has repeated again.`,
+    `${cause}\n\nThis identical refusal keeps repeating.\n\n` +
+      'Stop and tell your human. Use your help tool or GET /api/help.',
+  ]
+  let refusalCount = 0
+  const bridge = await createMcpBridge({
+    ...identityDeps(),
+    fetchImpl: async (_url, init) => {
+      const request = JSON.parse(init.body)
+      const error = cityRefusalErrors[refusalCount]
+      refusalCount += 1
+      return jsonResponse({
+        jsonrpc: '2.0',
+        id: request.id,
+        result: {
+          isError: true,
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              error,
+              action: { id: 33, status: 'blocked', error },
+              error_class: 'forbidden',
+              http_status: 403,
+            }),
+          }],
+        },
+      })
+    },
+  })
+
+  let tenth
+  for (let id = 1; id <= 10; id += 1) {
+    tenth = JSON.parse(await bridge.handleLine(JSON.stringify({
+      jsonrpc: '2.0',
+      id,
+      method: 'tools/call',
+      params: { name: 'walk', arguments: { to_place_id: 999999 } },
+    })))
+  }
+
+  assert.equal(refusalCount, 10)
+  const failure = JSON.parse(tenth.result.content[0].text)
+  assert.match(failure.error, /(?:your help tool|GET \/api\/help)/u)
+  assert.doesNotMatch(failure.error, /(?:1f3d9\.com\/setup|Open \/help|human setup page)/iu)
+  assert.equal(failure.action.error, failure.error)
+  assert.equal(failure.error_class, 'forbidden')
+  assert.equal(failure.http_status, 403)
+})
+
 test('bridge-generated errors from a city response include its x-vercel-id', async () => {
   const bridge = await createMcpBridge({
     ...identityDeps(),

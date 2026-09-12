@@ -33,13 +33,16 @@ const reviewedOfficialFacts = {
       'place_restore',
     ],
   },
+  later_holder_discovery: {
+    singular_question: 'This resident identity marked 1 public item for whoever holds it later. View the index?',
+  },
 }
 
 const reviewedLlmsClaims = `
 - Open https://1f3d9.com/join in a first-party browser; the key and the first eight one-use recovery codes are shown once.
-- Hosted chat with connector support uses exactly https://1f3d9.com/mcp/connect and keeps the key outside chat.
-- Key-capable local clients POST JSON-RPC 2.0 to https://1f3d9.com/mcp and pass the bearer secret only in the HTTP Authorization header.
-- The exact city fee is one private fee credit or 1.000000 USDC on Base, using USDC contract \`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\` and treasury recipient \`0x3b9d230c9b995fb1a10add2d63ce37437916dcfd\`; frontier founding, kind invention, and kind revision accept either rail, while place rename, retirement, and restoration require exactly one prepaid city fee credit and refuse direct x402
+Hosted chats use https://1f3d9.com/mcp/connect and first-party browser sign-in.
+Key-capable clients use https://1f3d9.com/mcp.
+City fee rails: 1.000000 USDC or one fee credit for frontier, kind_invention, kind_revision. The fee is one prepaid credit for place_rename, place_retire, place_restore; those actions reject direct x402 payment.
 `
 
 const reviewedWindowHtml = `
@@ -97,10 +100,17 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
   )
   assert.throws(
     () => validateLiveTruth({
+      official: { ...reviewedOfficialFacts, later_holder_discovery: {} },
+      llmsText: reviewedLlmsClaims,
+    }),
+    /later_holder_discovery\.singular_question/iu,
+  )
+  assert.throws(
+    () => validateLiveTruth({
       official: reviewedOfficialFacts,
       llmsText: reviewedLlmsClaims.replace(
-        'Hosted chat with connector support uses exactly https://1f3d9.com/mcp/connect and keeps the key outside chat.',
-        'Hosted chat uses https://1f3d9.com/mcp directly.',
+        'Hosted chats use https://1f3d9.com/mcp/connect and first-party browser sign-in.',
+        'Hosted chats use https://1f3d9.com/mcp directly.',
       ),
     }),
     /connector direction/iu,
@@ -108,14 +118,14 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
   assert.throws(
     () => validateLiveTruth({
       official: reviewedOfficialFacts,
-      llmsText: reviewedLlmsClaims.replace('one private fee credit or ', ''),
+      llmsText: reviewedLlmsClaims.replace('one fee credit', 'two fee credits'),
     }),
     /money sentence/iu,
   )
   assert.throws(
     () => validateLiveTruth({
       official: reviewedOfficialFacts,
-      llmsText: reviewedLlmsClaims.replace('refuse direct x402', 'accept direct x402'),
+      llmsText: reviewedLlmsClaims.replace('reject direct x402', 'accept direct x402'),
     }),
     /money sentence/iu,
   )
@@ -149,9 +159,20 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
   assert.throws(
     () => validateLiveTruth({
       official: reviewedOfficialFacts,
-      llmsText: reviewedLlmsClaims.replace('place rename, retirement, and restoration', 'place rename and retirement'),
+      llmsText: reviewedLlmsClaims.replace('place_rename, place_retire, place_restore', 'place_rename, place_retire'),
     }),
     /money sentence/iu,
+  )
+  assert.throws(
+    () => validateLiveTruth({
+      official: reviewedOfficialFacts,
+      llmsText: reviewedLlmsClaims.replace(
+        /City fee rails:[^\n]+/u,
+        'The exact city fee is one private fee credit or 1.000000 USDC on Base, using copied contract and treasury values.',
+      ),
+    }),
+    /money sentence/iu,
+    'the live-truth gate rejects the retired sentence that copied payment facts out of /api/official',
   )
   // Round-5 finding 4: a city-side rename or restructuring of
   // identity.coding_client_json.doors_enabled must fail this check, not

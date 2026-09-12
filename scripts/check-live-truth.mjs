@@ -18,20 +18,11 @@ const reviewed = {
   usdcContract: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
   claimFeeUsdc: 1,
   unitUsdc: '1.000000',
+  laterHolderSingularQuestion: 'This resident identity marked 1 public item for whoever holds it later. View the index?',
   // Actions that accept either rail (prepaid city fee credit or direct x402).
   dualRailActions: ['frontier', 'kind_invention', 'kind_revision'],
   // Actions that require exactly one prepaid city fee credit and refuse direct x402 (decision #68).
   creditOnlyActions: ['place_rename', 'place_retire', 'place_restore'],
-}
-
-// Human-readable phrasing the llms.txt money sentence is expected to use per action id.
-const actionLabels = {
-  frontier: /frontier founding/iu,
-  kind_invention: /kind invention/iu,
-  kind_revision: /kind revision/iu,
-  place_rename: /place rename/iu,
-  place_retire: /retir(?:e|ement)/iu,
-  place_restore: /restor(?:e|ation)/iu,
 }
 
 class FetchUnavailableError extends Error {}
@@ -91,6 +82,10 @@ export const validateLiveTruth = ({ official, llmsText }) => {
     typeof official.identity?.coding_client_json?.doors_enabled === 'boolean',
     'official.identity.coding_client_json.doors_enabled must be a boolean (readCodingDoorsEnabled depends on this shape)',
   )
+  requireClaim(
+    official.later_holder_discovery?.singular_question === reviewed.laterHolderSingularQuestion,
+    'official later_holder_discovery.singular_question changed',
+  )
 
   const feeCredit = official.city_fee_credit
   requireClaim(feeCredit && typeof feeCredit === 'object', 'official city_fee_credit is missing')
@@ -104,60 +99,25 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   )
 
   const normalizedLlms = compact(llmsText)
-  const moneyLine = llmsText.split(/\r?\n/u).find((entry) => /the exact city fee is/iu.test(entry))
+  const moneyLine = llmsText.split(/\r?\n/u).find((entry) => /^City fee rails:/u.test(entry))
   requireClaim(Boolean(moneyLine), 'llms.txt money sentence disagrees with /api/official (sentence not found)')
   const moneySentence = compact(moneyLine)
-
+  const expectedMoneySentence =
+    `City fee rails: ${feeCredit.unit_usdc} USDC or one fee credit for ${reviewed.dualRailActions.join(', ')}. ` +
+    `The fee is one prepaid credit for ${reviewed.creditOnlyActions.join(', ')}; ` +
+    'those actions reject direct x402 payment.'
   requireClaim(
-    moneySentence.includes(`\`${official.usdc_contract}\``),
-    'llms.txt money sentence disagrees with /api/official (USDC contract)',
-  )
-  requireClaim(
-    moneySentence.includes(`\`${official.treasury}\``),
-    'llms.txt money sentence disagrees with /api/official (treasury)',
-  )
-  requireClaim(
-    moneySentence.includes(`${feeCredit.unit_usdc} USDC`),
-    'llms.txt money sentence disagrees with /api/official (unit)',
-  )
-  requireClaim(
-    /one private fee credit/iu.test(moneySentence),
-    'llms.txt money sentence disagrees with /api/official (prepaid credit rail)',
+    moneySentence === expectedMoneySentence,
+    'llms.txt money sentence disagrees with /api/official (current served wording or action rails)',
   )
 
-  const [acceptClause = '', refuseClause = ''] = moneySentence.split(/,?\s+while\s+/iu)
   requireClaim(
-    refuseClause.length > 0,
-    'llms.txt money sentence disagrees with /api/official (missing credit-only clause)',
-  )
-  requireClaim(
-    /accept either rail/iu.test(acceptClause),
-    'llms.txt money sentence disagrees with /api/official (dual-rail actions must accept either rail)',
-  )
-  requireClaim(
-    /refuses? direct x402/iu.test(refuseClause) && /prepaid city fee credit/iu.test(refuseClause),
-    'llms.txt money sentence disagrees with /api/official (credit-only actions must refuse direct x402)',
-  )
-  for (const action of reviewed.dualRailActions) {
-    requireClaim(
-      actionLabels[action].test(acceptClause),
-      `llms.txt money sentence disagrees with /api/official (missing dual-rail action ${action})`,
-    )
-  }
-  for (const action of reviewed.creditOnlyActions) {
-    requireClaim(
-      actionLabels[action].test(refuseClause),
-      `llms.txt money sentence disagrees with /api/official (missing credit-only action ${action})`,
-    )
-  }
-
-  requireClaim(
-    /connector support uses exactly https:\/\/1f3d9\.com\/mcp\/connect/iu.test(normalizedLlms)
-      && /key-capable local clients.{0,160}?https:\/\/1f3d9\.com\/mcp\b/isu.test(normalizedLlms),
+    /hosted chats use https:\/\/1f3d9\.com\/mcp\/connect/iu.test(normalizedLlms)
+      && /key-capable clients use https:\/\/1f3d9\.com\/mcp\b/iu.test(normalizedLlms),
     'connector direction must keep /mcp/connect for hosted chat and /mcp for key-capable local clients',
   )
   requireClaim(
-    /(?:key and the first|signup already creates the first) eight one-use recovery codes/iu.test(normalizedLlms),
+    /(?:key and the first eight|signup already creates the first eight|signup reveals 1 key and (?:eight|8)) one-use recovery codes/iu.test(normalizedLlms),
     'recovery-code count must remain eight',
   )
 }

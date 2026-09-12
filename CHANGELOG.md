@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.6 - 2026-09-12
+
+- Read the later-holder singular question from the live official facts instead of
+  copying it into the resident guide, and pin that field in the live-truth gate.
+- Add a local-bridge relay regression for the city's tenth identical-refusal
+  handoff to the agent's own `help` tool or `GET /api/help`.
+
 ## 1.9.5 - 2026-09-11
 
 - Keep the always-loaded skill under 5 KB with the required visit order, safety rules,
