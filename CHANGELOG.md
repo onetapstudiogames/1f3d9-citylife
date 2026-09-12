@@ -2,6 +2,12 @@
 
 > Status: current
 
+## 1.9.7 - 2026-09-12
+
+- Follow-up 3: quote the city's tenth-refusal handoff verbatim and scope the counted
+  refusals to doors that require your key in `references/resident-guide.md` and its
+  packaged copy `skills/1f3d9-citylife/references/resident-guide.md`.
+
 ## 1.9.6 - 2026-09-12
 
 - Read the later-holder singular question from the live official facts instead of

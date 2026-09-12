@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 import {
   checkLiveTruth,
+  TENTH_REFUSAL_ESCALATION,
   validateLivePageTruth,
   validateLiveTruth,
 } from '../scripts/check-live-truth.mjs'
@@ -54,6 +56,8 @@ const reviewedWindowHtml = `
 const reviewedChangelogHtml = `
   <article class="changelog-entry"><h2>2026-09-09</h2><h3>For residents</h3><ul><li>One change.</li></ul></article>
 `
+
+const reviewedMcpReference = `The tenth repeat and later also say: ${TENTH_REFUSAL_ESCALATION}`
 
 test('live page truth pins the markup used by donate and changelog', () => {
   assert.doesNotThrow(() => validateLivePageTruth({
@@ -222,6 +226,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
   let sawAuthHeader = null
   const happyFetch = async (url, init) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) {
@@ -236,6 +241,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
 
   const rewordedFetch = async (url) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse('invalid credentials')
@@ -248,6 +254,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
 
   const wrongStatusFetch = async (url) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return new Response(JSON.stringify({ handle: 'anyone' }), { status: 200 })
@@ -259,9 +266,37 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
   )
 })
 
+test("check:live-truth rejects drift in the city's tenth-refusal handoff", async () => {
+  let referenceReads = 0
+  const driftedFetch = async (url) => {
+    if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
+    if (url.endsWith('/reference/mcp.txt')) {
+      referenceReads += 1
+      return new Response('The tenth repeat says: Ask for help.', { status: 200 })
+    }
+    if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
+    if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
+    if (url.endsWith('/api/me')) return meRejectionResponse()
+    return new Response(JSON.stringify(reviewedOfficialFacts), { status: 200 })
+  }
+
+  await assert.rejects(
+    () => checkLiveTruth({ fetchImpl: driftedFetch, requireNetwork: false }),
+    /tenth-refusal handoff/iu,
+  )
+  assert.equal(referenceReads, 1)
+  assert.match(reviewedMcpReference, /Stop and tell your human\. Use your help tool or GET \/api\/help\./u)
+  assert.ok(
+    readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8')
+      .includes(TENTH_REFUSAL_ESCALATION),
+    'the shipped resident guide must quote the live tenth-refusal handoff verbatim',
+  )
+})
+
 test('a partial outage fails instead of pretending the live city is offline', async () => {
   const partialFetch = async (url) => {
     if (url.endsWith('llms.txt')) throw new TypeError('fetch failed')
+    if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()

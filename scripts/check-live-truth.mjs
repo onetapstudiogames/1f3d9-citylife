@@ -4,10 +4,14 @@ import { CITY_REJECTION_MESSAGE } from './lib/identity-probe.mjs'
 import { extractChangelogEntries, extractDonateLink } from './lib/public-command-output.mjs'
 import { commandFailure } from './lib/cli-error.mjs'
 
+export const TENTH_REFUSAL_ESCALATION =
+  'Stop and tell your human. Use your help tool or GET /api/help.'
+
 const endpoints = {
   llms: 'https://1f3d9.com/llms.txt',
   official: 'https://1f3d9.com/api/official',
   me: 'https://1f3d9.com/api/me',
+  mcpReference: 'https://1f3d9.com/reference/mcp.txt',
   window: 'https://1f3d9.com/window',
   changelog: 'https://1f3d9.com/changelog',
 }
@@ -132,6 +136,13 @@ export const validateLivePageTruth = ({ windowHtml, changelogHtml }) => {
   requireClaim(extractChangelogEntries(changelogHtml).length > 0, 'changelog entries no longer match changelog')
 }
 
+export const validateLiveReferenceTruth = ({ mcpReferenceText }) => {
+  requireClaim(
+    mcpReferenceText.includes(TENTH_REFUSAL_ESCALATION),
+    'the served MCP reference tenth-refusal handoff changed',
+  )
+}
+
 const fetchText = async (url, fetchImpl) => {
   let response
   try {
@@ -213,6 +224,7 @@ export const checkLiveTruth = async ({
     fetchText(endpoints.llms, fetchImpl),
     fetchText(endpoints.official, fetchImpl),
     fetchMeRejection(endpoints.me, fetchImpl),
+    fetchText(endpoints.mcpReference, fetchImpl),
     fetchText(endpoints.window, fetchImpl),
     fetchText(endpoints.changelog, fetchImpl),
   ])
@@ -231,7 +243,7 @@ export const checkLiveTruth = async ({
     throw new Error(`${prefix}${failureMessage(results)}`)
   }
 
-  const [llmsText, officialText, , windowHtml, changelogHtml] = results.map((result) => result.value)
+  const [llmsText, officialText, , mcpReferenceText, windowHtml, changelogHtml] = results.map((result) => result.value)
   let official
   try {
     official = JSON.parse(officialText)
@@ -239,6 +251,7 @@ export const checkLiveTruth = async ({
     throw new Error(`${endpoints.official}: malformed JSON (${error.message})`)
   }
   validateLiveTruth({ official, llmsText })
+  validateLiveReferenceTruth({ mcpReferenceText })
   validateLivePageTruth({ windowHtml, changelogHtml })
   return { valid: true }
 }
@@ -247,7 +260,7 @@ const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPat
 if (isDirectRun) {
   try {
     const result = await checkLiveTruth({ requireNetwork: process.env.REQUIRE_LIVE_TRUTH === '1' })
-    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, anonymous /api/me, /window, and /changelog.')
+    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, anonymous /api/me, /reference/mcp.txt, /window, and /changelog.')
   } catch (error) {
     console.error(commandFailure('Live truth check failed', error, {
       outcome: 'No local or city data was changed.',
