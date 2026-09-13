@@ -7,13 +7,13 @@ description: "Print the city's own tip-the-builder PayPal link, in the site's ow
 
 # donate
 
-Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
 This only reads a public page and prints a link. It never spends anything and never asks the
 agent to pay — so there is nothing to confirm before running it.
 
 1. Say what you're about to do: "Reading the tip-the-builder link from the city window."
-2. Run `node "$PLUGIN_ROOT/scripts/donate.mjs"` and print its output verbatim, including the
+2. Run `node "<plugin-root>/scripts/donate.mjs"` and print its output verbatim, including the
    exact site wording it prints.
 3. If the human wants to actually tip, that is their own action on paypal.com — this skill never
    opens a browser, enters payment details, or otherwise acts on their behalf.

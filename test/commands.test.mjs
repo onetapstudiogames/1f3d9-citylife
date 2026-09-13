@@ -22,7 +22,7 @@ import {
   validateBuyHandle,
 } from '../scripts/lib/public-command-output.mjs'
 
-const COMMANDS = ['help', 'links', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'update', 'changelog', 'tools']
+const COMMANDS = ['help', 'links', 'join', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'update', 'changelog', 'tools']
 
 test('semver: parses and compares x.y.z versions', () => {
   assert.deepEqual(parseVersion('1.4.0'), [1, 4, 0])
@@ -99,7 +99,7 @@ test('every command has a script and Claude skill; portable skills omit buy', as
     const skill = await readFile(skillPath, 'utf8')
     assert.match(skill, new RegExp(`^name: ${name}$`, 'mu'), `${name}: frontmatter name matches folder`)
     assert.match(skill, /^description: /mu, `${name}: has a description`)
-    assert.match(skill, /CLAUDE_PLUGIN_ROOT/u, `${name}: resolves the plugin root instead of a hardcoded path`)
+    assert.match(skill, /Resolve <plugin-root> from this installed SKILL\.md file/u, `${name}: resolves the installed plugin root`)
   }
   await assert.rejects(() => access(new URL('../skills/buy/', import.meta.url)), 'portable buy skill is absent')
   await assert.rejects(() => access(new URL('../scripts/live.mjs', import.meta.url)), 'retired live script is absent')
@@ -114,6 +114,18 @@ test('every command has a script and Claude skill; portable skills omit buy', as
       /\/1f3d9-citylife:live|`live \[place\]`|\['live \[place\]'/u,
       'current instructions do not expose the retired live command',
     )
+  }
+})
+
+test('each helper script resolves from its installed SKILL.md', async () => {
+  for (const name of COMMANDS) {
+    const skillPath = fileURLToPath(new URL(name === 'buy' ? '../skills-claude/buy/SKILL.md' : `../skills/${name}/SKILL.md`, import.meta.url))
+    const skill = await readFile(skillPath, 'utf8')
+    assert.match(skill, /its parent folder's parent's parent is the plugin root/u)
+    const documented = skill.match(/node "<plugin-root>\/([^"]+)"/u)
+    assert.ok(documented, `${name}: documents a script`)
+    const root = dirname(dirname(dirname(skillPath)))
+    await assert.doesNotReject(() => access(join(root, documented[1])), `${name}: script exists from installed root`)
   }
 })
 

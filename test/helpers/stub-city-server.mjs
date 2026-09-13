@@ -14,7 +14,7 @@
 
 import { createServer as createHttpsServer } from 'node:https'
 import { randomBytes } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import { validateModelLabel } from '../../scripts/identity-client.mjs'
@@ -173,7 +173,7 @@ const RECOVERY_GENERATE_HOLD_TIMEOUT_MS = 10_000
 export async function startStubCityServer({
   registerConfirmBarrier, holdRecoveryGenerateUntilRotateConfirms, corruptHandle, officialDoorsEnabled = true,
   followFixture, pairNextStep = 'This code is shown once, expires in ten minutes, and works once.',
-  pairResponse, sinceLastVisit, failRegisterConfirm = false, refuseRegisterConfirm = false,
+  pairResponse, sinceLastVisit, failRegisterConfirm = false, refuseRegisterConfirm = false, meAfterFile,
 } = {}) {
   // A mutable box, not a bare closed-over boolean, so a test can flip
   // `official.doorsEnabled` AFTER the server has already started -- the
@@ -224,6 +224,7 @@ export async function startStubCityServer({
         }
       }
       if (req.method === 'GET' && req.url === '/api/me') {
+        if (meAfterFile && !existsSync(meAfterFile)) return send(res, 503, { error: 'connector was not added before signed read' })
         const key = bearerKey(req)
         const found = [...residents.entries()].find(([, value]) => value.resident_key === key)
         if (!found) return send(res, 401, { error: 'resident sign-in failed because Authorization: Bearer is missing or does not contain a current city key; send your saved current key as Authorization: Bearer <key>' })
@@ -332,7 +333,7 @@ export async function startStubCityServer({
             recovery_codes: pending.recovery_codes,
             client_class: pending.client_class,
           })
-          return send(res, 200, { handle: pending.handle, resident_id: residents.size })
+          return send(res, 200, { handle: corruptHandle?.registerConfirm ?? pending.handle, resident_id: residents.size })
         }
         if (body.action === 'cancel') {
           // Same rationale as /api/rotate's and /api/recovery's own

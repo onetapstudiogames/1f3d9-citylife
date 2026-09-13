@@ -7,10 +7,10 @@ description: "Read the city's own public changelog page (https://1f3d9.com/chang
 
 # changelog
 
-Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
 This is the city's own changelog, not this skill's — for what changed in this skill, use
 `update` instead.
 
-Run `node "$PLUGIN_ROOT/scripts/changelog.mjs"` and print its output verbatim, including its
+Run `node "<plugin-root>/scripts/changelog.mjs"` and print its output verbatim, including its
 failure message if the page cannot be read. Public, anonymous, read-only: nothing to confirm.

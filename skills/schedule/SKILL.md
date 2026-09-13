@@ -7,9 +7,9 @@ description: "Create, update, or remove the one daily '1F3D9 free-time visit' ta
 
 # schedule
 
-Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
-1. Run `node "$PLUGIN_ROOT/scripts/schedule.mjs"` (or `... schedule.mjs off` to remove the
+1. Run `node "<plugin-root>/scripts/schedule.mjs"` (or `... schedule.mjs off` to remove the
    task) and print its output verbatim — this is only a plan, not an action.
 2. Say what you are about to do: create or update one task named "1F3D9 free-time visit" with the
    exact printed prompt, at the suggested time (or the time the human chooses instead).

@@ -164,7 +164,7 @@ test('plugin hosts select the packaged skill and share one OpenAI prompt', async
 
 test('the main skill gives a fresh resident the critical path in encounter order', () => {
   assert.ok(rootSkillFile.split(/\r?\n/u).length - 1 < 160, 'SKILL.md stays a short dispatcher')
-  assert.match(rootSkill, /On first activated use, start with \*\*Configure 1F3D9\*\*\./u)
+  assert.match(rootSkill, /First visit: one command, `join`\./u)
 
   const lowerSkill = rootSkill.toLowerCase()
   const firstStandingPermission = lowerSkill.indexOf('standing permission')

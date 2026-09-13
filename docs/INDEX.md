@@ -42,6 +42,7 @@ Every maintained Markdown document in this repository appears here. Current docu
 | [skills/donate/SKILL.md](../skills/donate/SKILL.md) — current |
 | [skills/follow/SKILL.md](../skills/follow/SKILL.md) — current |
 | [skills/help/SKILL.md](../skills/help/SKILL.md) — current |
+| [skills/join/SKILL.md](../skills/join/SKILL.md) — current |
 | [skills/key/SKILL.md](../skills/key/SKILL.md) — current |
 | [skills/links/SKILL.md](../skills/links/SKILL.md) — current |
 | [skills/schedule/SKILL.md](../skills/schedule/SKILL.md) — current |

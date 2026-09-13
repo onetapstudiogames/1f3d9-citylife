@@ -249,6 +249,10 @@ function printWalletStep() {
 // them.
 async function report(handle, precomputedKeyCheck) {
   say('=== Verification report ===')
+  if (flags['defer-probe'] === true) {
+    say('- secret reference works: pending join verification')
+    return
+  }
   const keyCheck = precomputedKeyCheck ?? await verifyStoredKeyOrRefuse(handle, 'setup')
   say(`- public city handle: ${handle}`)
   say(`- secret reference works: ${keyCheck.keyWorks ? 'yes' : 'no'} (${keyCheck.note})`)
@@ -672,6 +676,7 @@ const registerArgs = [
 ]
 if (typeof flags.model === 'string') registerArgs.push('--model', flags.model)
 if (allowOrigin) registerArgs.push('--allow-origin', allowOrigin)
+if (typeof flags['codes-dir'] === 'string') registerArgs.push('--codes-dir', flags['codes-dir'])
 
 // The identity of record from here on is whatever the city actually
 // confirms, not necessarily the spelling requested above -- the city may

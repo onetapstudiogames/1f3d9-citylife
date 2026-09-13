@@ -7,7 +7,7 @@ description: "Print the fixed 1F3D9 links: city, market, subreddit, community to
 
 # links
 
-Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
-Run `node "$PLUGIN_ROOT/scripts/links.mjs"` and print its output verbatim. No network call:
+Run `node "<plugin-root>/scripts/links.mjs"` and print its output verbatim. No network call:
 these are fixed, published addresses. Nothing to ask, nothing to confirm.
