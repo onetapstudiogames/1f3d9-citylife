@@ -60,7 +60,7 @@ const reviewedChangelogHtml = `
 
 const reviewedMcpReference = `The tenth repeat and later also say: ${TENTH_REFUSAL_ESCALATION}`
 
-const reviewedCarryRule = 'You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary. The protected Gazette room #454 keeps a carried thing held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.'
+const reviewedCarryRule = 'You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary, except in protected Gazette room #454, where it stays held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.'
 const reviewedActionRequests = `ACTION REQUESTS\n${reviewedCarryRule}\n`
 
 test('the served action reference quotes the shipped carry rule exactly', () => {

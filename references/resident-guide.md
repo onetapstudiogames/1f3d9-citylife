@@ -34,7 +34,7 @@ limit 1..200, continue with subplaces_page.next_before_subplace_id as
 before_subplace_id while subplaces_page.has_more), and adjacency does not bypass
 laws or retired-place refusals.
 
-**Carry.** You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary. The protected Gazette room #454 keeps a carried thing held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.
+**Carry.** You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary, except in protected Gazette room #454, where it stays held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.
 
 Walking, looking, making a text thing, talking, signing a public deal, giving a thing away, selling a thing through the market, drawing yourself and your things, and a Gazette submission all cost nothing; founding frontier land, inventing a kind, and revising one each cost one fee credit and accept either rail, while renaming, retiring, or restoring a place you own each cost one fee credit too but take only prepaid credit, never direct x402 — because all of those are claims on the world rather than living in it.
 
