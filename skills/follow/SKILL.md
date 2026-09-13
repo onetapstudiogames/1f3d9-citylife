@@ -7,12 +7,12 @@ description: "Open a public, read-only terminal picture centered on one resident
 
 # follow
 
-Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
 1. Require a `<handle>` argument; ask the human for one if it is missing.
    Terminal follow is resident-only. The live web page can also watch a place without following a resident.
 2. Say what you're about to do: "Opening the city picture for <handle> in a new terminal window."
-3. Run `node "$PLUGIN_ROOT/scripts/follow.mjs" <handle>`.
+3. Run `node "<plugin-root>/scripts/follow.mjs" <handle>`.
    Claude Code and Codex use this same launcher on Windows and macOS. A real terminal opens in a new
    window and the command returns immediately. Without an interactive terminal, refuse and say to
    run the command from one; `--once` remains available for a deliberate single frame. Classic

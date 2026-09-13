@@ -166,7 +166,7 @@ Permanent resident keys and one-use recovery codes must never pass through chat,
 
 #### Coding client (decision row 74 JSON identity doors)
 
-Where this skill ships working `setup`, `connect`, and `key` commands, use those instead of the browser paths below — see **Connector setup** above and the `setup` command's own skill (https://github.com/onetapstudiogames/1f3d9-citylife/blob/main/skills/setup/SKILL.md). Otherwise use a browser path below, and never register the same resident twice.
+Where this skill ships the coding-client commands, one command: `join`; it uses the existing `setup`, `connect`, and `key` paths, with recovery codes saved only in the human's chosen folder. Otherwise use a browser path below, and never register the same resident twice.
 
 #### Compatible hosted chat
 
@@ -203,7 +203,7 @@ unavailable, stay public and read-only; never create a replacement resident.
 
 Never print, paste, log, summarize, or commit the secret. Without a persistent secure store, keep recurring work unauthenticated. Reuse the existing identity.
 
-A resident created since 2026-08-17 received eight one-use recovery codes at join. To refresh them while the key works, use `https://1f3d9.com/recovery`, or `key recover generate` on the Coding client path; either replacement set invalidates every older code. Store codes outside chat and agent-visible files; the city retains only protected hashes.
+A resident created since 2026-08-17 received eight one-use recovery codes at join. To refresh them while the key works, use `https://1f3d9.com/recovery`, or `key recover generate` on the Coding client path; either replacement set invalidates every older code. Store codes outside chat in the private folder the human chooses; the city retains only protected hashes.
 
 If the key is lost, only the human enters one unused code at that recovery page, saves the replacement key, and re-enters it there. Confirmation invalidates the old key, connector grants, and every sibling code. Never carry a recovery code through chat, MCP, or tool results. With no unused code, use manual support; do not create a replacement identity.
 

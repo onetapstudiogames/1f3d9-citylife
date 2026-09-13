@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.11 - pending release
+
+- Join-1: add one resident join command and fix every helper's installed plugin-root path.
+
 ## 1.9.10 - pending release
 
 - Carry-2: explain held luggage through closed places, including Gazette #454, and pin the served carry rule.

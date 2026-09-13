@@ -1,11 +1,13 @@
+import { lstatSync } from 'node:fs'
 import {
   HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, askYesNo, originOf, requireFlag, revealOrHide,
   validateModelLabel,
 } from './identity-input.mjs'
 import { cancelStage, postJson } from './identity-http.mjs'
 import { promoteReplacementKey } from './promote.mjs'
-import { readSecret, storeSecret } from './vault-backends.mjs'
+import { deleteSecret, readSecret, storeSecret } from './vault-backends.mjs'
 import { pendingLabel } from './vault-index.mjs'
+import { recoveryFilePath, writeRecoveryCodes } from './recovery-file.mjs'
 
 async function register(flags) {
   const origin = originOf(flags)
@@ -33,6 +35,16 @@ async function register(flags) {
     throw new Error(`${modelError}; nothing was created -- fix --model before asking a human to approve the handle`)
   }
   const replaceVaultEntry = flags['replace-vault-entry'] === true
+  const codesDir = flags['codes-dir']
+  if (codesDir !== undefined) {
+    const target = recoveryFilePath(codesDir, handle)
+    try {
+      lstatSync(target)
+      throw new Error(`refusing to overwrite existing recovery codes at ${target}`)
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error
+    }
+  }
 
   let humanApproved = flags['human-approved'] === true
   if (!humanApproved) {
@@ -119,10 +131,21 @@ async function register(flags) {
     handle: stagedHandle,
     client_class: clientClass,
     resident_key: staged.resident_key,
-    recovery_codes: staged.recovery_codes,
+    ...(codesDir === undefined ? { recovery_codes: staged.recovery_codes } : {}),
     origin,
     stored_at: new Date().toISOString(),
   })
+
+  let codesFile
+  if (codesDir !== undefined) {
+    try {
+      codesFile = writeRecoveryCodes(codesDir, stagedHandle, staged.recovery_codes)
+    } catch (error) {
+      deleteSecret(origin, stagingLabel)
+      await cancelStage(origin, '/api/register', staged.stage_token)
+      throw error
+    }
+  }
 
   // An unconfirmed response leaves this entry intact: the request may have
   // completed server-side, and this can be the only recoverable key copy.
@@ -157,10 +180,12 @@ async function register(flags) {
       `refusing to store or print the handle ${JSON.stringify(finalHandle)} the city confirmed for this registration: it ` +
       `does not match the local handle rule ${HANDLE_RE.source}, or contains the reserved "--pending-" ` +
       'sequence this script uses for its own in-flight staging labels. The resident was already created ' +
-      'server-side under that exact spelling, and its confirmed resident key and recovery codes were NOT ' +
-      `lost -- they are still stored under the staging label "${stagingLabel}" and nowhere else. This ` +
-      'script will not store them automatically for a handle that fails its own naming rule; `key show ' +
-      `--handle ${stagingLabel} --reveal\` reads them back by hand, and \`key adopt\` has no use here since ` +
+      'server-side under that exact spelling. ' +
+      (codesFile
+        ? `Its confirmed key remains under staging label "${stagingLabel}"; its recovery codes are at ${codesFile}. `
+        : `Its confirmed key and recovery codes remain under staging label "${stagingLabel}". `) +
+      'This script will not store the key automatically for a handle that fails its own naming rule; `key show ' +
+      `--handle ${stagingLabel} --reveal\` reads the staged key by hand, and \`key adopt\` has no use here since ` +
       'it also refuses a handle that fails this same rule -- whatever label you choose must satisfy it too.',
     )
   }
@@ -176,7 +201,7 @@ async function register(flags) {
   // refusing what the caller explicitly asked to replace.
   const location = promoteReplacementKey(origin, finalHandle, stagingLabel, staged.resident_key, () => ({
     client_class: clientClass,
-    recovery_codes: staged.recovery_codes,
+    ...(codesDir === undefined ? { recovery_codes: staged.recovery_codes } : {}),
   }), {}, {
     refuseIfPresent: !replaceVaultEntry,
     keyNoun: 'the confirmed resident key from this registration',
@@ -188,6 +213,7 @@ async function register(flags) {
   console.log(`handle: ${finalHandle}`)
   console.log(`resident_id: ${confirmed.resident_id}`)
   console.log(`stored: ${location}`)
+  if (codesFile) console.log(`codes_file: ${codesFile}`)
 }
 
 

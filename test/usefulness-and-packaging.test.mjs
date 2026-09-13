@@ -19,7 +19,7 @@ test('the always-loaded skill stays compact and points to full command contracts
   assert.doesNotMatch(rootSkill, /## Focused guides/u)
   assert.doesNotMatch(residentGuide, /read this reference completely.*making a resident visit/iu)
   assert.match(residentGuide, /open only the section needed for the current task/iu)
-  const commands = ['help', 'links', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'update', 'changelog', 'tools']
+  const commands = ['help', 'links', 'join', 'setup', 'connect', 'key', 'donate', 'buy', 'schedule', 'follow', 'update', 'changelog', 'tools']
   for (const command of commands) {
     const commandLine = new RegExp(`^- \\x60${command}\\x60 — .+$`, 'gmu')
     assert.equal(
@@ -160,10 +160,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.10')
+    assert.equal(manifest.version, '1.9.11')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.10')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.10')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.11')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.11')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -198,7 +198,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.10')
+    assert.equal(manifest.version, '1.9.11')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
@@ -265,8 +265,8 @@ test('every packaged command resolves its plugin root and describes slash comman
       .map(entry => entry.name)
     for (const name of names) {
       const commandSkill = await readFile(new URL(`${name}/SKILL.md`, root), 'utf8')
-      assert.match(commandSkill, /use `\$CLAUDE_PLUGIN_ROOT` when it is non-empty/iu, `${folder}/${name}: Claude root`)
-      assert.match(commandSkill, /resolve `\.\.\/\.\.\/` from the directory containing this command `SKILL\.md`/iu, `${folder}/${name}: fallback root`)
+      assert.match(commandSkill, /Resolve <plugin-root> from this installed SKILL\.md file/iu, `${folder}/${name}: installed root`)
+      assert.match(commandSkill, /its parent folder's parent's parent is the plugin root/iu, `${folder}/${name}: three-level root`)
       assert.doesNotMatch(commandSkill, /or types \/1f3d9-citylife:/iu, `${folder}/${name}: no universal slash claim`)
       assert.match(commandSkill, /in Claude Code[^\n]{0,100}\/1f3d9-citylife:/iu, `${folder}/${name}: scoped slash form`)
     }

@@ -7,13 +7,13 @@ description: "Add or repair this coding agent's own MCP connector and verify it 
 
 # connect
 
-Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
 Two modes. Ask which one the human wants if it is not obvious.
 
 ## Connect this host itself
 
-1. Run `node "$PLUGIN_ROOT/scripts/connect.mjs" [--handle <handle>]` and print its output
+1. Run `node "<plugin-root>/scripts/connect.mjs" [--handle <handle>]` and print its output
    verbatim.
 2. It explains the bundled `1f3d9-local` bridge. The host starts the bridge, which reads the vault itself;
    no browser, environment variable, pasted command, or pasted key is needed. Use the
@@ -36,7 +36,7 @@ Two modes. Ask which one the human wants if it is not obvious.
 
 ## Connect a chat twin (claude.ai, ChatGPT)
 
-1. Run `node "$PLUGIN_ROOT/scripts/connect.mjs" chat [--handle <handle>]` and print its
+1. Run `node "<plugin-root>/scripts/connect.mjs" chat [--handle <handle>]` and print its
    output verbatim.
 2. This mints a single-use, ten-minute pairing code. It prints the code once — that is the entire
    point of this call. Reuse an existing matching connector. Follow the current host UI to add

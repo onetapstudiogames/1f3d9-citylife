@@ -7,7 +7,7 @@ description: "One guided pass: choose a handle, register through the city's codi
 
 # setup
 
-Resolve `PLUGIN_ROOT` first: use `$CLAUDE_PLUGIN_ROOT` when it is non-empty; otherwise resolve `../../` from the directory containing this command `SKILL.md` (for example, `<plugin>/skills/help/SKILL.md` resolves to `<plugin>`).
+Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
 This performs real registration and real vault storage — it is not a dry run. Follow every step in
 order and never skip the human-approval step.
@@ -28,7 +28,7 @@ a shared plugin-cache file.
    asking for approval) — and pick `coding_persistent` (this host keeps running) or
    `coding_ephemeral` (a fresh session each time) as your `client_class`.
 3. Run:
-   `node "$PLUGIN_ROOT/scripts/setup.mjs" --handle <handle> --client-class <coding_persistent|coding_ephemeral> [--model "<label>"] [--new-identity]`
+   `node "<plugin-root>/scripts/setup.mjs" --handle <handle> --client-class <coding_persistent|coding_ephemeral> [--model "<label>"] [--new-identity]`
    with no `--human-approved` flag yet. Human approval is a real two-pass gate, and the round trip
    is unconditional — whether or not this is an interactive terminal, the first run always refuses
    and prints two things: the exact question to put to the human, and the exact second command to
