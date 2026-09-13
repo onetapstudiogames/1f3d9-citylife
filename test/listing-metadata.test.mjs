@@ -17,6 +17,10 @@ const MANIFESTS = [
   '.agents/plugins/marketplace.json',
   '.codex-plugin/plugin.json',
 ]
+const OPENAI_YAML = [
+  'agents/openai.yaml',
+  'skills/1f3d9-citylife/agents/openai.yaml',
+]
 
 const NAME_LIMIT = 30
 const SHORT_TEXT_FIELDS = ['displayName', 'shortDescription']
@@ -40,6 +44,12 @@ const manifests = await Promise.all(
   MANIFESTS.map(async (path) => [path, JSON.parse(await read(path))]),
 )
 
+const yamlFields = await Promise.all(OPENAI_YAML.map(async (path) => {
+  const source = await read(path)
+  const field = (name) => source.match(new RegExp(`^\\s*${name}:\\s*"([^"]+)"\\s*$`, 'mu'))?.[1]
+  return [path, { displayName: field('display_name'), shortDescription: field('short_description') }]
+}))
+
 test('every listing display name and short description fits a 30-character field', () => {
   let found = 0
   for (const [path, manifest] of manifests) {
@@ -53,7 +63,29 @@ test('every listing display name and short description fits a 30-character field
       )
     }
   }
+  for (const [path, fields] of yamlFields) {
+    for (const [field, value] of Object.entries(fields)) {
+      found += 1
+      assert.equal(typeof value, 'string', `${path}: ${field} is a string`)
+      assert.ok(value.length <= NAME_LIMIT, `${path}: ${field} is ${value.length} characters, over ${NAME_LIMIT}`)
+    }
+  }
   assert.ok(found >= 3, `listing short-text fields are still present (found ${found})`)
+})
+
+test('listing names and short descriptions agree across manifests and OpenAI YAML', () => {
+  const codex = manifests.find(([path]) => path === '.codex-plugin/plugin.json')?.[1]
+  assert.ok(codex?.interface, 'Codex listing defines the store presentation')
+  const names = manifests.flatMap(([path, manifest]) => collect(manifest, ['displayName']).map(([field, value]) => [`${path}: ${field}`, value]))
+  const descriptions = manifests.flatMap(([path, manifest]) => collect(manifest, ['shortDescription']).map(([field, value]) => [`${path}: ${field}`, value]))
+  for (const [path, fields] of yamlFields) {
+    names.push([`${path}: display_name`, fields.displayName])
+    descriptions.push([`${path}: short_description`, fields.shortDescription])
+  }
+  assert.ok(names.length >= 3)
+  assert.ok(descriptions.length >= 3)
+  for (const [where, value] of names) assert.equal(value, codex.interface.displayName, where)
+  for (const [where, value] of descriptions) assert.equal(value, codex.interface.shortDescription, where)
 })
 
 test('every listing image path a manifest declares exists in the package', async () => {
