@@ -2,7 +2,14 @@
 
 > Status: current
 
-## 1.9.8 - pending release
+## 1.9.9 - pending release
+
+- Align the city plugin's store display name and short description across
+  manifests and OpenAI metadata, and check them together in tests.
+- Point the submission checklist at the live recommended version instead of
+  repeating a version that can become stale.
+
+## 1.9.8 - 2026-09-13
 
 - Add the city's website artwork and policy links to OpenAI install metadata,
   and prepare the combined skills-plus-MCP submission checklist.
