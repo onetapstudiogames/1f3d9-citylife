@@ -222,7 +222,7 @@ function resolveHandle(label) {
     throw error
   }
   if (state?.handle) return state.handle
-  console.error(`${label}: no handle known for this origin. Pass --handle <handle>, or run setup first.`)
+  console.error(`${label}: no handle known for this origin. Pass --handle <handle>, or run setup first. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`)
   process.exitCode = 1
   return null
 }
@@ -241,14 +241,14 @@ async function connectHost() {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `connect: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
-      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
+      `connect: ${error.message}; this is not "no key stored" -- refusing to guess. ` +
+      'If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.',
     )
     process.exitCode = 1
     return
   }
   if (!stored.found || typeof stored.value?.resident_key !== 'string') {
-    console.log(`one me read: skipped — no vault entry found for "${handle}" at ${origin}.`)
+    console.log(`one me read: skipped — no vault entry found for "${handle}" at ${origin}. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`)
     process.exitCode = 1
     return
   }
@@ -283,14 +283,14 @@ function connectChat() {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `connect chat: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
-      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
+      `connect chat: ${error.message}; this is not "no key stored" -- refusing to guess. ` +
+      'If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.',
     )
     process.exitCode = 1
     return
   }
   if (!stored.found || typeof stored.value?.resident_key !== 'string') {
-    console.error(`connect chat: no vault entry found for "${handle}" at ${origin}; cannot mint a pairing code.`)
+    console.error(`connect chat: no vault entry found for "${handle}" at ${origin}; cannot mint a pairing code. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`)
     process.exitCode = 1
     return
   }

@@ -180,10 +180,10 @@ function loadIdentity({ selectedHandle, readSetupStateImpl, readVaultIndexImpl, 
 
 function statusGuidance(identity) {
   if (identity.status === 'setup_missing') {
-    return `Setup has not run on this host. Run \`${SETUP_COMMAND}\` before using resident tools.`
+    return `Setup has not run on this host. Run \`${SETUP_COMMAND}\` before using resident tools. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`
   }
   if (identity.status === 'setup_unreadable') {
-    return `The local setup state could not be read safely. Repair it with \`${SETUP_COMMAND}\` before using resident tools.`
+    return `The local setup state could not be read safely. Repair it with \`${SETUP_COMMAND}\` before using resident tools. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`
   }
   if (identity.status === 'index_unavailable') {
     return 'The local vault index could not be checked safely. Restart the host with this bridge configured as `--handle <handle>` to select a resident identity.'
@@ -193,11 +193,11 @@ function statusGuidance(identity) {
   }
   if (identity.status === 'key_missing') {
     return `No usable resident key was found for "${identity.handle}" in this host's vault. Run ` +
-      `\`${SETUP_COMMAND}\` before using resident tools.`
+      `\`${SETUP_COMMAND}\` before using resident tools. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`
   }
   if (identity.status === 'key_unreadable') {
     return `The resident key for "${identity.handle}" in this host's vault could not be read safely. Repair it with ` +
-      `\`${SETUP_COMMAND}\` before using resident tools.`
+      `\`${SETUP_COMMAND}\` before using resident tools. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`
   }
   if (identity.selection === 'index') {
     return `This bridge selected vault-index identity "${identity.handle}" and loaded its resident key.`
@@ -545,4 +545,5 @@ export {
   formatBridgeStop,
   parseBridgeArgs,
   runMcpBridge,
+  statusGuidance,
 }

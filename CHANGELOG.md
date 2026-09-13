@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.12 - pending release
+
+- Complete lost-key recovery guidance; clean up archived evidence banners.
+
 ## 1.9.11 - pending release
 
 - Join-1: add one resident join command and fix every helper's installed plugin-root path.

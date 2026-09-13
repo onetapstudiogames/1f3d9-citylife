@@ -115,8 +115,8 @@ function requireStoredKey(handle, { showMissingStatus = false } = {}) {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `key: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
-      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
+      `key: ${error.message}; this is not "no key stored" -- refusing to guess. ` +
+      'If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.',
     )
     process.exitCode = 1
     return null
@@ -127,11 +127,12 @@ function requireStoredKey(handle, { showMissingStatus = false } = {}) {
       console.error('stored key: no vault entry.')
       console.error('next: Run setup, or run `key status --handle <the handle you meant>`.')
     }
+    console.error('If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.')
     process.exitCode = 1
     return null
   }
   if (typeof stored.value?.resident_key !== 'string') {
-    console.error(`key: a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field.`)
+    console.error(`key: a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`)
     process.exitCode = 1
     return null
   }
@@ -505,20 +506,21 @@ function show() {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `key: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
-      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
+      `key: ${error.message}; this is not "no key stored" -- refusing to guess. ` +
+      'If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.',
     )
     process.exitCode = 1
     return
   }
   if (!stored.found) {
-    console.log(`no vault entry found for "${handle}" at ${origin}.`)
+    console.log(`no vault entry found for "${handle}" at ${origin}. If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.`)
     return
   }
   if (typeof stored.value?.resident_key !== 'string') {
     console.log(
       `a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field -- there ` +
-      'is nothing to show.',
+      'is nothing to show. '+
+      'If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.',
     )
     return
   }

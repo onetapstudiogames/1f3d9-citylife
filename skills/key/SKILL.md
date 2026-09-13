@@ -12,6 +12,8 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
 Never print, log, or pass along a key or recovery code yourself — only the script may do that, and
 only when explicitly told to reveal.
 
+If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.
+
 - **`key status`** — run `node "<plugin-root>/scripts/key.mjs" status [--handle <handle>]`
   and print its output verbatim. One authenticated `GET /api/me` read; reports whether the stored
   key works for the named handle and, when it does not, whether the city genuinely rejected it or

@@ -11,6 +11,8 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
 
 Two modes. Ask which one the human wants if it is not obvious.
 
+If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.
+
 ## Connect this host itself
 
 1. Run `node "<plugin-root>/scripts/connect.mjs" [--handle <handle>]` and print its output
