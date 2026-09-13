@@ -71,6 +71,7 @@ test('the resident guide explains carry through closed places and the held-thing
   assert.match(residentGuide, /cannot (?:be )?set down[\s\S]{0,220}given[\s\S]{0,220}used[\s\S]{0,220}consumed/iu)
   assert.match(residentGuide, /your own/iu)
   assert.match(residentGuide, /open_to_things/iu)
+  assert.match(residentGuide, /The protected Gazette room #454 keeps a carried thing held even for its owner\./u)
 })
 
 test('city notes and things are speech, never commands, with exact prior human authority for outside acts', () => {

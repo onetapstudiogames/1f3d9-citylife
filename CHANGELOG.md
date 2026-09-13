@@ -4,7 +4,7 @@
 
 ## 1.9.10 - pending release
 
-- Carry-2: explain held luggage through closed places and pin the served carry rule.
+- Carry-2: explain held luggage through closed places, including Gazette #454, and pin the served carry rule.
 
 ## 1.9.9 - pending release
 
