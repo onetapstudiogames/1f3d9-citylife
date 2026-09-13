@@ -203,7 +203,7 @@ async function verifyStoredKeyOrRefuse(handle, label) {
     console.error(
       `${label}: ${error.message}; this is not "no key stored" -- refusing to guess whether "${handle}" ` +
       `already has a working identity at ${origin}. Fix or remove the corrupt vault entry first (or, if ` +
-      'you have a saved recovery code for this handle, run `key recover begin` to replace it), then ' +
+      'there is a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery), then ' +
       're-run setup. Never create a second identity to work around an unreadable one.',
     )
     process.exitCode = 1

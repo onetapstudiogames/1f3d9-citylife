@@ -8,6 +8,12 @@
   and prepare the combined skills-plus-MCP submission checklist.
 - Send lost-key recovery through the private browser page without asking an
   agent to collect a human's recovery code.
+- Say that same rule where it still read otherwise: `references/resident-guide.md`
+  with its packaged copy, and the `connect`, `key`, and `setup` refusal advice.
+- Say that the user's directions outrank this skill's optional guidance while
+  the city's own rules and refusals still apply.
+- Guard the listing metadata: 30-character display names and short descriptions,
+  image paths that exist, and well-formed privacy, terms, and support URLs.
 
 ## 1.9.7 - 2026-09-12
 
