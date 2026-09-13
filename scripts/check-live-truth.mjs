@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readFile } from 'node:fs/promises'
 import { CITY_REJECTION_MESSAGE } from './lib/identity-probe.mjs'
 import { extractChangelogEntries, extractDonateLink } from './lib/public-command-output.mjs'
 import { commandFailure } from './lib/cli-error.mjs'
@@ -12,6 +13,7 @@ const endpoints = {
   official: 'https://1f3d9.com/api/official',
   me: 'https://1f3d9.com/api/me',
   mcpReference: 'https://1f3d9.com/reference/mcp.txt',
+  actionRequests: 'https://1f3d9.com/reference/action-requests.txt',
   window: 'https://1f3d9.com/window',
   changelog: 'https://1f3d9.com/changelog',
 }
@@ -143,6 +145,21 @@ export const validateLiveReferenceTruth = ({ mcpReferenceText }) => {
   )
 }
 
+export const validateLiveCarryTruth = ({ actionRequestsText, residentGuideText }) => {
+  requireClaim(typeof residentGuideText === 'string', 'resident guide carry rule is missing')
+  requireClaim(typeof actionRequestsText === 'string', 'served action reference carry rule is missing')
+  const guideRule = /^\*\*Carry\.\*\* ([^\r\n]+)/mu.exec(residentGuideText)?.[1]
+  requireClaim(Boolean(guideRule), 'resident guide carry rule is missing')
+  requireClaim(
+    compact(actionRequestsText).includes(compact(guideRule)),
+    'served action reference disagrees with the resident guide carry rule',
+  )
+  requireClaim(
+    !/Carry requires the destination owner to be the mover or its open_to_things to be true\.|A closed foreign destination refuses before either location changes\./u.test(compact(actionRequestsText)),
+    'served action reference retains the retired carry refusal',
+  )
+}
+
 const fetchText = async (url, fetchImpl) => {
   let response
   try {
@@ -225,6 +242,7 @@ export const checkLiveTruth = async ({
     fetchText(endpoints.official, fetchImpl),
     fetchMeRejection(endpoints.me, fetchImpl),
     fetchText(endpoints.mcpReference, fetchImpl),
+    fetchText(endpoints.actionRequests, fetchImpl),
     fetchText(endpoints.window, fetchImpl),
     fetchText(endpoints.changelog, fetchImpl),
   ])
@@ -243,7 +261,7 @@ export const checkLiveTruth = async ({
     throw new Error(`${prefix}${failureMessage(results)}`)
   }
 
-  const [llmsText, officialText, , mcpReferenceText, windowHtml, changelogHtml] = results.map((result) => result.value)
+  const [llmsText, officialText, , mcpReferenceText, actionRequestsText, windowHtml, changelogHtml] = results.map((result) => result.value)
   let official
   try {
     official = JSON.parse(officialText)
@@ -252,6 +270,8 @@ export const checkLiveTruth = async ({
   }
   validateLiveTruth({ official, llmsText })
   validateLiveReferenceTruth({ mcpReferenceText })
+  const residentGuideText = await readFile(new URL('../references/resident-guide.md', import.meta.url), 'utf8')
+  validateLiveCarryTruth({ actionRequestsText, residentGuideText })
   validateLivePageTruth({ windowHtml, changelogHtml })
   return { valid: true }
 }
@@ -260,7 +280,7 @@ const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPat
 if (isDirectRun) {
   try {
     const result = await checkLiveTruth({ requireNetwork: process.env.REQUIRE_LIVE_TRUTH === '1' })
-    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, anonymous /api/me, /reference/mcp.txt, /window, and /changelog.')
+    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, anonymous /api/me, /reference/mcp.txt, /reference/action-requests.txt, /window, and /changelog.')
   } catch (error) {
     console.error(commandFailure('Live truth check failed', error, {
       outcome: 'No local or city data was changed.',

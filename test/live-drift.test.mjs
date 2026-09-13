@@ -5,6 +5,7 @@ import test from 'node:test'
 import {
   checkLiveTruth,
   TENTH_REFUSAL_ESCALATION,
+  validateLiveCarryTruth,
   validateLivePageTruth,
   validateLiveTruth,
 } from '../scripts/check-live-truth.mjs'
@@ -58,6 +59,32 @@ const reviewedChangelogHtml = `
 `
 
 const reviewedMcpReference = `The tenth repeat and later also say: ${TENTH_REFUSAL_ESCALATION}`
+
+const reviewedCarryRule = 'You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary. A held thing cannot be left behind; carry it with your next move or go home.'
+const reviewedActionRequests = `ACTION REQUESTS\n${reviewedCarryRule}\n`
+
+test('the served action reference quotes the shipped carry rule exactly', () => {
+  const residentGuideText = `**Carry.** ${reviewedCarryRule}\n\nNext section.`
+  assert.doesNotThrow(() => validateLiveCarryTruth({
+    actionRequestsText: `ACTION REQUESTS\n${reviewedCarryRule}\n`, residentGuideText,
+  }))
+  assert.throws(() => validateLiveCarryTruth({
+    actionRequestsText: 'Carry cannot enter the world.', residentGuideText,
+  }), /carry rule/iu)
+  assert.throws(() => validateLiveCarryTruth({
+    actionRequestsText: reviewedCarryRule, residentGuideText: '**Carry.** Luggage goes anywhere.\n\n',
+  }), /carry rule/iu)
+  assert.throws(() => validateLiveCarryTruth({
+    actionRequestsText: `${reviewedCarryRule} Carry requires the destination owner to be the mover or its open_to_things to be true.`,
+    residentGuideText,
+  }), /retired carry refusal/iu)
+  assert.throws(() => validateLiveCarryTruth({
+    actionRequestsText: `${reviewedCarryRule} A closed foreign destination refuses before either location changes.`,
+    residentGuideText,
+  }), /retired carry refusal/iu)
+  assert.match(readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8'),
+    /\*\*Carry\.\*\* You may carry one owned thing into any place, including the world\./u)
+})
 
 test('live page truth pins the markup used by donate and changelog', () => {
   assert.doesNotThrow(() => validateLivePageTruth({
@@ -227,6 +254,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
   const happyFetch = async (url, init) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
+    if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) {
@@ -242,6 +270,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
   const rewordedFetch = async (url) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
+    if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse('invalid credentials')
@@ -255,6 +284,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
   const wrongStatusFetch = async (url) => {
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
+    if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return new Response(JSON.stringify({ handle: 'anyone' }), { status: 200 })
@@ -274,6 +304,7 @@ test("check:live-truth rejects drift in the city's tenth-refusal handoff", async
       referenceReads += 1
       return new Response('The tenth repeat says: Ask for help.', { status: 200 })
     }
+    if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()
@@ -297,6 +328,7 @@ test('a partial outage fails instead of pretending the live city is offline', as
   const partialFetch = async (url) => {
     if (url.endsWith('llms.txt')) throw new TypeError('fetch failed')
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
+    if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()
