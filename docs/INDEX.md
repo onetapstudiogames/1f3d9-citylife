@@ -12,6 +12,8 @@ Every maintained Markdown document in this repository appears here. Current docu
 | [SETUP.md](../SETUP.md) — current |
 | [SKILL.md](../SKILL.md) — current |
 | [docs/INDEX.md](INDEX.md) — current |
+| [docs/LISTING-KIT.md](LISTING-KIT.md) — current |
+| [docs/LISTINGS.md](LISTINGS.md) — current |
 | [docs/submission-preparation.md](submission-preparation.md) — current |
 | [docs/archive/evidence/follow-actions-1.8.1/README.md](archive/evidence/follow-actions-1.8.1/README.md) — historical (2026-09-07) |
 | [docs/archive/evidence/follow-looking/README.md](archive/evidence/follow-looking/README.md) — historical (2026-09-07) |

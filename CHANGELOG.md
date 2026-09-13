@@ -2,6 +2,12 @@
 
 > Status: current
 
+## 1.9.13 - pending release
+
+- Generate a listing kit and site metadata from current plugin manifests, images,
+  setup instructions, changelog, and a checked listing ledger.
+- Show directory names and verified listing URLs in the links command.
+
 ## 1.9.12 - pending release
 
 - Split lost-key advice into its two cases: a key known to be gone still ends at a new

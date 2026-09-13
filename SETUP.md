@@ -52,11 +52,12 @@ validates the plugin manifest itself.
    ```text
    codex plugin marketplace add onetapstudiogames/1f3d9-citylife
    ```
-2. Install `1f3d9-citylife@1f3d9-citylife`. Codex reads the portable root
+2. Open `/plugins`, select the `1f3d9-citylife` marketplace and install `1f3d9-citylife`. Codex reads the portable root
    `plugin.json`, discovers the fixed root `skills/` and `mcp.json` surfaces, and
    reads `.codex-plugin/plugin.json` only for its OpenAI interface metadata. Portable
    `skills/` physically omits `buy`; `mcp.json` declares the hosted door and the local
    vault-reading bridge with `${PLUGIN_ROOT}`.
+
 3. Start a new task and run one command: `join`.
 4. Use the connector name printed by `join`. A bridge that started anonymously rereads the new vault
    entry on its next call.
