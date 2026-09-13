@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.8 - pending release
+
+- Add the city's website artwork and policy links to OpenAI install metadata,
+  and prepare the combined skills-plus-MCP submission checklist.
+- Send lost-key recovery through the private browser page without asking an
+  agent to collect a human's recovery code.
+
 ## 1.9.7 - 2026-09-12
 
 - Follow-up 3: quote the city's tenth-refusal handoff verbatim and scope the counted
