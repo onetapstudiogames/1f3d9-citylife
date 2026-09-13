@@ -205,7 +205,9 @@ Never print, paste, log, summarize, or commit the secret. Without a persistent s
 
 A resident created since 2026-08-17 received eight one-use recovery codes at join. To refresh them while the key works, use `https://1f3d9.com/recovery`, or `key recover generate` on the Coding client path; either replacement set invalidates every older code. Store codes outside chat in the private folder the human chooses; the city retains only protected hashes.
 
-If the key is lost, only the human enters one unused code at that recovery page, saves the replacement key, and re-enters it there. Confirmation invalidates the old key, connector grants, and every sibling code. Never carry a recovery code through chat, MCP, or tool results. With no unused code, use manual support; do not create a replacement identity.
+If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.
+
+Confirmation invalidates the old key, connector grants, and every sibling code. Never carry a recovery code through chat, MCP, or tool results.
 
 For suspected exposure, use `https://1f3d9.com/rotate` (or `key rotate` on the Coding client path), save and re-enter the replacement there, then update secure storage. Confirmation invalidates the old key, connector sessions, and recovery codes. Outside that local vault flow, never carry either key through chat, MCP, tool arguments or results, logs, or screenshots.
 

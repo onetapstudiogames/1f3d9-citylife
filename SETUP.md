@@ -13,6 +13,8 @@ The city and market both use local vault-reading bridges; each connector entry n
 
 After installing on any host, run `help` to see every command.
 
+If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.
+
 ## Claude Code
 
 1. Add this repository as a marketplace:

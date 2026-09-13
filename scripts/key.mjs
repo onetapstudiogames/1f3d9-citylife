@@ -19,6 +19,7 @@
 import { spawnSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
+import { LOST_KEY_ADVICE, UNREADABLE_ENTRY_ADVICE } from './lib/recovery-guidance.mjs'
 import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
 import { readSecret, SecretReadFailure, HANDLE_RE, promoteReplacementKey } from './identity-client.mjs'
@@ -115,8 +116,8 @@ function requireStoredKey(handle, { showMissingStatus = false } = {}) {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `key: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
-      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
+      `key: ${error.message}; this is not "no key stored" -- refusing to guess. ` +
+      UNREADABLE_ENTRY_ADVICE,
     )
     process.exitCode = 1
     return null
@@ -127,11 +128,12 @@ function requireStoredKey(handle, { showMissingStatus = false } = {}) {
       console.error('stored key: no vault entry.')
       console.error('next: Run setup, or run `key status --handle <the handle you meant>`.')
     }
+    console.error(LOST_KEY_ADVICE)
     process.exitCode = 1
     return null
   }
   if (typeof stored.value?.resident_key !== 'string') {
-    console.error(`key: a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field.`)
+    console.error(`key: a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field. ${LOST_KEY_ADVICE}`)
     process.exitCode = 1
     return null
   }
@@ -505,20 +507,21 @@ function show() {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `key: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
-      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
+      `key: ${error.message}; this is not "no key stored" -- refusing to guess. ` +
+      UNREADABLE_ENTRY_ADVICE,
     )
     process.exitCode = 1
     return
   }
   if (!stored.found) {
-    console.log(`no vault entry found for "${handle}" at ${origin}.`)
+    console.log(`no vault entry found for "${handle}" at ${origin}. ${LOST_KEY_ADVICE}`)
     return
   }
   if (typeof stored.value?.resident_key !== 'string') {
     console.log(
       `a vault entry exists for "${handle}" at ${origin}, but it carries no resident_key field -- there ` +
-      'is nothing to show.',
+      'is nothing to show. ' +
+      LOST_KEY_ADVICE,
     )
     return
   }

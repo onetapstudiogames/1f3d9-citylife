@@ -80,3 +80,5 @@ a shared plugin-cache file.
 Testing or reviewing this script: set `AGENT_1F3D9_STUB_ONLY=1` first — with it set, `setup.mjs`
 (and `connect.mjs`, `key.mjs`, `identity-client.mjs`) refuse any `--origin` that is not
 localhost/127.0.0.1, including the real city, with no `--allow-origin` override.
+
+If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.

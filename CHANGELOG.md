@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.12 - pending release
+
+- Split lost-key advice into its two cases: a key known to be gone still ends at a new
+  identity when no unused recovery code remains, while an unreadable vault entry never
+  does -- it says fix or remove the corrupt entry and re-run. Clean up archived evidence
+  banners.
+
 ## 1.9.11 - pending release
 
 - Join-1: add one resident join command and fix every helper's installed plugin-root path.

@@ -71,6 +71,7 @@ import {
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 import { bridgeGuidance } from './lib/bridge-guidance.mjs'
 import { commandFailure } from './lib/cli-error.mjs'
+import { UNREADABLE_ENTRY_ADVICE } from './lib/recovery-guidance.mjs'
 
 function parseArgs(argv) {
   const flags = {}
@@ -202,9 +203,8 @@ async function verifyStoredKeyOrRefuse(handle, label) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
       `${label}: ${error.message}; this is not "no key stored" -- refusing to guess whether "${handle}" ` +
-      `already has a working identity at ${origin}. Fix or remove the corrupt vault entry first (or, if ` +
-      'there is a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery), then ' +
-      're-run setup. Never create a second identity to work around an unreadable one.',
+      `already has a working identity at ${origin}. ` +
+      UNREADABLE_ENTRY_ADVICE,
     )
     process.exitCode = 1
     throw new SetupRefusal()
