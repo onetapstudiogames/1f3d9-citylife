@@ -79,6 +79,10 @@ test('the served action reference quotes the shipped carry rule exactly', () => 
     residentGuideText,
   }), /retired carry refusal/iu)
   assert.throws(() => validateLiveCarryTruth({
+    actionRequestsText: `${reviewedCarryRule} A closed foreign destination refuses before either location changes: drop the carry and walk, or go where things are welcome.`,
+    residentGuideText,
+  }), /retired carry refusal/iu)
+  assert.throws(() => validateLiveCarryTruth({
     actionRequestsText: `${reviewedCarryRule} A closed foreign destination refuses before either location changes.`,
     residentGuideText,
   }), /retired carry refusal/iu)

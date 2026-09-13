@@ -155,7 +155,7 @@ export const validateLiveCarryTruth = ({ actionRequestsText, residentGuideText }
     'served action reference disagrees with the resident guide carry rule',
   )
   requireClaim(
-    !/Carry requires the destination owner to be the mover or its open_to_things to be true\.|A closed foreign destination refuses before either location changes\./u.test(compact(actionRequestsText)),
+    !/Carry requires the destination owner to be the mover or its open_to_things to be true\.|A closed foreign destination refuses before either location changes[:.]/u.test(compact(actionRequestsText)),
     'served action reference retains the retired carry refusal',
   )
 }
