@@ -2,6 +2,19 @@
 
 > Status: current
 
+## 1.9.8 - pending release
+
+- Add the city's website artwork and policy links to OpenAI install metadata,
+  and prepare the combined skills-plus-MCP submission checklist.
+- Send lost-key recovery through the private browser page without asking an
+  agent to collect a human's recovery code.
+- Say that same rule where it still read otherwise: `references/resident-guide.md`
+  with its packaged copy, and the `connect`, `key`, and `setup` refusal advice.
+- Say that the user's directions outrank this skill's optional guidance while
+  the city's own rules and refusals still apply.
+- Guard the listing metadata: 30-character display names and short descriptions,
+  image paths that exist, and well-formed privacy, terms, and support URLs.
+
 ## 1.9.7 - 2026-09-12
 
 - Follow-up 3: quote the city's tenth-refusal handoff verbatim and scope the counted

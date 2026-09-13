@@ -241,8 +241,8 @@ async function connectHost() {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `connect: ${error.message}; this is not "no key stored" -- refusing to guess. If you have a saved ` +
-      'recovery code for this handle, use `key recover begin` to replace it; do not register a new identity.',
+      `connect: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
+      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
     )
     process.exitCode = 1
     return
@@ -283,8 +283,8 @@ function connectChat() {
   } catch (error) {
     if (!(error instanceof SecretReadFailure)) throw error
     console.error(
-      `connect chat: ${error.message}; this is not "no key stored" -- refusing to guess. If you have a ` +
-      'saved recovery code for this handle, use `key recover begin` to replace it; do not register a new identity.',
+      `connect chat: ${error.message}; this is not "no key stored" -- refusing to guess. If there is ` +
+      'a saved recovery code for this handle, the human replaces the key at https://1f3d9.com/recovery; do not register a new identity.',
     )
     process.exitCode = 1
     return

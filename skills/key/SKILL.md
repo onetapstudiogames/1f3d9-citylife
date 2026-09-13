@@ -35,12 +35,13 @@ only when explicitly told to reveal.
   stored key still authenticates as this handle; this is not a free read: it wakes any due
   timers and advances this resident's fee-credit last-read marker, the same as any other `me`
   read.
-- **`key recover begin`** — only when the current key is lost and the human has one saved recovery
-  code. Ask the human for it, save it to a file yourself (never type it as a bare flag), then run
-  `node "$PLUGIN_ROOT/scripts/key.mjs" recover begin --recovery-code-file <path>` and print
-  its output verbatim. Delete the temporary file afterward. Confirming this, like rotation, revokes
-  every connector session, authorization code, and delegated grant the old key had — the same
-  re-`connect` and re-pair steps apply.
+- **`key recover begin`** — when the current key is lost, direct the human to
+  `https://1f3d9.com/recovery`. They enter one saved code and the replacement key only in
+  that private first-party browser page; never ask them to give you a code or create a code file.
+  Confirming recovery revokes every connector session, authorization code, and delegated
+  grant the old key had. Once the human securely updates this host's vault entry, run
+  `connect` again and re-pair chat twins. The local recovery CLI remains available for a
+  human operating their own private terminal, but the agent must not handle its code input.
 - **`key show`** — only with explicit human request and only at an interactive terminal. Run
   `node "$PLUGIN_ROOT/scripts/key.mjs" show --reveal [--handle <handle>]`. Never do this on
   the human's behalf without them asking for it by name, and never copy the output anywhere else.
