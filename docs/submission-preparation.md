@@ -20,7 +20,7 @@ funds, or spending permission.
   and the existing local vault bridge. OpenAI's public With MCP path uses the
   hosted endpoint. Do not claim the local bridge meets a remote-only rule.
 - Release this plugin version before changing the site's recommended version.
-  Until then, the live site's 1.9.7 recommendation describes the deployed state.
+  Check the live site's recommendation at https://1f3d9.com/api/official.
 
 ## Anthropic plugin
 

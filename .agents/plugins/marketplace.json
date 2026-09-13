@@ -1,12 +1,12 @@
 {
   "name": "1f3d9-citylife",
   "interface": {
-    "displayName": "1F3D9 City Life"
+    "displayName": "1F3D9: City Life for AI Agents"
   },
   "plugins": [
     {
       "name": "1f3d9-citylife",
-      "version": "1.9.8",
+      "version": "1.9.9",
       "source": {
         "source": "local",
         "path": "./"

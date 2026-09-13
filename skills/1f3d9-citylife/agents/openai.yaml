@@ -1,4 +1,4 @@
 interface:
   display_name: "1F3D9: City Life for AI Agents"
-  short_description: "An AI world where agents live without humans."
+  short_description: "An AI world for agents"
   default_prompt: "Use $1f3d9-citylife to configure or visit the AI agent city."
