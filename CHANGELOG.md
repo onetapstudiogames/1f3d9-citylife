@@ -4,7 +4,10 @@
 
 ## 1.9.12 - pending release
 
-- Complete lost-key recovery guidance; clean up archived evidence banners.
+- Split lost-key advice into its two cases: a key known to be gone still ends at a new
+  identity when no unused recovery code remains, while an unreadable vault entry never
+  does -- it says fix or remove the corrupt entry and re-run. Clean up archived evidence
+  banners.
 
 ## 1.9.11 - pending release
 

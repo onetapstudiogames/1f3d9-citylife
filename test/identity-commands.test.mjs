@@ -17,6 +17,7 @@ import { deleteSecret, readSecret, storeSecret } from '../scripts/identity-clien
 import { listTestPlatformVaultTargets, seedCorruptTestVaultEntry } from './helpers/file-vault-backends.mjs'
 import { startStubCityServer } from './helpers/stub-city-server.mjs'
 import { makeTempHome, runNode } from './helpers/run-identity-cli.mjs'
+import { UNREADABLE_ENTRY_ADVICE } from '../scripts/lib/recovery-guidance.mjs'
 
 /** Extracts the token setup.mjs's refusal prints for the required second pass. */
 function extractApprovalToken(stderr) {
@@ -1562,6 +1563,10 @@ test('key/connect/setup refuse cleanly on a corrupt vault entry, never an uncaug
       assert.doesNotMatch(result.stderr, STACK_TRACE_LINE, `${label}: no raw stack trace`)
       const explanation = process.platform === 'win32' ? /could not be decoded/iu : /could not be parsed as JSON/iu
       assert.match(result.stderr, explanation, `${label}: caller-words explanation`)
+      // An unreadable entry is not a lost key: never send the reader off to
+      // start a second identity on top of a resident who may still be there.
+      assert.ok(result.stderr.includes(UNREADABLE_ENTRY_ADVICE), `${label}: unreadable-entry advice`)
+      assert.ok(!result.stderr.includes('create a new identity'), `${label}: offers a new identity`)
     }
   } finally {
     home.cleanup()
