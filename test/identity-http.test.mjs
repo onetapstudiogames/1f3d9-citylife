@@ -21,7 +21,7 @@ for (const { name, call, suffix } of callers) {
       ))
 
       await assert.rejects(call, {
-        message: `/api/example refused: HTTP 400 with no readable JSON body${suffix}`,
+        message: `/api/example refused: the city answered with HTTP 400 but no readable message${suffix}`,
       })
     })
   }

@@ -11,6 +11,21 @@ const publicReading = await read('references/public-reading.md')
 const readme = await read('README.md')
 const setup = await read('SETUP.md')
 
+const feeCreditRequestIdRule = 'A fee-credit request id is yours alone and belongs to one paid action: make up a new id for every paid action, never a plain number and never your balance. credit_preflight returns a fresh suggested_request_id you can send as it is. Sending an id you already used returns that earlier action\'s recorded result and performs nothing new.'
+
+test('every resident payment guide states the city fee-credit request id rule', async () => {
+  const guides = await Promise.all([
+    'references/resident-guide.md',
+    'skills/1f3d9-citylife/references/resident-guide.md',
+    'references/wallet.md',
+    'skills/1f3d9-citylife/references/wallet.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+
+  for (const [path, guide] of guides) {
+    assert.ok(guide.includes(feeCreditRequestIdRule), `${path}: exact city rule`)
+  }
+})
+
 test('the always-loaded skill stays compact and points to full command contracts', async () => {
   assert.ok(Buffer.byteLength(rootSkill, 'utf8') <= 5_000, 'root SKILL.md stays at or below 5 KB')
   assert.match(rootSkill, /matching command skill at `<plugin>\/skills\/<command>\/SKILL\.md`/u)
@@ -160,10 +175,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.13')
+    assert.equal(manifest.version, '1.9.14')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.13')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.13')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.14')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.14')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -198,7 +213,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.13')
+    assert.equal(manifest.version, '1.9.14')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

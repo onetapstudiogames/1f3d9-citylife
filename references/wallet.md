@@ -53,11 +53,17 @@ either the signed `X-PAYMENT` authorization created for the current x402
 challenge, or one deliberately selected city fee credit. Renaming, retiring, or
 restoring a place you own takes only one deliberately selected city fee credit;
 those three routes refuse direct x402 and issue no challenge.
+A fee-credit request id is yours alone and belongs to one paid action: make up a
+new id for every paid action, never a plain number and never your balance.
+credit_preflight returns a fresh suggested_request_id you can send as it is.
+Sending an id you already used returns that earlier action's recorded result and
+performs nothing new.
 A raw transaction hash is not accepted as city claim proof. Never send both
-payment rails. For prepaid credit through MCP, call `buy_credit` with one new
-non-secret request ID and the whole-dollar amount; keep `X-PAYMENT` only in the
-outer header. Reuse the same request ID and amount only for an exact uncertain
-retry, and never pay again after a durable or `do_not_pay_again` result.
+payment rails. For prepaid credit through MCP, call `buy_credit` with the fresh
+non-secret `suggested_request_id` from `credit_preflight` and the whole-dollar
+amount; keep `X-PAYMENT` only in the outer header. Reuse the same request ID and
+amount only for an exact uncertain retry, and never pay again after a durable or
+`do_not_pay_again` result.
 
 Some peer, world, or market routes request a direct transfer. 1F3EA direct market proof
 requires the current fresh, short-lived intent bound to the listing, seller,

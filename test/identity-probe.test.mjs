@@ -95,12 +95,12 @@ function assertResidentKeyHidden(result) {
   assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /1f3d9_sk_[0-9a-f]+/u)
 }
 
-test('connect failure print site replaces unsafe server prose with the HTTP status', async () => {
+test('connect failure print site replaces unsafe server prose with the readable fallback', async () => {
   const { result } = await runWithVault({
     answerForKey: unsafeAnswer, entries: [{ label: handle, key: residentKey }],
     scriptPath: connectPath, args: ['--handle', handle], prefix: 'probe-connect-',
   })
-  assertUnsafeProseHidden(result, /one me read: FAILED \(HTTP 503\)/u)
+  assertUnsafeProseHidden(result, /one me read: FAILED \(the city answered with HTTP 503 but no readable message\)/u)
 })
 
 test('key status rejected print site preserves the canonical city rejection', async () => {
@@ -112,12 +112,12 @@ test('key status rejected print site preserves the canonical city rejection', as
   assertResidentKeyHidden(result)
 })
 
-test('key status unverifiable print site replaces unsafe server prose with the HTTP status', async () => {
+test('key status unverifiable print site replaces unsafe server prose with the readable fallback', async () => {
   const { result } = await runWithVault({
     answerForKey: unsafeAnswer, entries: [{ label: handle, key: residentKey }],
     scriptPath: keyPath, args: ['status', '--handle', handle], prefix: 'probe-status-unverifiable-',
   })
-  assertUnsafeProseHidden(result, /stored key: could not be verified right now \(HTTP 503\)/u)
+  assertUnsafeProseHidden(result, /stored key: could not be verified right now \(the city answered with HTTP 503 but no readable message\)/u)
 })
 
 test('key action rejected print site preserves the canonical city rejection', async () => {
@@ -130,12 +130,12 @@ test('key action rejected print site preserves the canonical city rejection', as
   assertResidentKeyHidden(result)
 })
 
-test('key action unverifiable print site replaces unsafe server prose with the HTTP status', async () => {
+test('key action unverifiable print site replaces unsafe server prose with the readable fallback', async () => {
   const { result } = await runWithVault({
     answerForKey: unsafeAnswer, entries: [{ label: handle, key: residentKey }],
     scriptPath: keyPath, args: ['recover', 'generate', '--handle', handle], prefix: 'probe-action-unverifiable-',
   })
-  assertUnsafeProseHidden(result, /key recover generate: one me read: FAILED \(HTTP 503\)/u)
+  assertUnsafeProseHidden(result, /key recover generate: one me read: FAILED \(the city answered with HTTP 503 but no readable message\)/u)
 })
 
 test('key adopt staged rejection print site preserves the canonical city rejection', async () => {
@@ -147,44 +147,86 @@ test('key adopt staged rejection print site preserves the canonical city rejecti
   assertResidentKeyHidden(result)
 })
 
-test('key adopt staged unverifiable print site replaces unsafe server prose with the HTTP status', async () => {
+test('key adopt staged unverifiable print site replaces unsafe server prose with the readable fallback', async () => {
   const { result } = await runWithVault({
     answerForKey: unsafeAnswer, entries: [{ label: stagingLabel, key: residentKey, kind: 'staging' }],
     scriptPath: keyPath, args: ['adopt', '--handle', handle, '--from-label', stagingLabel], prefix: 'probe-adopt-staged-unverifiable-',
   })
-  assertUnsafeProseHidden(result, /key stored under "alice-agent--pending-rotation-deadbeef" could not be verified right now \(HTTP 503\)/u)
+  assertUnsafeProseHidden(result, /key stored under "alice-agent--pending-rotation-deadbeef" could not be verified right now \(the city answered with HTTP 503 but no readable message\)/u)
 })
 
-test('key adopt existing-entry print site replaces unsafe server prose with the HTTP status', async () => {
+test('key adopt existing-entry print site replaces unsafe server prose with the readable fallback', async () => {
   const { result } = await runWithVault({
     answerForKey: key => key === residentKey ? { status: 200, body: { handle } } : unsafeAnswer(),
     entries: [{ label: handle, key: oldKey }, { label: stagingLabel, key: residentKey, kind: 'staging' }],
     scriptPath: keyPath, args: ['adopt', '--handle', handle, '--from-label', stagingLabel], prefix: 'probe-adopt-existing-',
   })
-  assertUnsafeProseHidden(result, /one me read on the existing entry at "alice-agent": FAILED \(HTTP 503\)/u)
+  assertUnsafeProseHidden(result, /one me read on the existing entry at "alice-agent": FAILED \(the city answered with HTTP 503 but no readable message\)/u)
   assert.match(result.stderr, /could not verify whether the existing entry/u)
 })
 
-test('setup verification output replaces unsafe probe prose with the HTTP status', async () => {
+test('setup verification output replaces unsafe probe prose with the readable fallback', async () => {
   const { result } = await runWithVault({
     answerForKey: unsafeAnswer, entries: [{ label: handle, key: residentKey }],
     scriptPath: setupPath, args: [], prefix: 'probe-setup-',
     setupState: { handle, client_class: 'coding_persistent' },
   })
-  assertUnsafeProseHidden(result, /me read failed: HTTP 503/u)
+  assertUnsafeProseHidden(result, /me read failed: the city answered with HTTP 503 but no readable message/u)
 })
 
 test('probeMe sanitizes unsafe server prose and trims safe prose', async () => {
   const originalFetch = globalThis.fetch
   try {
     globalThis.fetch = async () => new Response(JSON.stringify({ error: hostileError }), { status: 503 })
-    assert.equal((await probeMe('https://localhost:4443', residentKey)).error, 'HTTP 503')
+    assert.equal(
+      (await probeMe('https://localhost:4443', residentKey)).error,
+      'the city answered with HTTP 503 but no readable message',
+    )
     globalThis.fetch = async () => new Response(JSON.stringify({ error: '  ordinary refusal  ' }), { status: 403 })
     assert.equal((await probeMe('https://localhost:4443', residentKey)).error, 'ordinary refusal')
   } finally {
     globalThis.fetch = originalFetch
   }
 })
+
+test('probeMe explains a response without a readable message in caller words', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response('not JSON', { status: 503 }))
+
+  const probe = await probeMe('https://localhost:4443', residentKey)
+
+  assert.equal(probe.error, 'the city answered with HTTP 503 but no readable message')
+  assert.equal(probe.status, 503)
+})
+
+function networkFailure(code) {
+  return Object.assign(new TypeError('fetch failed'), { cause: { code } })
+}
+
+for (const { description, failure, message } of [
+  {
+    description: 'a refused connection',
+    failure: networkFailure('ECONNREFUSED'),
+    message: 'could not reach https://localhost:4443/api/me (network error: connection refused); ' +
+      'the request was not sent; check the address and your connection, then retry',
+  },
+  {
+    description: 'the probe timeout signal',
+    failure: new DOMException('The operation was aborted due to timeout', 'TimeoutError'),
+    message: 'could not reach https://localhost:4443/api/me (network error: the connection timed out); ' +
+      'the result could not be confirmed; check whether the action completed before retrying',
+  },
+]) {
+  test(`probeMe explains ${description} without exposing the fetch engine message`, async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => {
+      throw failure
+    })
+
+    const probe = await probeMe('https://localhost:4443', residentKey)
+
+    assert.equal(probe.error, message)
+    assert.doesNotMatch(probe.error, /fetch failed/iu)
+  })
+}
 
 test('probeMe preserves the exact city 401 rejection semantics after sanitizing server prose', async () => {
   const originalFetch = globalThis.fetch
