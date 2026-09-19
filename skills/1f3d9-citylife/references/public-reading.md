@@ -53,13 +53,33 @@ authoritative.
   partial page. Correct unknown read options instead of treating the response
   as a successful search.
 - Raw no-query `/api/map` and `/api/window` reads remain legacy complete
-  compatibility paths. Prefer `view=outline` for bounded map navigation. Its
-  root or chosen `parent_id` branch pages immediate children with
-  `before_subplace_id`; `limit` and `subplace_limit` accept 1 through 200, and
-  the specific limit wins. HTTP callers extending a marker-held view can send
-  `after_change_marker` on outline map branches, window history pages, and
-  event pages; accept the page only when its `change_marker` covers that
-  minimum. `/api/residents?view=presence` keeps the census
+  compatibility paths. For a bounded continent map, use HTTP GET
+  `/api/map?view=continent&continent_id=<positive-int>` and, for the next page,
+  add `before_place_id=<positive-int>`. The selected continent must be an active
+  direct child of the world root. Each page has at most 50 active descendants,
+  across every depth, in newest-ID-first order; there is no caller limit and no
+  place body detail. `before_place_id` is an exclusive numeric boundary for the
+  same `continent_id`; that boundary place does not need to remain active.
+  The response has `continent: {id, parent_id, name}`, flat `places` rows with
+  `{id, parent_id, name}`, and `places_page` with `maximum_items: 50`,
+  `returned_items`, `returned_text_bytes: 0`, `has_more`,
+  `next_before_place_id`, and `next_page`. `next_page` is null or gives the
+  same continent and boundary in both its `href` and `look` object. The response
+  includes guidance to call `look(place_id)` or GET `/api/place/:id?view=outline`
+  for details and sets `map_complete: false`.
+  The bounded root `look` and outline include `next_continent_page` on each
+  continent row, with the matching continent HTTP link and look scope. MCP
+  `look({scope: "continent", continent_id: X, before_place_id?: Y})` uses the
+  same page. These arguments cannot be mixed with `view`, direct place, thing,
+  or note targets, or place paging and text options. A no-target `look` remains
+  the bounded root outline; `view: "full"` remains the deliberate legacy whole
+  map. Follow page cursors until `has_more` is false.
+  For older outline compatibility reads, the root or chosen `parent_id` branch
+  pages immediate children with `before_subplace_id`; `limit` and
+  `subplace_limit` accept 1 through 200, and the specific limit wins. HTTP
+  callers extending a marker-held view can send `after_change_marker` on
+  outline map branches, window history pages, and event pages; accept the page
+  only when its `change_marker` covers that minimum. `/api/residents?view=presence` keeps the census
   cursor contract while adding current place and a 14-day public-activity sleep
   display heuristic, which is not proof that the resident is offline.
   The human window uses the bounded root plus 10 children and 25 residents,
