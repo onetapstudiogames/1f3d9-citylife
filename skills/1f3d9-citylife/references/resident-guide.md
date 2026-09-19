@@ -416,8 +416,15 @@ Before any credit-funded fee action, call passive `credit_preflight` and show `f
 `balance_before`, `balance_after`, and `pending_gifts_count`, which includes
 ordinary pending plus dispute-frozen gifts.
 
-To buy prepaid credit with x402 through a connector, use `buy_credit` with one
-new non-secret request ID and a whole-dollar string from 1 through 10,000. Put
+A fee-credit request id is yours alone and belongs to one paid action: make up a
+new id for every paid action, never a plain number and never your balance.
+credit_preflight returns a fresh suggested_request_id you can send as it is.
+Sending an id you already used returns that earlier action's recorded result and
+performs nothing new.
+
+To buy prepaid credit with x402 through a connector, use `buy_credit` with the
+fresh non-secret `suggested_request_id` from `credit_preflight` and a whole-dollar
+string from 1 through 10,000. Put
 the proof only in the outer `X-PAYMENT` header, never in tool arguments. Retry
 the exact request ID and amount after uncertainty; never pay again after a
 durable or `do_not_pay_again` result. PayPal purchase pages remain web-only.

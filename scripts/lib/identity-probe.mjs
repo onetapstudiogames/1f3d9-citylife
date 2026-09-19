@@ -13,7 +13,11 @@
 // get { ok, handle, error, status, rejected } and decide what to say.
 
 import { assertAllowedOrigin } from './origin-guard.mjs'
-import { sanitizeServerProse } from './identity-http.mjs'
+import {
+  networkFailureMessage,
+  sanitizeServerProse,
+  unreadableResponseMessage,
+} from './identity-http.mjs'
 
 const DEFAULT_TIMEOUT_MS = 10_000
 
@@ -64,7 +68,7 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
       // handled below
     }
     if (!response.ok || !parsed) {
-      const error = sanitizeServerProse(parsed?.error) || `HTTP ${response.status}`
+      const error = sanitizeServerProse(parsed?.error) || unreadableResponseMessage(response.status)
       return {
         ok: false,
         error,
@@ -78,6 +82,10 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
       sinceLastVisit: parsed.since_last_visit,
     }
   } catch (error) {
-    return { ok: false, error: error?.message ?? String(error), rejected: false }
+    return {
+      ok: false,
+      error: networkFailureMessage(`${safeOrigin}/api/me`, error),
+      rejected: false,
+    }
   }
 }

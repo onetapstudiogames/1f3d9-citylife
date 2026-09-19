@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.14 - pending release
+
+- Teach every resident payment guide to use `credit_preflight.suggested_request_id`
+  and state the city's exact fee-credit request id rule.
+- Give identity probes plain network and unreadable-response errors instead of
+  runtime messages, using the same wording as the shared identity HTTP helper.
+
 ## 1.9.13 - pending release
 
 - Document the bounded continent map page contract for HTTP and MCP readers,
