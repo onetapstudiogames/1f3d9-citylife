@@ -158,7 +158,7 @@ const guardedProbeCases = [
   {
     name: 'an edge/WAF 403 HTML page',
     answer: { status: 403, contentType: 'text/html', body: '<html><body>Forbidden</body></html>' },
-    error: 'HTTP 403',
+    error: 'the city answered with HTTP 403 but no readable message',
     rejected: false,
   },
   {
