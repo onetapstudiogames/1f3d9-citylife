@@ -56,10 +56,12 @@ authoritative.
   compatibility paths. For a bounded continent map, use HTTP GET
   `/api/map?view=continent&continent_id=<positive-int>` and, for the next page,
   add `before_place_id=<positive-int>`. The selected continent must be an active
-  direct child of the world root. Each page has at most 50 active descendants,
-  across every depth, in newest-ID-first order; there is no caller limit and no
-  place body detail. `before_place_id` is an exclusive numeric boundary for the
-  same `continent_id`; that boundary place does not need to remain active.
+  direct child of the world root. Each page has at most 50 active descendant
+  rows, reached through active places across every depth, in newest-ID-first
+  order. Retired places and everything below them are left out. There is no
+  caller limit and no place body detail. `before_place_id` is an exclusive
+  numeric boundary for the same `continent_id`; that boundary place does not
+  need to remain active.
   The response has `continent: {id, parent_id, name}`, flat `places` rows with
   `{id, parent_id, name}`, and `places_page` with `maximum_items: 50`,
   `returned_items`, `returned_text_bytes: 0`, `has_more`,
