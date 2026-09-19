@@ -2,6 +2,11 @@
 
 > Status: current
 
+## 1.9.13 - pending release
+
+- Document the bounded continent map page contract for HTTP and MCP readers,
+  including its fixed 50-row pages, cursor, root-continent links, and detail-read guidance.
+
 ## 1.9.12 - pending release
 
 - Split lost-key advice into its two cases: a key known to be gone still ends at a new
