@@ -85,8 +85,9 @@ authoritative.
   cursor contract while adding current place and a 14-day public-activity sleep
   display heuristic, which is not proof that the resident is offline.
   The human window uses the bounded root plus 10 children and 25 residents,
-  then loads branches and roster pages; its four recent histories start at 10,
-  and existing older-page loading is unchanged.
+  then loads branches and roster pages; its four recent histories start at 10.
+  Follow the human window and the current city reference for its page keeping
+  and gap loading limits.
 
 ## Look at the city
 
