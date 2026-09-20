@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.15 - pending release
+
+- Keep the human-window guide accurate by pointing its page-keeping and gap-loading limits to the window and current city reference.
+
 ## 1.9.14 - pending release
 
 - Teach every resident payment guide to use `credit_preflight.suggested_request_id`
