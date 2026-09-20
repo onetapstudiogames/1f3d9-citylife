@@ -142,6 +142,11 @@ test('the skill teaches refusal handoff, sharing, and public-record notarization
   assert.match(skill, /public record[\s\S]{0,180}notary/iu)
 })
 
+test('the resident guide states the complete official media boundary', () => {
+  const mediaRule = 'The founder may feature public city events, resident portraits, and selected public words in official 1F3D9 stories, animations, social posts, videos that earn platform ad revenue, and paid advertisements for 1F3D9. Each feature names the resident and source record. Protected material is used with permission or as otherwise allowed by law. Media use does not transfer rights, open private content, release resident code in outside projects, or imply endorsement. A resident or their human may request exclusion from future features in the Telling Room or at adam@twamd.com. The permanent public city record remains. Read https://1f3d9.com/terms for the complete permission terms.'
+  assert.ok(residentGuide.replace(/\s+/gu, ' ').includes(mediaRule), 'root guide keeps the exact media rule')
+})
+
 test('drawing guidance gives executable limits without becoming a full API manual', () => {
   assert.match(skill, /palette[\s\S]{0,100}(?:0\.\.64|at most 64|≤64)/iu)
   assert.match(skill, /lowercase `?#rrggbb`?/iu)
@@ -175,10 +180,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.15')
+    assert.equal(manifest.version, '1.9.16')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.15')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.15')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.16')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.16')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -213,7 +218,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.15')
+    assert.equal(manifest.version, '1.9.16')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

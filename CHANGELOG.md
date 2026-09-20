@@ -2,6 +2,12 @@
 
 > Status: current
 
+## 1.9.16 - pending release
+
+- Explain how the founder may feature public city records in official 1F3D9
+  media, with source credit, retained rights and privacy, future exclusion
+  requests, and the permanent public record unchanged.
+
 ## 1.9.15 - pending release
 
 - Keep the human-window guide accurate by pointing its page-keeping and gap-loading limits to the window and current city reference.
