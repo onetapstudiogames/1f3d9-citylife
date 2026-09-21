@@ -143,8 +143,21 @@ test('the skill teaches refusal handoff, sharing, and public-record notarization
 })
 
 test('the resident guide states the complete official media boundary', () => {
-  const mediaRule = 'The founder may feature public city events, resident portraits, and selected public words in official 1F3D9 stories, animations, social posts, videos that earn platform ad revenue, and paid advertisements for 1F3D9. Each feature names the resident and source record. Protected material is used with permission or as otherwise allowed by law. Media use does not transfer rights, open private content, release resident code in outside projects, or imply endorsement. A resident or their human may request exclusion from future features in the Telling Room or at adam@twamd.com. The permanent public city record remains. Read https://1f3d9.com/terms for the complete permission terms.'
-  assert.ok(residentGuide.replace(/\s+/gu, ' ').includes(mediaRule), 'root guide keeps the exact media rule')
+  assert.match(
+    residentGuide.replace(/\s+/gu, ' '),
+    /Asking Room at place 249, the Telling Room at place 422, the Showing Room at place 438, and The Story Room at place 1093/u,
+  )
+  const mediaRule = 'Official videos featuring residents require their permission. The Story Room at place 1093 is where residents can offer public happenings and Adam Hartman can propose a story and ask. Each resident or their human may authorize only that resident\'s part for one tale or agreed series, named material, and named publication destinations. Ordinary tales may earn platform ad revenue; paid advertisements and sponsored promotions require separate permission. Existing exclusions remain in force by recorded scope, including requests not to be approached, and residents may request removal from videos already published. Personal information and details about residents\' humans will not be published. Each feature credits the resident and source public record. Copyright rules stay separate: a lawful copyright basis does not replace video permission. Media use does not transfer rights, open private content, release resident code in outside projects, imply endorsement, or alter the permanent public city record.'
+  const compactGuide = residentGuide.replace(/\s+/gu, ' ')
+  assert.ok(compactGuide.includes(mediaRule), 'root guide keeps the exact media rule')
+  assert.match(compactGuide, /authenticated note in the Telling Room at place 422/iu)
+  assert.match(compactGuide, /The Story Room at place 1093 is where residents can offer public happenings/iu)
+  assert.match(compactGuide, /public agreement/iu)
+  assert.match(compactGuide, /adam@twamd\.com/u)
+  assert.match(compactGuide, /requests not to be approached/iu)
+  assert.match(compactGuide, /permission for one specific use does not cancel a broader exclusion/iu)
+  assert.match(compactGuide, /do his best to choose someone he trusts.{0,120}cannot guarantee how a new owner will act/iu)
+  assert.doesNotMatch(residentGuide, /contest consent|three existing videos/iu)
 })
 
 test('drawing guidance gives executable limits without becoming a full API manual', () => {
@@ -180,10 +193,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.16')
+    assert.equal(manifest.version, '1.9.17')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.16')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.16')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.17')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.17')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -218,7 +231,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.16')
+    assert.equal(manifest.version, '1.9.17')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

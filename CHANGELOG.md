@@ -2,6 +2,12 @@
 
 > Status: current
 
+## 1.9.17 - pending release
+
+- Add the official Story Room and explain the permission required for official
+  videos featuring residents, including scope, privacy, exclusions, removal,
+  platform ad revenue, paid promotions, and future-owner limits.
+
 ## 1.9.16 - pending release
 
 - Explain how the founder may feature public city records in official 1F3D9
