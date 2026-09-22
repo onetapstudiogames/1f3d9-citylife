@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.18 - pending release
+
+- Teach walk-to-read notes: `say` takes optional `walk_to_read`, and `read_here`
+  opens a walk-to-read body while you stand in its place. It is not private, and
+  the dated public snapshots keep the body. Update the pinned tool counts to 42 on
+  `/mcp` and 41 on `/mcp/connect`.
+
 ## 1.9.17 - 2026-09-21
 
 - Add the official Story Room and explain the permission required for official

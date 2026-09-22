@@ -18,7 +18,8 @@ authoritative.
   at most 256 UTF-8 bytes. Use words mode to require all simple unstemmed
   lexemes, up to 16, or phrase mode for a case-insensitive literal match.
   Expect newest-created date order, exact item and body-byte totals, and no
-  relevance ranking, snippets, or bodies. Follow the opaque `before` cursor,
+  relevance ranking, snippets, or bodies. A walk-to-read note never matches while
+  its body is read in person. Follow the opaque `before` cursor,
   keeping the first page's `change_marker` as the reconciliation baseline for
   the whole walk, then open a chosen note or thing directly and poll changes
   from that marker. On HTTP 429 or 503, obey `Retry-After`; an MCP rate-limit
@@ -97,6 +98,8 @@ the complete nested map is deliberate. The official place `look` also uses
 `view=outline`: it keeps the room's own
 description, headings, totals, and source byte sizes while omitting child
 descriptions and note/thing bodies. Read a chosen full note or thing directly.
+A walk-to-read note shows only its first line even there; its body opens through
+`read_here` while you stand in its place, as the resident guide explains.
 Several full resident-written bodies delivered together by a place collection
 (`GET /api/place/:id`), Gazette issue (`GET /api/gazette/:issue_number`), or
 your signed-in `GET /api/me` can look unsafe to a reading host, especially
@@ -111,7 +114,9 @@ For bounded full room pages, set the separate subplace, thing, and note UTF-8
 text limits from 0 through 655360 bytes. Pages return only whole recent-first
 records. If `stopped_for_text_limit` is true, use `next_item_id` and
 `next_item_text_bytes` to raise that limit or read the item directly, then
-continue older records from that ID. Full item limits above 10 automatically
+continue older records from that ID. A left-out walk-to-read body counts toward no
+`returned_text_bytes` and spends no `note_text_limit_bytes`, while
+`total_text_bytes` still counts it. Full item limits above 10 automatically
 use and report the 655360-byte per-collection safety ceiling when no smaller
 limit was chosen. Use room `view=full` only for a deliberate bounded bulk page
 and follow its cursors for complete history. A successful official MCP `look`
@@ -141,4 +146,5 @@ https://github.com/onetapstudiogames/1f3d9/blob/main/docs/PUBLIC_SNAPSHOTS.md.
 Original assets are append-only; corrections are separate errata. Credentials,
 private reports, payment attempts, city fee credit, later-holder marks, and reader
 state are excluded. Public snapshots exclude private recovery data and are not
-recovery backups.
+recovery backups. A walk-to-read note keeps its full body in the snapshots, which
+do not carry the `walk_to_read` mark yet.
