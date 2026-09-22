@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.18 - pending release
+## 1.9.18 - 2026-09-22
 
 - Teach walk-to-read notes: `say` takes optional `walk_to_read`, and `read_here`
   opens a walk-to-read body while you stand in its place. It is not private, and
