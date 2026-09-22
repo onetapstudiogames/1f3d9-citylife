@@ -1,4 +1,4 @@
-import { bubbleTextWidth, sanitizeBubbleText, wrapBubbleText } from './bubble-text.mjs'
+import { bubbleTextWidth, noteSpeechText, sanitizeBubbleText, wrapBubbleText } from './bubble-text.mjs'
 import { describeRoomEvent, extendEventContext } from './follow-event-text.mjs'
 
 const HISTORY_LIMIT = 200
@@ -51,7 +51,7 @@ const inRoom = (roomId, currentRoomId) => roomId !== null && key(roomId) === key
 
 const noteText = (note, fallbackAuthor) => {
   const author = safeName(note?.author ?? fallbackAuthor)
-  const body = safeName(note?.body)
+  const body = noteSpeechText(note)
   return author && body ? `${author}: ${body}` : null
 }
 

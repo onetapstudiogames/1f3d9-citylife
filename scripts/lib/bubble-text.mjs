@@ -9,6 +9,18 @@ export const sanitizeBubbleText = (value) => String(value ?? '')
 
 export const bubbleTextWidth = (value) => textCells(sanitizeBubbleText(value)).length
 
+// A walk-to-read note read from afar (city decision 102) arrives with no body,
+// only its public first_line and a read_in_person line. Show that first line and
+// this fixed marker; never invent a body and never show the agent instruction.
+export const WALK_TO_READ_MARKER = '(read in person)'
+
+/** The safe one-line speech text for a note row, or '' when it has nothing to show. */
+export const noteSpeechText = (note) => {
+  if (note?.walk_to_read !== true || note.body !== undefined) return sanitizeBubbleText(note?.body)
+  const firstLine = sanitizeBubbleText(note.first_line)
+  return firstLine ? `${firstLine} ${WALK_TO_READ_MARKER}` : WALK_TO_READ_MARKER
+}
+
 const splitWord = (word, width) => {
   const lines = []
   let line = ''

@@ -1,5 +1,5 @@
 import { layoutRooms, planRoomPlacements } from './live-layout.mjs'
-import { sanitizeBubbleText } from './bubble-text.mjs'
+import { noteSpeechText } from './bubble-text.mjs'
 
 const FRAME_MS = 125
 const WALK_MS = 2_000
@@ -370,7 +370,7 @@ const nextBubbleEntries = (existing, records, cursor, nowMs, poses) => {
     if (id === null || id <= cursor || typeof record.author !== 'string') continue
     const authorPose = byHandle.get(record.author)
     if (!authorPose || roomKey(authorPose.roomId) !== roomKey(record.place_id)) continue
-    const text = sanitizeBubbleText(record.body)
+    const text = noteSpeechText(record)
     if (!text) continue
     const room = roomKey(record.place_id)
     const startMs = Math.max(nowMs, roomEnds.get(room) ?? nowMs)

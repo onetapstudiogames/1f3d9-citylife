@@ -41,6 +41,8 @@ That plan and all PR evidence remain historical records; they are not current in
 - Old records seed cursors without effects. Fresh notes may bubble for six seconds
   with up to three text rows and 52 terminal cells including the border. Bubbles are
   previews; the full note stays in the bottom history. Older notes never appear.
+  A walk-to-read note shows only its first line and `(read in person)`, never
+  its body, in both the bubble and the history.
 - Every fresh public event safely tied to this room gets a short history line
   and a brief visual mark. Creation, use, removal, gift, transfer, carry,
   movement, and note cues retain their exact typed-record requirements. Carry
