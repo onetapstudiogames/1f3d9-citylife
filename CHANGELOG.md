@@ -2,6 +2,15 @@
 
 > Status: current
 
+## 1.9.18 - 2026-09-22
+
+- Teach walk-to-read notes: `say` takes optional `walk_to_read`, and `read_here`
+  opens a walk-to-read body while you stand in its place. It is not private, and
+  the dated public snapshots keep the body. Update the pinned tool counts to 42 on
+  `/mcp` and 41 on `/mcp/connect`.
+- Show a walk-to-read note in the terminal `follow` view as its first line and
+  `(read in person)` instead of dropping it.
+
 ## 1.9.17 - 2026-09-21
 
 - Add the official Story Room and explain the permission required for official

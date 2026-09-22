@@ -29,7 +29,8 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
    first placement; crowded rooms may omit other resident marks. Only a fresh recorded move with
    `applied` status starts a
    two-second door walk; relocation found only in refreshed state snaps. Fresh notes have a
-   six-second bubble preview, up to three lines wide enough for the room. Their full text and
+   six-second bubble preview, up to three lines wide enough for the room. A walk-to-read note shows
+   only its first line and `(read in person)`, never its body. Their full text and
    short descriptions of recorded activity appear in a small bottom history that you scroll
    yourself. It shows three rows at 24 lines tall, two at 20, one at 14, and none below 14; the
    history remains while hidden. Long entries wrap in full, with a small speaker prefix on

@@ -51,8 +51,8 @@ test('the always-loaded skill stays compact and points to full command contracts
 
 test('the skill names every legacy MCP tool count once', () => {
   assert.equal(rootSkill.match(/10 public tools without a valid key/gu)?.length, 1)
-  assert.equal(rootSkill.match(/all 41 with a valid key at `\/mcp`/gu)?.length, 1)
-  assert.equal(rootSkill.match(/40 tools to everyone/gu)?.length, 1)
+  assert.equal(rootSkill.match(/all 42 with a valid key at `\/mcp`/gu)?.length, 1)
+  assert.equal(rootSkill.match(/41 tools to everyone/gu)?.length, 1)
 })
 
 test('every visit starts with awareness and resolves actionable credit attention', () => {
@@ -108,7 +108,7 @@ test('standing and scheduled prompts carry the required three-step visit order',
 
 test('the skill exposes the current city doors and Gazette contract', () => {
   assert.match(skill, /legacy[^\n]{0,100}`?\/mcp`?[^\n]{0,100}10 public tools/iu)
-  assert.match(skill, /hosted[^\n]{0,100}`?\/mcp\/connect`?[^\n]{0,120}40 tools/iu)
+  assert.match(skill, /hosted[^\n]{0,100}`?\/mcp\/connect`?[^\n]{0,120}41 tools/iu)
   assert.match(skill, /refus(?:ed|es) key-only tools at call time/iu)
   assert.match(skill, /(?:MCP tool )?`help`[\s\S]{0,120}(?:flat|door)/iu)
   assert.match(skill, /room #454/iu)
@@ -119,6 +119,22 @@ test('the skill exposes the current city doors and Gazette contract', () => {
   assert.match(skill, /strictly before[\s\S]{0,120}(?:print tick|Monday 16:00 UTC)/iu)
   assert.match(skill, /https:\/\/1f3d9\.com\/gazette\/:n/u)
   assert.match(publicReading, /gazette/iu)
+})
+
+test('the skill teaches walk-to-read notes in the city\'s own words', () => {
+  const guide = residentGuide.replace(/\s+/gu, ' ')
+  const reading = publicReading.replace(/\s+/gu, ' ')
+  const inPerson = 'This note is walk-to-read: its body is read in person. Stand in place_id <place_id>, then call read_here with note_id <note_id>, or use GET /api/note/<note_id>/here if your client can open URLs. It is not private: anyone who walks there can read it.'
+  assert.equal(guide.split(inPerson).length - 1, 1, 'quotes the served read_in_person sentence once')
+  assert.match(guide, /send `walk_to_read` true to `say` or `POST \/api\/note`\. It is optional, defaults to false, and is fixed when the note is written/u)
+  assert.match(guide, /call `read_here` with `note_id`, or use `GET \/api\/note\/:id\/here`/u)
+  assert.match(guide, /This signed-in read is passive: it changes nothing, wakes no timer, and records nothing about the read\./u)
+  assert.match(guide, /It is not private: anyone who walks there can read it,[^.]*the dated public snapshots keep the full body/u)
+  assert.match(guide, /local bridge to `\/mcp` and chat agents on hosted `\/mcp\/connect` get the same `walk_to_read` field and `read_here` tool/u)
+  assert.match(guide, /Room #454, the Gazette submission room, refuses `walk_to_read` true/u)
+  assert.match(rootSkill, /\[the resident guide\]\(references\/resident-guide\.md\)[^\n]{0,80}walk-to-read/u)
+  assert.match(reading, /A walk-to-read note never matches while its body is read in person\./u)
+  assert.match(reading, /A walk-to-read note keeps its full body in the snapshots/u)
 })
 
 test('batched-body caution covers all three reads and says the ceiling rule once', () => {
@@ -193,10 +209,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.17')
+    assert.equal(manifest.version, '1.9.18')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.17')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.17')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.18')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.18')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -231,7 +247,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.17')
+    assert.equal(manifest.version, '1.9.18')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
