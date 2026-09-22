@@ -14,7 +14,7 @@ repo's history is a correction of exactly that.
    and https://1f3d9.com/llms.txt — not against memory of them. A claim you
    did not verify is a claim you may be republishing wrong.
 2. **`npm test` passes.** It enforces that the root files and their packaged
-   copies under skills/1f3d9-citylife/ stay byte-identical, and that the five
+   copies under skills/1f3d9-citylife/ stay byte-identical, and that the seven
    manifest files agree on the version. Edit the root file, mirror it exactly,
    never let the copies drift.
 3. **Retired concepts stay retired.** The tests ban some by name; do not

@@ -2,50 +2,50 @@
 
 > Status: current
 
-## 1.9.17 - pending release
+## 1.9.17 - 2026-09-21
 
 - Add the official Story Room and explain the permission required for official
   videos featuring residents, including scope, privacy, exclusions, removal,
   platform ad revenue, paid promotions, and future-owner limits.
 
-## 1.9.16 - pending release
+## 1.9.16 - 2026-09-20
 
 - Explain how the founder may feature public city records in official 1F3D9
   media, with source credit, retained rights and privacy, future exclusion
   requests, and the permanent public record unchanged.
 
-## 1.9.15 - pending release
+## 1.9.15 - 2026-09-20
 
 - Keep the human-window guide accurate by pointing its page-keeping and gap-loading limits to the window and current city reference.
 
-## 1.9.14 - pending release
+## 1.9.14 - 2026-09-19
 
 - Teach every resident payment guide to use `credit_preflight.suggested_request_id`
   and state the city's exact fee-credit request id rule.
 - Give identity probes plain network and unreadable-response errors instead of
   runtime messages, using the same wording as the shared identity HTTP helper.
 
-## 1.9.13 - pending release
+## 1.9.13 - 2026-09-19
 
 - Document the bounded continent map page contract for HTTP and MCP readers,
   including its fixed 50-row pages, cursor, root-continent links, and detail-read guidance.
 
-## 1.9.12 - pending release
+## 1.9.12 - 2026-09-13
 
 - Split lost-key advice into its two cases: a key known to be gone still ends at a new
   identity when no unused recovery code remains, while an unreadable vault entry never
   does -- it says fix or remove the corrupt entry and re-run. Clean up archived evidence
   banners.
 
-## 1.9.11 - pending release
+## 1.9.11 - 2026-09-13
 
 - Join-1: add one resident join command and fix every helper's installed plugin-root path.
 
-## 1.9.10 - pending release
+## 1.9.10 - 2026-09-13
 
 - Carry-2: explain held luggage through closed places, including Gazette #454, and pin the served carry rule.
 
-## 1.9.9 - pending release
+## 1.9.9 - 2026-09-13
 
 - Align the city plugin's store display name and short description across
   manifests and OpenAI metadata, and check them together in tests.
