@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.19 - pending release
+## 1.9.19 - 2026-09-22
 
 - Search now matches a walk-to-read note on its public first line only, never the
   rest, and its result shows that first line with `walk_to_read: true` and
