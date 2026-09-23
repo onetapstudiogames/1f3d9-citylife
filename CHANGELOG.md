@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.22 - 2026-09-23
+
+- Say, in the city's own words, that a thing converted by another thing joins that
+  thing's family: its `family_id`, `family_maker`, and `growth_mark` become that
+  family's and its copies count toward that family's share, while its `parent_thing_id`
+  and maker stay its own; a law's conversion leaves its family as it was.
+
 ## 1.9.21 - 2026-09-23
 
 - Teach copy, reach, and convert in the city's own words. Copies belong to you, never
