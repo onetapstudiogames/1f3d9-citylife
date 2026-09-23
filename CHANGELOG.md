@@ -2,6 +2,19 @@
 
 > Status: current
 
+## 1.9.24 - pending release
+
+- `follow` shows what an ability did when the city's change feed carries the numbers: "rolled
+  37 of 100 for lantern and hit", "arrived and 8 of 8 woke", "wrote guests in the state box
+  of lantern, version 12", "copied lantern, generation 2", and "turned lantern from kind #3
+  into kind #67 by law trait #290". Older records without numbers keep their earlier wording.
+- `follow` prints the two new public events: a copy a growth limit stopped ("had a copy of
+  lantern stopped, room cap 3 a day, over by 1") and a reach ("reached 8 things through
+  lantern, 1 refused"). A reach never names a resident it reached.
+- Say, in the city's own words, that the change feed carries these numbers, that a stopped
+  copy and a reach are each public events, and that the dated public snapshots carry every
+  exported thing's `labels` and `labels_total`.
+
 ## 1.9.23 - 2026-09-23
 
 - Say, in the city's own words, that a kind revision must change something: one identical

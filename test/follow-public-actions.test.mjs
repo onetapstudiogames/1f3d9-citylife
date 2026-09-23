@@ -100,7 +100,7 @@ test('wrapped system events preserve the Gazette printer as the actor', () => {
   assert.doesNotMatch(shown.lines.join('\n'), /the Gazette: printer/u)
 })
 
-test('ability records name the thing, the branch, the wake and the copy without claiming stripped numbers', () => {
+test('older ability records without numbers keep their earlier wording and claim no numbers', () => {
   let shown = step(null, 0, observation())
   shown = step(shown, 1, observation([
     event(1, 'chance_rolled', { place_id: 9, thing_id: 2, action_id: 40, status: 'then' }),
@@ -124,6 +124,59 @@ test('ability records name the thing, the branch, the wake and the copy without 
   ])
   assert.deepEqual(shown.added.map(e => e.cue), ['effect', 'effect', 'effect', 'effect', 'action', 'make', 'change', 'change'])
   assert.doesNotMatch(shown.state.history.map(e => e.text).join(' '), /[0-9]+ of 100|percent/u)
+})
+
+test('ability records carry their public numbers when the feed has them', () => {
+  let shown = step(null, 0, observation())
+  shown = step(shown, 1, observation([
+    event(1, 'chance_rolled', { place_id: 9, thing_id: 2, status: 'then', purpose: 'chance', roll: 37, sides: 100, percent: 40, outcome: 'counted' }),
+    event(2, 'chance_rolled', { place_id: 9, thing_id: 2, status: 'else', purpose: 'chance', roll: 81, sides: 100, outcome: 'action_failed' }),
+    event(3, 'chance_rolled', { place_id: 9, status: null, purpose: 'wake_pick', roll: null, sides: 12 }),
+    event(4, 'chance_rolled', { place_id: 9, thing_id: 2, status: null, purpose: 'copy_place', roll: 2, sides: 3 }),
+    event(5, 'room_settled', { place_id: 9, mode: 'arrive', status: 'woke', tried: 8, woke: 8, forfeited: 0 }),
+    event(6, 'room_settled', { place_id: 9, mode: 'talk', status: 'quiet', tried: 3, woke: 0, forfeited: 2 }),
+    event(7, 'thing_edited', { place_id: 9, thing_id: 2, mode: 'state', key: 'guests', op: 'append', version: 12 }),
+    event(8, 'thing_edited', { place_id: 9, thing_id: 2, mode: 'state', op: 'clear', version: 13 }),
+    event(9, 'thing_created', { place_id: 9, thing_id: 12, source_thing_id: 2, name: 'lantern', mode: 'copy', generation: 2, family_id: 2 }),
+    event(10, 'thing_edited', { place_id: 9, thing_id: 2, mode: 'converted', kind_id: 67, from_kind_id: 3, law_trait_id: 290 }),
+    event(11, 'copy_skipped', { place_id: 9, thing_id: 2, trait_id: 4, family_id: 2, cap: 'place_daily', limit: 3, over_by: 1 }),
+    event(12, 'copy_skipped', { place_id: 9, thing_id: 2, cap: 'no_arrivals', limit: 0, over_by: 1 }),
+    event(13, 'room_reached', { place_id: 9, thing_id: 2, trait_id: 4, over: 'things', reached: 8, more: 0, skipped: 1, stopped: null }),
+    event(14, 'room_reached', { place_id: 9, thing_id: null, trait_id: 290, over: 'residents', reached: 1, more: 3, skipped: 0, stopped: 'action_reach_limit' }),
+  ]))
+  assert.deepEqual(shown.state.history.map(e => e.text), [
+    'vesper rolled 37 of 100 for lantern and hit.',
+    'vesper rolled 81 of 100 for lantern and missed, but the action failed.',
+    'vesper rolled a public pick among 12 waiting tries.',
+    'vesper rolled 2 of 3 to pick where a copy lands.',
+    'vesper arrived and 8 of 8 woke.',
+    'vesper spoke and 0 of 3 woke, 2 dropped.',
+    'vesper wrote guests in the state box of lantern, version 12.',
+    'vesper emptied the state box of lantern, version 13.',
+    'vesper copied lantern, generation 2.',
+    'vesper turned lantern from kind #3 into kind #67 by law trait #290.',
+    'vesper had a copy of lantern stopped, room cap 3 a day, over by 1.',
+    'vesper had a copy of lantern stopped, no room next door takes arriving copies.',
+    'vesper reached 8 things through lantern, 1 refused.',
+    'vesper reached 1 resident by law trait #290, 3 more not reached, stopped by the 512-change limit.',
+  ])
+  assert.deepEqual(shown.added.map(e => e.cue), ['effect', 'effect', 'effect', 'effect', 'effect', 'action',
+    'change', 'change', 'make', 'change', 'attempt', 'attempt', 'effect', 'effect'])
+})
+
+test('the two new kinds without numbers use plain words, and elsewhere stay out', () => {
+  let shown = step(null, 0, observation())
+  shown = step(shown, 1, observation([
+    event(1, 'copy_skipped', { place_id: 9, thing_id: 2 }),
+    event(2, 'room_reached', { place_id: 9 }),
+    event(3, 'copy_skipped', { place_id: 10, thing_id: 2, cap: 'copies', limit: 1, over_by: 1 }),
+    event(4, 'room_reached', { place_id: 10, over: 'things', reached: 2 }),
+    event(5, 'copy_skipped', { place_id: 9 }),
+  ]))
+  assert.deepEqual(shown.state.history.map(e => e.text), [
+    'vesper had a copy of lantern stopped by a growth limit.',
+    'vesper reached across the room.',
+  ])
 })
 
 test('ability records elsewhere or in an unknown shape stay out of this room', () => {

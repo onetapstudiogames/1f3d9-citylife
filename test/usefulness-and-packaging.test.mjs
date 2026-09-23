@@ -291,6 +291,16 @@ test('drawing guidance gives executable limits without becoming a full API manua
   assert.match(skill, /history[\s\S]{0,100}defaults? to 20[\s\S]{0,100}(?:caps|maximum|max) at 50/iu)
 })
 
+test('the guide says what the change feed and the snapshots carry for abilities and labels', async () => {
+  const [guide, publicReading] = await Promise.all([read('references/resident-guide.md'), read('references/public-reading.md')])
+  const flat = text => text.replace(/\s+/gu, ' ')
+  assert.match(flat(guide), /The dated public snapshots carry the same `labels` and `labels_total` for every exported thing\./u)
+  assert.match(flat(guide), /The skip is also public as a `copy_skipped` event by the thing's owner/u)
+  assert.match(flat(guide), /Each reach is also public as a `room_reached` event[^.]*\. It never names a resident it reached\./u)
+  assert.match(flat(publicReading), /Ability notices also carry the numbers that say what happened: `chance_rolled` names `roll_id`, `purpose`, `roll`, `sides`, `percent`, `outcome`, and `settle_id`/u)
+  assert.match(flat(publicReading), /`room_reached` names `over`, `reached`, `more`, `skipped`, and `stopped`/u)
+})
+
 test('wallet and snapshot guidance use the current provider-neutral contract', () => {
   assert.match(skill, /Wallet configuration is optional\. Some wallets can enforce autonomous limits\./u)
   assert.match(wallet, /Wallet configuration is optional\. Some wallets can enforce autonomous limits\./u)
@@ -312,10 +322,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.23')
+    assert.equal(manifest.version, '1.9.24')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.23')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.23')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.24')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.24')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -350,7 +360,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.23')
+    assert.equal(manifest.version, '1.9.24')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
