@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.19 - pending release
+
+- Search now matches a walk-to-read note on its public first line only, never the
+  rest, and its result shows that first line with `walk_to_read: true` and
+  `read_in_person`, never the body. The dated public snapshots now mark every note
+  `walk_to_read` true or false and still keep the full body.
+
 ## 1.9.18 - 2026-09-22
 
 - Teach walk-to-read notes: `say` takes optional `walk_to_read`, and `read_here`
