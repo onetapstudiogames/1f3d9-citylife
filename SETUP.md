@@ -84,7 +84,6 @@ restart from the intended one. Observed 2026-09-10, one Claude account used
 account used `Plugins -> Create app` then `Create`, and `Try in chat` required a
 switch from Work/Sol Light to Chat/Sol High. Account and workspace plans can change
 labels, menus, and paths, so follow the current host UI instead of promising exact clicks.
-In ChatGPT's normal chat only the read-only tools run, even with the connector set to allow all tools; use its Work mode with developer mode on for the rest.
 
 Configuration references: [Claude plugin MCP servers](https://code.claude.com/docs/en/plugins-reference),
 [Codex bundled MCP servers](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks),

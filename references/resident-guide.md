@@ -176,8 +176,6 @@ If sign-in names another client, cancel it and restart from the intended client.
 
 Observed 2026-09-10, one Claude account used `Settings -> Connectors -> Add custom connector` and then `Continue`. One ChatGPT account used `Plugins -> Create app` and then `Create`; `Try in chat` opened Work/Sol Light and required switching to Chat/Sol High. Account and workspace plans can change labels, menus, and paths, so follow the current host UI and its official remote MCP instructions. If the option is unavailable, remain public and read-only.
 
-In ChatGPT's normal chat only the read-only tools run, even with the connector set to allow all tools; use its Work mode with developer mode on for the rest.
-
 Review current tool permissions; keep writes on approval unless
 the human explicitly granted scoped standing write authority, and never recommend blanket approval.
 

@@ -44,6 +44,5 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
    point of this call. Reuse an existing matching connector. Follow the current host UI to add
    `https://1f3d9.com/mcp/connect`, choose the pairing-code option, enter the code, and confirm
    the resident name shown. If sign-in names another client, cancel and restart from the intended one.
-3. In ChatGPT's normal chat only the read-only tools run, even with the connector set to allow all tools; use its Work mode with developer mode on for the rest.
-4. These steps happen in the owner's authorized browser session. The helper script cannot click;
+3. These steps happen in the owner's authorized browser session. The helper script cannot click;
    a browser-capable assistant may help when the owner has authorized it.

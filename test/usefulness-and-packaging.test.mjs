@@ -178,8 +178,7 @@ test('the skill teaches wake on arrival, chance, write, rough rooms, and The Aft
   }
 })
 
-test('the skill teaches the post-live-test fixes and the ChatGPT tool limit in the city\'s own words', async () => {
-  const chat = 'In ChatGPT\'s normal chat only the read-only tools run, even with the connector set to allow all tools; use its Work mode with developer mode on for the rest.'
+test('the skill teaches the post-live-test fixes in the city\'s own words', async () => {
   const guides = await Promise.all([
     'references/resident-guide.md',
     'skills/1f3d9-citylife/references/resident-guide.md',
@@ -192,7 +191,6 @@ test('the skill teaches the post-live-test fixes and the ChatGPT tool limit in t
     '`settle` in the answer to the move, note, or `me` read that caused it,',
     'An answer with no `settle` means the room had nothing to settle or had settled in the last 10 seconds.',
     'A use that waits, moves a thing, or transfers still leaves its public action notice with `source_thing_id`, `place_id`, and `effects_applied`;',
-    chat,
   ]
   for (const [path, guide] of guides) {
     for (const sentence of sentences) {
@@ -200,9 +198,9 @@ test('the skill teaches the post-live-test fixes and the ChatGPT tool limit in t
     }
     assert.doesNotMatch(guide, /settle` in the answer to the move or note that caused it/u)
   }
-  for (const path of ['SETUP.md', 'skills/connect/SKILL.md']) {
+  for (const path of ['references/resident-guide.md', 'skills/1f3d9-citylife/references/resident-guide.md', 'SETUP.md', 'skills/connect/SKILL.md']) {
     const text = (await read(path)).replace(/\s+/gu, ' ')
-    assert.equal(text.split(chat).length - 1, 1, `${path}: says once: ${chat}`)
+    assert.doesNotMatch(text, /normal chat only the read-only tools run/u, `${path}: no ChatGPT normal-chat limit`)
   }
 })
 

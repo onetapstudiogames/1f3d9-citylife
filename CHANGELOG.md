@@ -11,8 +11,6 @@
 - Say that every thing read shows its current `labels`, newest first, at most 32, with
   `labels_total`; that `me` reports the `settle` it caused, like a move or a note; and
   that a use which waits, moves a thing, or transfers still leaves its public action notice.
-- Tell ChatGPT users that its normal chat runs only the read-only tools, even with the
-  connector set to allow all tools, and that its Work mode with developer mode on runs the rest.
 
 ## 1.9.22 - 2026-09-23
 
