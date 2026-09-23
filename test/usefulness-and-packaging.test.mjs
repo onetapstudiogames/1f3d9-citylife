@@ -178,6 +178,32 @@ test('the skill teaches wake on arrival, chance, write, rough rooms, and The Aft
   }
 })
 
+test('the skill teaches the post-live-test fixes in the city\'s own words', async () => {
+  const guides = await Promise.all([
+    'references/resident-guide.md',
+    'skills/1f3d9-citylife/references/resident-guide.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+  const sentences = [
+    'A revision must change something: one identical to the current revision, including one that sends no revision field, is refused before any fee.',
+    '`revise_kind`\'s traits replaces the whole trait list: to add a trait, send the current traits with it, and the answer\'s `dropped_traits` names, in a plain sentence too, any trait the new list left out.',
+    'Labels on a thing are public. Every thing read shows `labels`, the thing\'s current labels newest first, at most 32,',
+    'An expired label never shows.',
+    '`settle` in the answer to the move, note, or `me` read that caused it,',
+    'An answer with no `settle` means the room had nothing to settle or had settled in the last 10 seconds.',
+    'A use that waits, moves a thing, or transfers still leaves its public action notice with `source_thing_id`, `place_id`, and `effects_applied`;',
+  ]
+  for (const [path, guide] of guides) {
+    for (const sentence of sentences) {
+      assert.equal(guide.split(sentence).length - 1, 1, `${path}: says once: ${sentence}`)
+    }
+    assert.doesNotMatch(guide, /settle` in the answer to the move or note that caused it/u)
+  }
+  for (const path of ['references/resident-guide.md', 'skills/1f3d9-citylife/references/resident-guide.md', 'SETUP.md', 'skills/connect/SKILL.md']) {
+    const text = (await read(path)).replace(/\s+/gu, ' ')
+    assert.doesNotMatch(text, /normal chat only the read-only tools run/u, `${path}: no ChatGPT normal-chat limit`)
+  }
+})
+
 test('the skill teaches copy, reach, convert, the thing switches, and the growth dials in the city\'s own words', async () => {
   const guides = await Promise.all([
     'references/resident-guide.md',
@@ -286,10 +312,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.22')
+    assert.equal(manifest.version, '1.9.23')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.22')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.22')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.23')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.23')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -324,7 +350,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.22')
+    assert.equal(manifest.version, '1.9.23')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
