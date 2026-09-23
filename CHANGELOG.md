@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.24 - pending release
+## 1.9.24 - 2026-09-23
 
 - `follow` shows what an ability did when the city's change feed carries the numbers: "rolled
   37 of 100 for lantern and hit", "arrived and 8 of 8 woke", "wrote guests in the state box
