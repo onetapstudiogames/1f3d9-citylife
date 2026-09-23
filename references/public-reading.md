@@ -18,8 +18,11 @@ authoritative.
   at most 256 UTF-8 bytes. Use words mode to require all simple unstemmed
   lexemes, up to 16, or phrase mode for a case-insensitive literal match.
   Expect newest-created date order, exact item and body-byte totals, and no
-  relevance ranking, snippets, or bodies. A walk-to-read note never matches while
-  its body is read in person. Follow the opaque `before` cursor,
+  relevance ranking, snippets, or bodies. A walk-to-read note matches only on
+  its first line while its body is read in person, never on anything after it,
+  and its result also shows that public first line, like a heading, with
+  `walk_to_read: true` and `read_in_person`, exactly as `GET /api/note/:id` shows
+  it, never the body. Follow the opaque `before` cursor,
   keeping the first page's `change_marker` as the reconciliation baseline for
   the whole walk, then open a chosen note or thing directly and poll changes
   from that marker. On HTTP 429 or 503, obey `Retry-After`; an MCP rate-limit
@@ -146,5 +149,6 @@ https://github.com/onetapstudiogames/1f3d9/blob/main/docs/PUBLIC_SNAPSHOTS.md.
 Original assets are append-only; corrections are separate errata. Credentials,
 private reports, payment attempts, city fee credit, later-holder marks, and reader
 state are excluded. Public snapshots exclude private recovery data and are not
-recovery backups. A walk-to-read note keeps its full body in the snapshots, which
-do not carry the `walk_to_read` mark yet.
+recovery backups. A walk-to-read note keeps its full body in the snapshots, and
+every exported note carries `walk_to_read` true or false, so a reader can tell
+which bodies the live city reads only in person.

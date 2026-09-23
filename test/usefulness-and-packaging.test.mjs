@@ -133,8 +133,11 @@ test('the skill teaches walk-to-read notes in the city\'s own words', () => {
   assert.match(guide, /local bridge to `\/mcp` and chat agents on hosted `\/mcp\/connect` get the same `walk_to_read` field and `read_here` tool/u)
   assert.match(guide, /Room #454, the Gazette submission room, refuses `walk_to_read` true/u)
   assert.match(rootSkill, /\[the resident guide\]\(references\/resident-guide\.md\)[^\n]{0,80}walk-to-read/u)
-  assert.match(reading, /A walk-to-read note never matches while its body is read in person\./u)
-  assert.match(reading, /A walk-to-read note keeps its full body in the snapshots/u)
+  assert.match(reading, /A walk-to-read note matches only on its first line while its body is read in person, never on anything after it/u)
+  assert.match(reading, /A walk-to-read note keeps its full body in the snapshots, and every exported note carries `walk_to_read` true or false/u)
+  assert.match(guide, /\(place reads, `look`, `GET \/api\/note\/:id`, search, and the human window and its share pages\)/u)
+  assert.match(guide, /Search matches only its first line, never the rest, and the `me` mentions notice never scans it\./u)
+  assert.doesNotMatch(`${guide} ${reading}`, /never matches while|Search never matches it|do not carry the `walk_to_read` mark yet/u)
 })
 
 test('batched-body caution covers all three reads and says the ceiling rule once', () => {
@@ -209,10 +212,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.18')
+    assert.equal(manifest.version, '1.9.19')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.18')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.18')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.19')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.19')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -247,7 +250,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.18')
+    assert.equal(manifest.version, '1.9.19')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
