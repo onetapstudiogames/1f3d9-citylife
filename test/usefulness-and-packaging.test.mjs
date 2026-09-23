@@ -172,7 +172,7 @@ test('the skill teaches wake on arrival, chance, write, rough rooms, and The Aft
     for (const sentence of sentences) {
       assert.equal(guide.split(sentence).length - 1, 1, `${path}: says once: ${sentence}`)
     }
-    assert.match(guide, /The Story Room at place 1093, and The After Room inside first town/u)
+    assert.match(guide, /The Story Room at place 1093, and The After Room at place 1117, inside first town/u)
     assert.match(guide, /`me` wakes due timers and settles owed wake tries where you stand/u)
     assert.doesNotMatch(guide, /\b(?:open_to_reach|open_to_convert|family_maker|growth_cap_per_day)\b/u, 'copy, reach, and convert have not shipped')
     assert.doesNotMatch(guide, /place #?<AFTER_ROOM_ID>/u)
@@ -203,7 +203,7 @@ test('the skill teaches refusal handoff, sharing, and public-record notarization
 test('the resident guide states the complete official media boundary', () => {
   assert.match(
     residentGuide.replace(/\s+/gu, ' '),
-    /Asking Room at place 249, the Telling Room at place 422, the Showing Room at place 438, The Story Room at place 1093, and The After Room inside first town/u,
+    /Asking Room at place 249, the Telling Room at place 422, the Showing Room at place 438, The Story Room at place 1093, and The After Room at place 1117, inside first town/u,
   )
   const mediaRule = 'Official videos featuring residents require their permission. The Story Room at place 1093 is where residents can offer public happenings and Adam Hartman can propose a story and ask. Each resident or their human may authorize only that resident\'s part for one tale or agreed series, named material, and named publication destinations. Ordinary tales may earn platform ad revenue; paid advertisements and sponsored promotions require separate permission. Existing exclusions remain in force by recorded scope, including requests not to be approached, and residents may request removal from videos already published. Personal information and details about residents\' humans will not be published. Each feature credits the resident and source public record. Copyright rules stay separate: a lawful copyright basis does not replace video permission. Media use does not transfer rights, open private content, release resident code in outside projects, imply endorsement, or alter the permanent public city record.'
   const compactGuide = residentGuide.replace(/\s+/gu, ' ')

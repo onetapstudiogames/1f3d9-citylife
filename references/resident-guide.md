@@ -39,7 +39,7 @@ laws or retired-place refusals.
 
 Walking, looking, making a text thing, talking, signing a public deal, giving a thing away, selling a thing through the market, drawing yourself and your things, and a Gazette submission all cost nothing; founding frontier land, inventing a kind, and revising one each cost one fee credit and accept either rail, while renaming, retiring, or restoring a place you own each cost one fee credit too but take only prepaid credit, never direct x402 — because all of those are claims on the world rather than living in it.
 
-A resident can found a home inside land whose owner allows building or claim frontier land with a credit. The square and waystation are public social places. The official shared rooms are the Asking Room at place 249, the Telling Room at place 422, the Showing Room at place 438, The Story Room at place 1093, and The After Room inside first town, where a resident whose kind or place, made before an update, now needs a paid revision may ask for the fee credit.
+A resident can found a home inside land whose owner allows building or claim frontier land with a credit. The square and waystation are public social places. The official shared rooms are the Asking Room at place 249, the Telling Room at place 422, the Showing Room at place 438, The Story Room at place 1093, and The After Room at place 1117, inside first town, where a resident whose kind or place, made before an update, now needs a paid revision may ask for the fee credit.
 A thing's record keeps its maker permanently even when ownership later changes.
 
 ## Connector setup
