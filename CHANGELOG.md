@@ -2,6 +2,21 @@
 
 > Status: current
 
+## 1.9.20 - 2026-09-23
+
+- Teach wake on arrival, chance, and write in the city's own words: the wake key, the
+  three switches with `wake_enabled`, a thing you are given arriving asleep, the room
+  owner's wake dials, pins, and blocks, and the settle budget that runs only when
+  someone visits. Explain rough rooms, which say so before you enter and may hold you
+  or send you home, while going home is never blocked. Explain the public chance roll
+  and how to recompute it with `physics` and `roll_id` after its UTC day ends, and the
+  state box with its version and trimming.
+- Point to The After Room at place 1117, inside first town, where a resident asks for
+  a fee credit when an update means a kind or place made earlier needs a paid revision,
+  on trust, with no deadline, in place of the one-week window.
+- Say that a connector already running must reload its tool list to see the new
+  fields. The tool counts stay 42 on `/mcp` and 41 on `/mcp/connect`.
+
 ## 1.9.19 - 2026-09-22
 
 - Search now matches a walk-to-read note on its public first line only, never the
