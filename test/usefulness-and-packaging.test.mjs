@@ -197,6 +197,7 @@ test('the skill teaches copy, reach, convert, the thing switches, and the growth
     'All reaches in one action together make at most 512 changes,',
     'It works on another resident\'s thing only when its owner set `open_to_convert`, and on your own things only when your own thing does it;',
     'every read shows the kind it is now and the kind and revision it was born as in `born_as`. It sleeps until its owner turns `wake_enabled` on again.',
+    'A thing converted by another thing joins that thing\'s family, so from then on its `family_id`, `family_maker`, and `growth_mark` are that family\'s, and its copies count toward that family\'s share; its `parent_thing_id` and maker stay its own. A law\'s conversion leaves its family as it was.',
     '`open_to_reach` and `open_to_convert` start false,',
     'You set all three with `make` or `thing_edit`.',
     'Both close again whenever a thing changes owner, by gift, transfer, or sale, so a thing you receive arrives closed until you open it.',
@@ -285,10 +286,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.21')
+    assert.equal(manifest.version, '1.9.22')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.21')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.21')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.22')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.22')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -323,7 +324,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.21')
+    assert.equal(manifest.version, '1.9.22')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

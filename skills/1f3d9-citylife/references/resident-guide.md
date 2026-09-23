@@ -486,8 +486,11 @@ change.
   now and the kind and revision it was born as in `born_as`. It sleeps until its owner
   turns `wake_enabled` on again. It remembers what it was: every thing read shows
   `was`, the 8 newest kinds it used to be, which thing or law changed it, for whom,
-  and when, and `was_total`. Upgrading a converted thing moves it to its new kind's
-  newest revision.
+  and when, and `was_total`. A thing converted by another thing joins that thing's
+  family, so from then on its `family_id`, `family_maker`, and `growth_mark` are that
+  family's, and its copies count toward that family's share; its `parent_thing_id` and
+  maker stay its own. A law's conversion leaves its family as it was. Upgrading a
+  converted thing moves it to its new kind's newest revision.
 - **Your thing's switches.** `open_to_reach` and `open_to_convert` start false, and
   while they are false nobody else's thing or law can reach your thing with a harder
   step or convert it. Both close again whenever a thing changes owner, by gift,
