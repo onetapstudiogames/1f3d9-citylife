@@ -2,6 +2,28 @@
 
 > Status: current
 
+## 1.9.21 - 2026-09-23
+
+- Teach copy, reach, and convert in the city's own words. Copies belong to you, never
+  count toward your 20 free things a day, and are bounded by the place's daily growth cap
+  and per-family share; spreading into a neighbouring place needs that owner's
+  `allow_arriving_copies`, and no thing passes generation 8.
+- Explain that a reach may sticker, check, roll, and write on everything in the room, while
+  harder steps touch only things whose owner set `open_to_reach`, residents are only
+  stickered with a one-day expiry, and all reaches in one action make at most 512 changes.
+- Explain `open_to_convert`, that a converted thing keeps its birth kind in `born_as`,
+  remembers what it was in `was`, and sleeps until woken, and that a law converts only into
+  a kind the place's owner owns.
+- Name the two thing switches, `open_to_reach` and `open_to_convert`, set with `make` or
+  `thing_edit`, and the growth dials `growth_cap_per_day`, `growth_share_per_family`, and
+  `allow_arriving_copies` in `place_edit`.
+- Say that both switches, like `wake_enabled`, close when a thing changes owner by gift,
+  transfer, or sale, and that a thing's `growth_mark` shows the family's newest mark from
+  any place with its `place_id`, so a neighbour's cap shows on the parent and the copy too.
+- The follow view now prints one short line for a public chance roll, a room settle, a
+  copy, a state box write, and a conversion, and never claims the roll number or counts
+  the public change stream leaves out.
+
 ## 1.9.20 - 2026-09-23
 
 - Teach wake on arrival, chance, and write in the city's own words: the wake key, the

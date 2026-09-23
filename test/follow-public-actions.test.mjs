@@ -99,3 +99,44 @@ test('wrapped system events preserve the Gazette printer as the actor', () => {
   assert.ok(shown.lines.every(line => line.startsWith('Gazette p:')))
   assert.doesNotMatch(shown.lines.join('\n'), /the Gazette: printer/u)
 })
+
+test('ability records name the thing, the branch, the wake and the copy without claiming stripped numbers', () => {
+  let shown = step(null, 0, observation())
+  shown = step(shown, 1, observation([
+    event(1, 'chance_rolled', { place_id: 9, thing_id: 2, action_id: 40, status: 'then' }),
+    event(2, 'chance_rolled', { place_id: 9, thing_id: 2, status: 'else' }),
+    event(3, 'chance_rolled', { place_id: 9, status: null }),
+    event(4, 'room_settled', { place_id: 9, mode: 'arrive', status: 'woke' }),
+    event(5, 'room_settled', { place_id: 9, mode: 'talk', status: 'quiet' }),
+    event(6, 'thing_created', { place_id: 9, thing_id: 12, source_thing_id: 2, name: 'lantern', kind_id: 3, mode: 'copy' }),
+    event(7, 'thing_edited', { place_id: 9, thing_id: 2, mode: 'state' }),
+    event(8, 'thing_edited', { place_id: 9, thing_id: 2, source_thing_id: 5, kind_id: 6, mode: 'converted' }),
+  ]))
+  assert.deepEqual(shown.state.history.map(e => e.text), [
+    'vesper rolled a public chance for lantern and it hit.',
+    'vesper rolled a public chance for lantern and it missed.',
+    'vesper rolled a public pick.',
+    'vesper arrived and things here woke.',
+    'vesper spoke and nothing here woke.',
+    'vesper copied lantern.',
+    'vesper wrote in the state box of lantern.',
+    'vesper turned lantern into kind #6.',
+  ])
+  assert.deepEqual(shown.added.map(e => e.cue), ['effect', 'effect', 'effect', 'effect', 'action', 'make', 'change', 'change'])
+  assert.doesNotMatch(shown.state.history.map(e => e.text).join(' '), /[0-9]+ of 100|percent/u)
+})
+
+test('ability records elsewhere or in an unknown shape stay out of this room', () => {
+  let shown = step(null, 0, observation())
+  shown = step(shown, 1, observation([], { contextEvents: [
+    event(1, 'chance_rolled', { place_id: 10, thing_id: 2, status: 'then' }),
+    event(2, 'chance_rolled', { thing_id: 99, status: 'then' }),
+    event(3, 'chance_rolled', { place_id: 9, thing_id: 2, status: 'sideways' }),
+    event(4, 'room_settled', { place_id: 10, mode: 'arrive', status: 'woke' }),
+    event(5, 'room_settled', { place_id: 9, mode: 'fly', status: 'woke' }),
+    event(6, 'room_settled', { place_id: 9, mode: 'arrive', status: 'failed' }),
+    event(7, 'thing_created', { place_id: 10, thing_id: 12, source_thing_id: 2, mode: 'copy' }),
+    event(8, 'thing_edited', { place_id: 9, mode: 'state' }),
+  ] }))
+  assert.deepEqual(shown.state.history, [])
+})
