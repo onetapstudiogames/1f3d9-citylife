@@ -109,39 +109,110 @@ const actionDescription = (row, known, roomId, rows) => {
   return { description: `${basic[d.action]}${thing ? ` ${thing}` : ''}${suffix}`, cue: d.status === 'noop' ? 'action' : d.action === 'make' ? 'make' : 'action', thingId }
 }
 
-// The public change stream keeps only status, mode, and ids for these records: never the
-// roll number, the percent, or how many things tried, so the text never claims them.
+// The change feed carries an ability record's numbers since the city added them (roll,
+// sides, tried, woke, version, generation, caps, and reach counts). Older records lack
+// them, so each line keeps its earlier wording when a number is absent, never a guess.
 const settleTrigger = Object.freeze({ arrive: 'arrived', talk: 'spoke', act: 'acted', me: 'checked in' })
+const count = value => Number.isSafeInteger(value) && value >= 0 ? value : null
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+const copyCaps = Object.freeze({
+  generations: limit => `generation cap ${limit}`, copies: limit => `copy cap ${limit}`,
+  place_daily: limit => `room cap ${limit} a day`, family_share: limit => `family share ${limit} a day`,
+})
+
+const chanceLine = (d, subject) => {
+  const roll = count(d.roll)
+  const sides = count(d.sides)
+  const failed = d.outcome === 'action_failed' ? ', but the action failed'
+    : d.outcome === 'member_refused' ? ', but that reach member refused' : ''
+  if (d.status === 'then' || d.status === 'else') {
+    const hit = d.status === 'then'
+    const line = roll !== null && sides
+      ? `rolled ${roll} of ${sides}${subject} and ${hit ? 'hit' : 'missed'}`
+      : `rolled a public chance${subject} and it ${hit ? 'hit' : 'missed'}`
+    return `${line}${failed}`
+  }
+  if (d.status !== null && d.status !== undefined) return null
+  if (d.purpose === 'wake_pick' && sides) return `rolled a public pick among ${plural(sides, 'waiting try', 'waiting tries')}`
+  if (d.purpose === 'copy_place' && roll !== null && sides) return `rolled ${roll} of ${sides} to pick where a copy lands${failed}`
+  return `rolled a public pick${subject}`
+}
+
+const settleLine = d => {
+  const trigger = settleTrigger[d.mode]
+  if (!trigger || !['woke', 'quiet'].includes(d.status)) return null
+  const tried = count(d.tried)
+  const woke = count(d.woke)
+  const dropped = count(d.forfeited) ? `, ${count(d.forfeited)} dropped` : ''
+  const numbered = tried !== null && woke !== null && woke <= tried && (woke > 0) === (d.status === 'woke')
+  if (numbered && tried > 0) return `${trigger} and ${woke} of ${tried} woke${dropped}`
+  return `${trigger} and ${d.status === 'woke' ? 'things here woke' : 'nothing here woke'}${numbered ? dropped : ''}`
+}
+
+const stateLine = (d, thing) => {
+  const version = count(d.version) ? `, version ${count(d.version)}` : ''
+  if (d.op === 'clear') return `emptied the state box of ${thing}${version}`
+  const key = safe(d.key)
+  return `wrote ${key ? `${key} ` : ''}in the state box of ${thing}${version}`
+}
+
+const convertLine = (d, thing) => {
+  const from = id(d.from_kind_id) ? ` from kind #${id(d.from_kind_id)}` : ''
+  const law = id(d.law_trait_id) ? ` by law trait #${id(d.law_trait_id)}` : ''
+  return `turned ${thing}${from} into ${id(d.kind_id) ? `kind #${id(d.kind_id)}` : 'another kind'}${law}`
+}
+
+const copySkippedLine = (d, thing) => {
+  const limit = count(d.limit)
+  const overBy = count(d.over_by)
+  if (d.cap === 'no_arrivals') return `had a copy of ${thing} stopped, no room next door takes arriving copies`
+  if (!Object.hasOwn(copyCaps, d.cap) || limit === null) return `had a copy of ${thing} stopped by a growth limit`
+  return `had a copy of ${thing} stopped, ${copyCaps[d.cap](limit)}${overBy ? `, over by ${overBy}` : ''}`
+}
+
+const reachLine = (d, thing) => {
+  const through = thing ? ` through ${thing}` : id(d.trait_id) ? ` by law trait #${id(d.trait_id)}` : ''
+  const reached = count(d.reached)
+  if (reached === null || !['things', 'residents'].includes(d.over)) return `reached across the room${through}`
+  const refused = count(d.skipped) ? `, ${count(d.skipped)} refused` : ''
+  const more = count(d.more) ? `, ${count(d.more)} more not reached` : ''
+  const stopped = d.stopped === 'action_reach_limit' ? ', stopped by the 512-change limit' : ''
+  return `reached ${plural(reached, d.over.slice(0, -1), d.over)}${through}${refused}${more}${stopped}`
+}
 
 const abilityDescription = (row, known) => {
   const d = row.detail ?? {}
   const thingName = value => lookup(known.things, id(value))?.name ?? (id(value) ? `thing #${id(value)}` : '')
   if (row.kind === 'chance_rolled') {
     const thingId = id(d.thing_id)
-    const subject = thingId ? ` for ${thingName(thingId)}` : ''
-    if (d.status === 'then') return { description: `rolled a public chance${subject} and it hit`, cue: 'effect', thingId }
-    if (d.status === 'else') return { description: `rolled a public chance${subject} and it missed`, cue: 'effect', thingId }
-    if (d.status === null || d.status === undefined) return { description: `rolled a public pick${subject}`, cue: 'effect', thingId }
-    return null
+    const description = chanceLine(d, thingId ? ` for ${thingName(thingId)}` : '')
+    return description ? { description, cue: 'effect', thingId } : null
   }
   if (row.kind === 'room_settled') {
-    const trigger = settleTrigger[d.mode]
-    if (!trigger || !['woke', 'quiet'].includes(d.status)) return null
-    return { description: d.status === 'woke' ? `${trigger} and things here woke` : `${trigger} and nothing here woke`,
-      cue: d.status === 'woke' ? 'effect' : 'action', thingId: null }
+    const description = settleLine(d)
+    if (!description) return null
+    return { description, cue: d.status === 'woke' ? 'effect' : 'action', thingId: null }
+  }
+  if (row.kind === 'room_reached') {
+    const thingId = id(d.thing_id)
+    return { description: reachLine(d, thingId ? thingName(thingId) : ''), cue: 'effect', thingId }
+  }
+  if (row.kind === 'copy_skipped') {
+    const thingId = id(d.thing_id)
+    if (!thingId) return null
+    return { description: copySkippedLine(d, thingName(thingId)), cue: 'attempt', thingId }
   }
   if (row.kind === 'thing_created' && d.mode === 'copy') {
     const thingId = id(d.thing_id)
     if (!thingId) return null
     const source = (id(d.source_thing_id) ? lookup(known.things, id(d.source_thing_id))?.name : null) ?? (safe(d.name) || `thing #${thingId}`)
-    return { description: `copied ${source}`, cue: 'make', thingId }
+    return { description: `copied ${source}${count(d.generation) ? `, generation ${count(d.generation)}` : ''}`, cue: 'make', thingId }
   }
   if (row.kind === 'thing_edited' && ['state', 'converted'].includes(d.mode)) {
     const thingId = id(d.thing_id)
     if (!thingId) return null
     const thing = thingName(thingId)
-    if (d.mode === 'state') return { description: `wrote in the state box of ${thing}`, cue: 'change', thingId }
-    return { description: `turned ${thing} into ${id(d.kind_id) ? `kind #${id(d.kind_id)}` : 'another kind'}`, cue: 'change', thingId }
+    return { description: d.mode === 'state' ? stateLine(d, thing) : convertLine(d, thing), cue: 'change', thingId }
   }
   return undefined
 }

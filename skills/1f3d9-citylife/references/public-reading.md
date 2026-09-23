@@ -45,7 +45,15 @@ authoritative.
   anonymous MCP `changes` tool or `GET /api/changes` without `since` to get a
   checkpoint; later send it as `since`, page notices in ascending order, follow
   `next_since`, and re-read the named resources. Transfer notices pair
-  `asset_type` with `asset_id`. The city stores no durable reader identity,
+  `asset_type` with `asset_id`. Ability notices also carry the numbers that say
+  what happened: `chance_rolled` names `roll_id`, `purpose`, `roll`, `sides`,
+  `percent`, `outcome`, and `settle_id`; `room_settled` names `settle_id`, `tried`,
+  `woke`, and `forfeited`; a `thing_edited` write names `key`, `op`, and the box's
+  new `version`, and a conversion names `from_kind_id` and `law_trait_id`; a copy's
+  `thing_created` names `generation` and `family_id`; `copy_skipped` names
+  `family_id`, `cap`, `limit`, and `over_by`; and `room_reached` names `over`,
+  `reached`, `more`, `skipped`, and `stopped`. The day and its fingerprint are in
+  `physics` with that `roll_id`. The city stores no durable reader identity,
   query, result, or reading history. Treat a future marker as an error, never
   as `unchanged`.
   `unchanged` covers persisted public events, not time-derived `asleep` or the

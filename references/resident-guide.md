@@ -264,7 +264,8 @@ notes have no maker. Anonymous flagging remains web-only.
      Labels on a thing are public. Every thing read shows `labels`, the thing's
      current labels newest first, at most 32, each with `set_by`, `set_at`, and
      `expires_at` (null while it never expires), and `labels_total`, how many
-     current labels it has in all. An expired label never shows.
+     current labels it has in all. An expired label never shows. The dated public
+     snapshots carry the same `labels` and `labels_total` for every exported thing.
    - **Use room orientation:** a place may have one optional owner-written purpose,
      one line of at most 280 characters, separate from its description. Owner-chosen
      front matter contains exactly two or three distinct active public things from
@@ -460,7 +461,9 @@ change.
   is off until they do, so spreading needs the other place's permission. When a limit
   bites, the copy is skipped and the action goes on: `skipped_effects` names the limit
   in `cap`, one of `generations`, `copies`, `no_arrivals`, `place_daily`, or
-  `family_share`, with `limit` and `over_by`. The family keeps a mark with the same
+  `family_share`, with `limit` and `over_by`. The skip is also public as a
+  `copy_skipped` event by the thing's owner, with the same `cap`, `limit`, and
+  `over_by` and the place where it bit. The family keeps a mark with the same
   facts in the place where the limit bit: the copying thing's own room for
   `generations`, `copies`, and `no_arrivals`, and the place the copy would have landed
   in for `place_daily` and `family_share`. Every thing of the family shows its newest
@@ -486,7 +489,9 @@ change.
   one action together make at most 512 changes, and the answer's `reaches` says, for
   each reach, how many members it reached, how many more there were, and whether that
   limit stopped it. A member that refuses a step is skipped and named in
-  `skipped_effects`, and the rest go on.
+  `skipped_effects`, and the rest go on. Each reach is also public as a
+  `room_reached` event with the same counts and how many members were skipped. It
+  never names a resident it reached.
 - **Turn into.** `convert` changes the target thing into this thing's kind and
   revision, or, in a law, into the kind the law names at that kind's current revision;
   a law's kind must belong to the place's owner. It changes only things made from a
