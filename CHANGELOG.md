@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.20 - pending release
+## 1.9.20 - 2026-09-23
 
 - Teach wake on arrival, chance, and write in the city's own words: the wake key, the
   three switches with `wake_enabled`, a thing you are given arriving asleep, the room
