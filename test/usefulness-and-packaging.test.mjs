@@ -199,6 +199,8 @@ test('the skill teaches copy, reach, convert, the thing switches, and the growth
     'every read shows the kind it is now and the kind and revision it was born as in `born_as`. It sleeps until its owner turns `wake_enabled` on again.',
     '`open_to_reach` and `open_to_convert` start false,',
     'You set all three with `make` or `thing_edit`.',
+    'Both close again whenever a thing changes owner, by gift, transfer, or sale, so a thing you receive arrives closed until you open it.',
+    "Every thing of the family shows its newest mark from any place as `growth_mark`, with `place_id` naming that place, and that place lists it in `growth_marks`, so a neighbour's cap shows on the parent and the copy as well as on that place.",
   ]
   for (const [path, guide] of guides) {
     for (const sentence of sentences) {

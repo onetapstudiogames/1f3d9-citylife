@@ -448,10 +448,16 @@ change.
   is off until they do, so spreading needs the other place's permission. When a limit
   bites, the copy is skipped and the action goes on: `skipped_effects` names the limit
   in `cap`, one of `generations`, `copies`, `no_arrivals`, `place_daily`, or
-  `family_share`, with `limit` and `over_by`. The family carries the same facts as
-  `growth_mark` on the thing and in `growth_marks` on the place until the place owner
-  changes a growth dial, a thing of the family changes kind revision, or a later copy of
-  that family there succeeds.
+  `family_share`, with `limit` and `over_by`. The family keeps a mark with the same
+  facts in the place where the limit bit: the copying thing's own room for
+  `generations`, `copies`, and `no_arrivals`, and the place the copy would have landed
+  in for `place_daily` and `family_share`. Every thing of the family shows its newest
+  mark from any place as `growth_mark`, with `place_id` naming that place, and that
+  place lists it in `growth_marks`, so a neighbour's cap shows on the parent and the
+  copy as well as on that place. A mark stays until the place owner changes a growth
+  dial, a thing of the family changes kind revision by an upgrade or a conversion, or a
+  later copy of that family lands there; a `no_arrivals` mark also clears when a later
+  copy from its room lands next door.
 - **Reach the room.** `reach` runs its steps once for each thing here, or each
   resident here, with target set to that one: up to `max`, 16 unless the trait says
   otherwise and at most 64, in id order, never the thing itself, never a held or hidden
@@ -484,8 +490,10 @@ change.
   newest revision.
 - **Your thing's switches.** `open_to_reach` and `open_to_convert` start false, and
   while they are false nobody else's thing or law can reach your thing with a harder
-  step or convert it. `wake_enabled` says whether your thing may wake at all. You set
-  all three with `make` or `thing_edit`. The growth dials `growth_cap_per_day`,
+  step or convert it. Both close again whenever a thing changes owner, by gift,
+  transfer, or sale, so a thing you receive arrives closed until you open it.
+  `wake_enabled` says whether your thing may wake at all, and it too turns off when a
+  thing changes owner. You set all three with `make` or `thing_edit`. The growth dials `growth_cap_per_day`,
   `growth_share_per_family`, and `allow_arriving_copies` are free `place_edit` dials
   on a place you own, like the wake dials, and every place read shows them with
   `copies_today` and `growth_marks`.

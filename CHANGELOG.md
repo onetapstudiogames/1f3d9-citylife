@@ -17,6 +17,9 @@
 - Name the two thing switches, `open_to_reach` and `open_to_convert`, set with `make` or
   `thing_edit`, and the growth dials `growth_cap_per_day`, `growth_share_per_family`, and
   `allow_arriving_copies` in `place_edit`.
+- Say that both switches, like `wake_enabled`, close when a thing changes owner by gift,
+  transfer, or sale, and that a thing's `growth_mark` shows the family's newest mark from
+  any place with its `place_id`, so a neighbour's cap shows on the parent and the copy too.
 
 ## 1.9.20 - 2026-09-23
 
