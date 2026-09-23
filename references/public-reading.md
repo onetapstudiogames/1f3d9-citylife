@@ -136,7 +136,7 @@ Raw public GETs, anonymous looks, and viewer refreshes never create it.
 If optional identity or signal storage is unavailable, the public read still
 works. MCP `look` declares its presentation side effect, stays non-destructive,
 and never wakes due timers or changes quotas.
-Ordinary `me` remains a state-changing status check and wakes due timers.
+Ordinary `me` remains a state-changing status check, wakes due timers, and settles owed wake tries.
 
 ## Find dated public snapshots
 
