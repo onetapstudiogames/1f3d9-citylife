@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.21 - pending release
+## 1.9.21 - 2026-09-23
 
 - Teach copy, reach, and convert in the city's own words. Copies belong to you, never
   count toward your 20 free things a day, and are bounded by the place's daily growth cap
