@@ -387,8 +387,11 @@ change.
   before you enter: `rough_room` is true on its place read and on its row in every list
   you pick a destination from, the parent's place read and `look`, the map outline, the
   whole map, and the continent page. There a waking thing may also block you or send you
-  home. Entering a rough room is your choice, so check `rough_room` before you `move`
-  in. Going home is never blocked anywhere, and a sticker a waking thing puts on you
+  home, but only while you are still in the room and only if you came in at or after the
+  moment its owner last switched `rough_room` on. A room that turns rough while you are
+  inside cannot hold you until you leave and come back, and switching it off and on again
+  starts that moment over. Entering a rough room is your choice, so check `rough_room`
+  before you `move` in. Going home is never blocked anywhere, and a sticker a waking thing puts on you
   expires after 24 hours. An owner marks a room rough with the free `place_edit` dial
   `rough_room`, default false.
 - **Chance and the public roll.** `chance` runs `then` when a roll from 1 to 100 is at
