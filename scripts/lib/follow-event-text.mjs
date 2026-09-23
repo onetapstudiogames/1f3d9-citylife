@@ -18,6 +18,7 @@ const kinds = Object.freeze({
   thing_moved: ['moved', 'action'], thing_upgraded: ['upgraded', 'change'], thing_withdrawn: ['withdrew', 'change'],
   laws_changed: ['changed the local laws', 'rules'], effect_scheduled: ['scheduled an effect', 'wait'],
   effect_resolved: ['resolved an effect', 'effect'], gazette_printed: ['printed The Gazette', 'make'],
+  chance_rolled: ['rolled a public chance', 'effect'], room_settled: ['settled the room', 'effect'],
   agreement: ['wrote an agreement', 'agreement'], agreement_accession: ['opened an agreement to later signers', 'agreement'],
   agreement_sign: ['signed an agreement', 'agreement'], transfer: ['transferred', 'trade'],
   transfer_offer: ['offered for sale', 'trade'], sale: ['bought', 'trade'], transfer_cancel: ['canceled a sale offer', 'trade'],
@@ -108,14 +109,56 @@ const actionDescription = (row, known, roomId, rows) => {
   return { description: `${basic[d.action]}${thing ? ` ${thing}` : ''}${suffix}`, cue: d.status === 'noop' ? 'action' : d.action === 'make' ? 'make' : 'action', thingId }
 }
 
+// The public change stream keeps only status, mode, and ids for these records: never the
+// roll number, the percent, or how many things tried, so the text never claims them.
+const settleTrigger = Object.freeze({ arrive: 'arrived', talk: 'spoke', act: 'acted', me: 'checked in' })
+
+const abilityDescription = (row, known) => {
+  const d = row.detail ?? {}
+  const thingName = value => lookup(known.things, id(value))?.name ?? (id(value) ? `thing #${id(value)}` : '')
+  if (row.kind === 'chance_rolled') {
+    const thingId = id(d.thing_id)
+    const subject = thingId ? ` for ${thingName(thingId)}` : ''
+    if (d.status === 'then') return { description: `rolled a public chance${subject} and it hit`, cue: 'effect', thingId }
+    if (d.status === 'else') return { description: `rolled a public chance${subject} and it missed`, cue: 'effect', thingId }
+    if (d.status === null || d.status === undefined) return { description: `rolled a public pick${subject}`, cue: 'effect', thingId }
+    return null
+  }
+  if (row.kind === 'room_settled') {
+    const trigger = settleTrigger[d.mode]
+    if (!trigger || !['woke', 'quiet'].includes(d.status)) return null
+    return { description: d.status === 'woke' ? `${trigger} and things here woke` : `${trigger} and nothing here woke`,
+      cue: d.status === 'woke' ? 'effect' : 'action', thingId: null }
+  }
+  if (row.kind === 'thing_created' && d.mode === 'copy') {
+    const thingId = id(d.thing_id)
+    if (!thingId) return null
+    const source = (id(d.source_thing_id) ? lookup(known.things, id(d.source_thing_id))?.name : null) ?? (safe(d.name) || `thing #${thingId}`)
+    return { description: `copied ${source}`, cue: 'make', thingId }
+  }
+  if (row.kind === 'thing_edited' && ['state', 'converted'].includes(d.mode)) {
+    const thingId = id(d.thing_id)
+    if (!thingId) return null
+    const thing = thingName(thingId)
+    if (d.mode === 'state') return { description: `wrote in the state box of ${thing}`, cue: 'change', thingId }
+    return { description: `turned ${thing} into ${id(d.kind_id) ? `kind #${id(d.kind_id)}` : 'another kind'}`, cue: 'change', thingId }
+  }
+  return undefined
+}
+
 /** One description and cue for a witnessed public event; unknown/private facts stay absent. */
 export const describeRoomEvent = (row, known, roomId, rows) => {
   const d = row?.detail ?? {}
   const actor = safe(row?.actor)
   if (!actor || roomFor(row, known, roomId) === null) return null
   let detail
+  const ability = row.kind === 'action' ? undefined : abilityDescription(row, known)
+  if (ability === null) return null
   if (row.kind === 'action') detail = actionDescription(row, known, roomId, rows)
-  else if (Object.hasOwn(kinds, row.kind)) {
+  else if (ability) {
+    if (d.error !== undefined && d.error !== null) return null
+    detail = ability
+  } else if (Object.hasOwn(kinds, row.kind)) {
     if (row.kind !== 'effect_resolved' && d.error !== undefined && d.error !== null) return null
     let [description, cue] = kinds[row.kind]
     const related = linkKeys(d).map(key => lookup(known.links, key)).find(value => value?.roomId === roomId)

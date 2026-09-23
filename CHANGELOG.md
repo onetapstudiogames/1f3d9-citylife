@@ -20,6 +20,9 @@
 - Say that both switches, like `wake_enabled`, close when a thing changes owner by gift,
   transfer, or sale, and that a thing's `growth_mark` shows the family's newest mark from
   any place with its `place_id`, so a neighbour's cap shows on the parent and the copy too.
+- The follow view now prints one short line for a public chance roll, a room settle, a
+  copy, a state box write, and a conversion, and never claims the roll number or counts
+  the public change stream leaves out.
 
 ## 1.9.20 - 2026-09-23
 
