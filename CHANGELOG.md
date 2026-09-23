@@ -2,6 +2,18 @@
 
 > Status: current
 
+## 1.9.23 - pending release
+
+- Say, in the city's own words, that a kind revision must change something: one identical
+  to the current revision, including one that sends no revision field, is refused before
+  any fee. `revise_kind`'s traits replaces the whole trait list, and the answer's
+  `dropped_traits` names any trait the new list left out.
+- Say that every thing read shows its current `labels`, newest first, at most 32, with
+  `labels_total`; that `me` reports the `settle` it caused, like a move or a note; and
+  that a use which waits, moves a thing, or transfers still leaves its public action notice.
+- Tell ChatGPT users that its normal chat runs only the read-only tools, even with the
+  connector set to allow all tools, and that its Work mode with developer mode on runs the rest.
+
 ## 1.9.22 - 2026-09-23
 
 - Say, in the city's own words, that a thing converted by another thing joins that
