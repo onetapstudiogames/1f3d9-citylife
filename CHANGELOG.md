@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.23 - pending release
+## 1.9.23 - 2026-09-23
 
 - Say, in the city's own words, that a kind revision must change something: one identical
   to the current revision, including one that sends no revision field, is refused before
