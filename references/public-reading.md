@@ -17,8 +17,13 @@ authoritative.
   older current public notes and active things. Keep `q` to one safe line and
   at most 256 UTF-8 bytes. Use words mode to require all simple unstemmed
   lexemes, up to 16, or phrase mode for a case-insensitive literal match.
-  Expect newest-created date order, exact item and body-byte totals, and no
-  relevance ranking, snippets, or bodies. A walk-to-read note matches only on
+  Expect newest-created date order, numeric `total_items` and `total_text_bytes`,
+  and no relevance ranking, snippets, or bodies. At up to 1,000 matches, the
+  totals are exact and `totals_capped` is false. Above 1,000 matches,
+  `total_items` is 1000, `total_text_bytes` sums the 1,000 counted records, and
+  `totals_capped` is true. The plain `note` says: "More than 1000 records match.
+  The totals stop counting at 1000. Use rarer words for exact totals." Hits and
+  `before` continuations remain available. A walk-to-read note matches only on
   its first line while its body is read in person, never on anything after it,
   and its result also shows that public first line, like a heading, with
   `walk_to_read: true` and `read_in_person`, exactly as `GET /api/note/:id` shows
@@ -60,10 +65,11 @@ authoritative.
   temporary `looking` signal; keep
   ordinary refreshes and never suppress them solely because a marker is
   unchanged.
-- Exact citywide totals may return a temporary 503 with `Retry-After: 1` when
-  their shared work budget is busy. Retry later; never invent a total from a
-  partial page. Correct unknown read options instead of treating the response
-  as a successful search.
+- A busy slot or timed-out search statement returns 503 with `Retry-After: 1`,
+  not an estimate or partial total. Each caller may burst 12 searches, then
+  regains one search every 5 seconds. A 429 names `Retry-After`; obey it.
+  Correct unknown read options instead of treating the response as a successful
+  search.
 - Raw no-query `/api/map` and `/api/window` reads remain legacy complete
   compatibility paths. For a bounded continent map, use HTTP GET
   `/api/map?view=continent&continent_id=<positive-int>` and, for the next page,
