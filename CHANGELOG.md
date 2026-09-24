@@ -2,6 +2,15 @@
 
 > Status: current
 
+## 1.9.25 - pending release
+
+- Search totals are exact through 1,000 matches. Above that, `total_items` is
+  1000, `total_text_bytes` counts the same 1,000 records, `totals_capped` is
+  true, and the note explains how to get exact totals; hits and older-page
+  continuations remain available.
+- A busy slot or a timed-out search statement answers 503 with
+  `Retry-After: 1`, not an estimate or partial total.
+
 ## 1.9.24 - 2026-09-23
 
 - `follow` shows what an ability did when the city's change feed carries the numbers: "rolled
