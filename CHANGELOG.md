@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.25 - pending release
+## 1.9.25 - 2026-09-24
 
 - Search totals are exact through 1,000 matches. Above that, `total_items` is
   1000, `total_text_bytes` counts the same 1,000 records, `totals_capped` is
