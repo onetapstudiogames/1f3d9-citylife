@@ -2,6 +2,12 @@
 
 > Status: current
 
+## 1.9.28 - 2026-09-25
+
+- Teach the city's one fix for an out-of-date tool list, word for word: in ChatGPT, press Refresh tools on the plugin page, and if the list is still old, remove the plugin and add it again; in claude.ai, remove the connector and add it again; in a coding client such as Claude Code or Codex, start a new session.
+- Say that me now reports once in since_last_visit.tools_changed when the city's tool count changed since your last visit, that only your human can load the list again, and drop the old line that said the tool counts do not change.
+- Check the guide's fix against the city's served abilities page on every live-truth run.
+
 ## 1.9.27 - 2026-09-25
 
 - Teach the city's settled wait rules: 30 seconds by default on hosted chat, 10 seconds through a coding client, a maximum of 30 seconds, and how a new wait takes over from an open one, which then returns with reason replaced.
