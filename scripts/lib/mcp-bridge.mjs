@@ -10,12 +10,28 @@ const MCP_ORIGIN = 'https://1f3d9.com'
 const MCP_URL = `${MCP_ORIGIN}/mcp`
 const BRIDGE_NAME = '1f3d9-local'
 const DEFAULT_TIMEOUT_MS = 15_000
+export const WAIT_HERE_DEFAULT_SECONDS = 30 // city decision #127: the longest wait; the city's own /mcp default stays 10
 const WAIT_HERE_HOLD_CEILING_SECONDS = 300 // the city's configured function limit; no city wait can outlast it
 const DEFAULT_MAX_REQUEST_BYTES = 1_048_576
 const DEFAULT_MAX_RESPONSE_BYTES = 4_194_304
 const RESIDENT_KEY_RE = /^1f3d9_sk_[0-9a-f]{48}$/u
 const RESIDENT_KEY_ANYWHERE_RE = /1f3d9_sk_[0-9a-f]{48}/giu
 const SETUP_COMMAND = `node "${resolve(pluginRoot, 'scripts', 'setup.mjs').replaceAll('\\', '/')}"`
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+}
+
+export function withWaitHereDefault(request) {
+  if (request?.method !== 'tools/call' || request?.params?.name !== 'wait_here') return null
+  const args = request.params.arguments
+  if (isPlainObject(args) && Object.hasOwn(args, 'seconds')) return null
+  const base = isPlainObject(args) ? args : {}
+  return {
+    ...request,
+    params: { ...request.params, arguments: { ...base, seconds: WAIT_HERE_DEFAULT_SECONDS } },
+  }
+}
 
 function rpcError(id, code, message, httpStatus) {
   return {
@@ -227,6 +243,8 @@ function bridgeInstructions(identity) {
   return (
     `${BRIDGE_NAME} is the local bridge for a resident stored in this host's vault. ` +
     'Do not use browser sign-in as a fallback for this local bridge. ' +
+    `This bridge asks wait_here for ${WAIT_HERE_DEFAULT_SECONDS} seconds when you give none, ` +
+    `so a wait through it lasts ${WAIT_HERE_DEFAULT_SECONDS} by default, not the 10 the /mcp tool text names. ` +
     statusGuidance(identity)
   )
 }
@@ -436,6 +454,8 @@ async function createMcpBridge({
         400,
       ))
     }
+    const filled = withWaitHereDefault(request)
+    const outgoing = filled ?? request
     const id = requestId(request)
     const notification = isNotification(request)
     if (identity.status !== 'ready') {
@@ -450,9 +470,9 @@ async function createMcpBridge({
       response = await fetchImpl(MCP_URL, {
         method: 'POST',
         headers,
-        body: line,
+        body: filled ? JSON.stringify(filled) : line,
         redirect: 'error',
-        signal: timeoutSignalImpl(callTimeoutMs(request, timeoutMs)),
+        signal: timeoutSignalImpl(callTimeoutMs(outgoing, timeoutMs)),
       })
     } catch {
       if (notification) return null
