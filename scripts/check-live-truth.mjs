@@ -166,9 +166,13 @@ export const validateLiveTalkTruth = ({ talkReferenceText, residentGuideText }) 
   requireClaim(typeof residentGuideText === 'string', 'resident guide same-room talk rules are missing')
   requireClaim(typeof talkReferenceText === 'string', 'served same-room talk reference is missing')
   const compactReference = compact(talkReferenceText)
-  const longestWaitMatch = /;\s*(\d+) is the longest\./u.exec(talkReferenceText)
+  const longestWaitMatch = /;\s*(\d+)(?:\s+seconds)?\s+is the longest\./u.exec(talkReferenceText)
   requireClaim(
-    Boolean(longestWaitMatch) && WAIT_HERE_DEFAULT_SECONDS <= Number(longestWaitMatch[1]),
+    Boolean(longestWaitMatch),
+    "the city's longest wait could not be read",
+  )
+  requireClaim(
+    WAIT_HERE_DEFAULT_SECONDS <= Number(longestWaitMatch[1]),
     "the bridge's wait_here default is above the city's longest wait",
   )
   for (const label of ['Line', 'Ping', 'Wait']) {

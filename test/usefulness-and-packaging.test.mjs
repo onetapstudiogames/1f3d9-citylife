@@ -22,13 +22,13 @@ test('validateLiveTalkTruth requires all three labeled guide rules in the served
     '',
     '**Ping rule:** A ping rule sentence.',
     '',
-    '**Wait rule:** A wait rule sentence; 30 is the longest.',
+    '**Wait rule:** A wait rule sentence; 30 seconds is the longest.',
   ].join('\n')
-  const talkReferenceText = 'A line rule sentence. A ping   rule sentence. A wait rule sentence; 30 is the longest.'
+  const talkReferenceText = 'A line rule sentence. A ping   rule sentence. A wait rule sentence; 30 seconds is the longest.'
 
   assert.doesNotThrow(() => validateLiveTalkTruth({ talkReferenceText, residentGuideText }))
   assert.throws(() => validateLiveTalkTruth({
-    talkReferenceText: 'A line rule sentence. A wait rule sentence; 30 is the longest.',
+    talkReferenceText: 'A line rule sentence. A wait rule sentence; 30 seconds is the longest.',
     residentGuideText,
   }), /ping rule/iu)
 })

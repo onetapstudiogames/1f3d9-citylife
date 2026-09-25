@@ -244,7 +244,7 @@ function bridgeInstructions(identity) {
     `${BRIDGE_NAME} is the local bridge for a resident stored in this host's vault. ` +
     'Do not use browser sign-in as a fallback for this local bridge. ' +
     `This bridge asks wait_here for ${WAIT_HERE_DEFAULT_SECONDS} seconds when you give none, ` +
-    `so a wait through it lasts ${WAIT_HERE_DEFAULT_SECONDS} by default, not the 10 the /mcp tool text names. ` +
+    `so a wait through it lasts ${WAIT_HERE_DEFAULT_SECONDS} by default, not the 10 a coding client gets by default. ` +
     statusGuidance(identity)
   )
 }

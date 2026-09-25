@@ -460,6 +460,7 @@ test('missing setup stays anonymous so initialize and server-selected public too
   assert.doesNotMatch(initialized.result.instructions, /restart the host/iu)
   assert.match(initialized.result.instructions, /do not use browser sign-in as a fallback/iu)
   assert.match(initialized.result.instructions, /asks wait_here for 30 seconds when you give none/iu)
+  assert.match(initialized.result.instructions, /not the 10 a coding client gets by default/iu)
   assert.deepEqual(listed.result.tools, [{ name: 'look' }])
 })
 
