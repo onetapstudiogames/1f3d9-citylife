@@ -35,6 +35,88 @@ test('callTimeoutMs gives wait_here its asked seconds plus the usual 15 and leav
   assert.equal(timeout({ jsonrpc: '2.0', id: 3, method: 'tools/list' }), 15_000)
 })
 
+test('wait_here gets a 30 second default only when seconds is absent and other calls stay byte-identical', async () => {
+  const forwardedBodies = []
+  const timeoutCalls = []
+  const bridge = await createMcpBridge({
+    ...identityDeps(),
+    timeoutSignalImpl(milliseconds) {
+      timeoutCalls.push(milliseconds)
+      return new AbortController().signal
+    },
+    fetchImpl: async (_url, init) => {
+      forwardedBodies.push(init.body)
+      const request = JSON.parse(init.body)
+      return jsonResponse({ jsonrpc: '2.0', id: request.id, result: {} })
+    },
+  })
+
+  const defaulted = {
+    jsonrpc: '2.0', id: 10, method: 'tools/call', trace: 'keep',
+    params: { name: 'wait_here', arguments: {}, _meta: { source: 'keep' } },
+  }
+  const malformedArguments = [
+    { jsonrpc: '2.0', id: 11, method: 'tools/call', params: { name: 'wait_here' } },
+    { jsonrpc: '2.0', id: 12, method: 'tools/call', params: { name: 'wait_here', arguments: null } },
+    { jsonrpc: '2.0', id: 13, method: 'tools/call', params: { name: 'wait_here', arguments: [] } },
+    { jsonrpc: '2.0', id: 14, method: 'tools/call', params: { name: 'wait_here', arguments: 'x' } },
+  ]
+  const unchangedWaitLines = [
+    [' { "jsonrpc" : "2.0", "id" : 15, "method" : "tools/call", "params" : { "name" : "wait_here", "arguments" : { "seconds" : 5 } } } ', 20_000],
+    ['{"jsonrpc":"2.0","id":16,"method":"tools/call","params":{"name":"wait_here","arguments":{"seconds":"20"}}}', 315_000],
+    ['{"jsonrpc":"2.0","id":17,"method":"tools/call","params":{"name":"wait_here","arguments":{"seconds":null}}}', 315_000],
+    ['{"jsonrpc":"2.0","id":18,"method":"tools/call","params":{"name":"wait_here","arguments":{"seconds":31}}}', 46_000],
+  ]
+  const cursorWait = {
+    jsonrpc: '2.0', id: 19, method: 'tools/call',
+    params: { name: 'wait_here', arguments: { after_line_change: '12' } },
+  }
+  const unchangedCallLines = [
+    [' { "jsonrpc" : "2.0", "id" : 20, "method" : "tools/call", "params" : { "name" : "look", "arguments" : {} } } ', 15_000],
+    ['{"jsonrpc":"2.0","id":21,"method":"tools/list"}', 15_000],
+  ]
+
+  const inputLines = [
+    JSON.stringify(defaulted),
+    ...malformedArguments.map(request => JSON.stringify(request)),
+    ...unchangedWaitLines.map(([line]) => line),
+    JSON.stringify(cursorWait),
+    ...unchangedCallLines.map(([line]) => line),
+  ]
+  for (const line of inputLines) await bridge.handleLine(line)
+
+  assert.deepEqual(JSON.parse(forwardedBodies[0]), {
+    ...defaulted,
+    params: { ...defaulted.params, arguments: { seconds: 30 } },
+  })
+  for (let index = 0; index < malformedArguments.length; index += 1) {
+    const request = malformedArguments[index]
+    assert.deepEqual(JSON.parse(forwardedBodies[index + 1]), {
+      ...request,
+      params: { ...request.params, arguments: { seconds: 30 } },
+    })
+  }
+  const unchangedWaitStart = 1 + malformedArguments.length
+  for (let index = 0; index < unchangedWaitLines.length; index += 1) {
+    assert.equal(forwardedBodies[unchangedWaitStart + index], unchangedWaitLines[index][0])
+  }
+  const cursorIndex = unchangedWaitStart + unchangedWaitLines.length
+  assert.deepEqual(JSON.parse(forwardedBodies[cursorIndex]), {
+    ...cursorWait,
+    params: { ...cursorWait.params, arguments: { after_line_change: '12', seconds: 30 } },
+  })
+  const unchangedCallsStart = cursorIndex + 1
+  for (let index = 0; index < unchangedCallLines.length; index += 1) {
+    assert.equal(forwardedBodies[unchangedCallsStart + index], unchangedCallLines[index][0])
+  }
+  assert.deepEqual(timeoutCalls, [
+    45_000, 45_000, 45_000, 45_000, 45_000,
+    ...unchangedWaitLines.map(([, timeout]) => timeout),
+    45_000,
+    ...unchangedCallLines.map(([, timeout]) => timeout),
+  ])
+})
+
 test('a wait_here call is not cut at 15 seconds', async () => {
   const timeoutCalls = []
   const bridge = await createMcpBridge({
@@ -377,6 +459,8 @@ test('missing setup stays anonymous so initialize and server-selected public too
   assert.match(initialized.result.instructions, /setup has not run on this host/iu)
   assert.doesNotMatch(initialized.result.instructions, /restart the host/iu)
   assert.match(initialized.result.instructions, /do not use browser sign-in as a fallback/iu)
+  assert.match(initialized.result.instructions, /asks wait_here for 30 seconds when you give none/iu)
+  assert.match(initialized.result.instructions, /not the 10 a coding client gets by default/iu)
   assert.deepEqual(listed.result.tools, [{ name: 'look' }])
 })
 

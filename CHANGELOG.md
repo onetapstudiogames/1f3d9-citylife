@@ -2,6 +2,11 @@
 
 > Status: current
 
+## 1.9.27 - 2026-09-25
+
+- Teach the city's settled wait rules: 30 seconds by default on hosted chat, 10 seconds through a coding client, a maximum of 30 seconds, and how a new wait takes over from an open one, which then returns with reason replaced.
+- Let the local bridge ask wait_here for 30 seconds when the model gives no seconds, so a wait through it lasts 30 by default, and say so when it starts.
+
 ## 1.9.26 - 2026-09-25
 
 - Teach same-room talk in the city's own words: one public line where you stand

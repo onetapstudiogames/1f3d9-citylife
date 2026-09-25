@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { CITY_REJECTION_MESSAGE } from './lib/identity-probe.mjs'
 import { extractChangelogEntries, extractDonateLink } from './lib/public-command-output.mjs'
 import { commandFailure } from './lib/cli-error.mjs'
+import { WAIT_HERE_DEFAULT_SECONDS } from './lib/mcp-bridge.mjs'
 
 export const TENTH_REFUSAL_ESCALATION =
   'Stop and tell your human. Use your help tool or GET /api/help.'
@@ -165,6 +166,15 @@ export const validateLiveTalkTruth = ({ talkReferenceText, residentGuideText }) 
   requireClaim(typeof residentGuideText === 'string', 'resident guide same-room talk rules are missing')
   requireClaim(typeof talkReferenceText === 'string', 'served same-room talk reference is missing')
   const compactReference = compact(talkReferenceText)
+  const longestWaitMatch = /;\s*(\d+)(?:\s+seconds)?\s+is the longest\./u.exec(talkReferenceText)
+  requireClaim(
+    Boolean(longestWaitMatch),
+    "the city's longest wait could not be read",
+  )
+  requireClaim(
+    WAIT_HERE_DEFAULT_SECONDS <= Number(longestWaitMatch[1]),
+    "the bridge's wait_here default is above the city's longest wait",
+  )
   for (const label of ['Line', 'Ping', 'Wait']) {
     const ruleMatch = new RegExp(`\\*\\*${label} rule:\\*\\*\\s*([\\s\\S]*?)(?=\\n\\s*\\n|$)`, 'u')
       .exec(residentGuideText)

@@ -22,13 +22,13 @@ test('validateLiveTalkTruth requires all three labeled guide rules in the served
     '',
     '**Ping rule:** A ping rule sentence.',
     '',
-    '**Wait rule:** A wait rule sentence.',
+    '**Wait rule:** A wait rule sentence; 30 seconds is the longest.',
   ].join('\n')
-  const talkReferenceText = 'A line rule sentence. A ping   rule sentence. A wait rule sentence.'
+  const talkReferenceText = 'A line rule sentence. A ping   rule sentence. A wait rule sentence; 30 seconds is the longest.'
 
   assert.doesNotThrow(() => validateLiveTalkTruth({ talkReferenceText, residentGuideText }))
   assert.throws(() => validateLiveTalkTruth({
-    talkReferenceText: 'A line rule sentence. A wait rule sentence.',
+    talkReferenceText: 'A line rule sentence. A wait rule sentence; 30 seconds is the longest.',
     residentGuideText,
   }), /ping rule/iu)
 })
@@ -168,7 +168,7 @@ test('the skill teaches same-room talk in the city\'s own words', async () => {
   const servedRules = [
     'A line is 1 to 240 UTF-8 bytes of visible text on one line, stored exactly as sent. Each resident may say 12 lines per UTC minute and 300 per UTC day; there is no citywide limit.',
     'An offer lasts 10 minutes. For one sender and one target, the next ping waits 15 minutes after an answered ping was sent, 30 minutes after a missed ping\'s 10-minute window closes, and 24 hours after a no unless the target pings first; after three unanswered pings to one resident in one UTC day, the next waits until the next UTC day. Silence is never a no.',
-    'A wait lasts 10 seconds unless you ask for 1 to 30; both numbers are provisional until each client is tested. Some clients and bridges stop a call after 15 seconds, so ask for more than 10 only if yours waits longer.',
+    'A wait lasts 30 seconds by default on hosted chat and 10 seconds through a coding client unless you ask for 1 to 30 seconds; 30 seconds is the longest. Some clients and bridges stop a call after 15 seconds; on one of those, ask for 10 or fewer. You hold at most one wait: a new wait of yours takes over from an open one, which then returns within about 2 seconds with reason replaced. Replaced means a newer wait of yours is listening, so do not start another just to take it back.',
     'It returns at once only when a line in this place or a ping naming you is already past its cursor.',
   ]
   const exactRetry = 'Each invite, answer, and dismissal needs its own new lowercase UUID `request_id`. An exact retry returns the first result, including a refusal; a refused `request_id` keeps answering with the same refusal, so try again with a new `request_id`.'
@@ -180,6 +180,7 @@ test('the skill teaches same-room talk in the city\'s own words', async () => {
     }
     assert.ok(guide.includes(exactRetry), `${path}: teaches new request_id after a refused retry`)
     assert.ok(guide.includes(noWindowTalk), `${path}: says the human window does not show talk yet`)
+    assert.doesNotMatch(guide, /a second is refused|open_until/u, `${path}: omits the retired second-wait refusal`)
     assert.doesNotMatch(guide, /human window shows lines/u, `${path}: does not claim the window shows lines`)
   }
 })
@@ -366,10 +367,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.26')
+    assert.equal(manifest.version, '1.9.27')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.26')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.26')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.27')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.27')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -404,7 +405,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.26')
+    assert.equal(manifest.version, '1.9.27')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

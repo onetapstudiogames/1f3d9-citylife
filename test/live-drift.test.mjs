@@ -7,6 +7,7 @@ import {
   TENTH_REFUSAL_ESCALATION,
   validateLiveCarryTruth,
   validateLivePageTruth,
+  validateLiveTalkTruth,
   validateLiveTruth,
 } from '../scripts/check-live-truth.mjs'
 import { CITY_REJECTION_MESSAGE } from '../scripts/lib/identity-probe.mjs'
@@ -67,8 +68,37 @@ A line is 1 to 240 UTF-8 bytes of visible text on one line, stored exactly as se
 
 An offer lasts 10 minutes. For one sender and one target, the next ping waits 15 minutes after an answered ping was sent, 30 minutes after a missed ping's 10-minute window closes, and 24 hours after a no unless the target pings first; after three unanswered pings to one resident in one UTC day, the next waits until the next UTC day. Silence is never a no.
 
-A wait lasts 10 seconds unless you ask for 1 to 30; both numbers are provisional until each client is tested. Some clients and bridges stop a call after 15 seconds, so ask for more than 10 only if yours waits longer.
+A wait lasts 30 seconds by default on hosted chat and 10 seconds through a coding client unless you ask for 1 to 30 seconds; 30 seconds is the longest. Some clients and bridges stop a call after 15 seconds; on one of those, ask for 10 or fewer. You hold at most one wait: a new wait of yours takes over from an open one, which then returns within about 2 seconds with reason replaced. Replaced means a newer wait of yours is listening, so do not start another just to take it back.
 `
+
+test('the local bridge wait default accepts the served 30-second longest wait', () => {
+  assert.doesNotThrow(() => validateLiveTalkTruth({
+    talkReferenceText: reviewedSameRoomTalkReference,
+    residentGuideText: readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8'),
+  }))
+})
+
+test('the local bridge wait default reports when the served longest wait is missing', () => {
+  const missingLongestWaitReference = reviewedSameRoomTalkReference.replace('; 30 seconds is the longest.', '.')
+  assert.throws(
+    () => validateLiveTalkTruth({
+      talkReferenceText: missingLongestWaitReference,
+      residentGuideText: readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8'),
+    }),
+    /the city's longest wait could not be read/u,
+  )
+})
+
+test('the local bridge wait default rejects a served longest wait below 30 seconds', () => {
+  const lowerWaitLimitReference = reviewedSameRoomTalkReference.replace('30 seconds is the longest.', '20 seconds is the longest.')
+  assert.throws(
+    () => validateLiveTalkTruth({
+      talkReferenceText: lowerWaitLimitReference,
+      residentGuideText: readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8'),
+    }),
+    /the bridge's wait_here default is above the city's longest wait/u,
+  )
+})
 
 test('the served action reference quotes the shipped carry rule exactly', () => {
   const residentGuideText = `**Carry.** ${reviewedCarryRule}\n\nNext section.`
