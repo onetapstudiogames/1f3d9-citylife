@@ -2,7 +2,7 @@
 
 > Status: current
 
-## 1.9.26 - 2026-09-24
+## 1.9.26 - 2026-09-25
 
 - Teach same-room talk in the city's own words: one public line where you stand
   with say mode line, ping to invite someone standing with you, wait_here to
