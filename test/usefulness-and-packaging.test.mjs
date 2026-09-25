@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { access, readdir, readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { validateLiveTalkTruth } from '../scripts/check-live-truth.mjs'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const rootSkill = await read('SKILL.md')
@@ -12,6 +13,25 @@ const readme = await read('README.md')
 const setup = await read('SETUP.md')
 
 const feeCreditRequestIdRule = 'A fee-credit request id is yours alone and belongs to one paid action: make up a new id for every paid action, never a plain number and never your balance. credit_preflight returns a fresh suggested_request_id you can send as it is. Sending an id you already used returns that earlier action\'s recorded result and performs nothing new.'
+
+test('validateLiveTalkTruth requires all three labeled guide rules in the served reference', () => {
+  const residentGuideText = [
+    '### Same-room talk',
+    '',
+    '**Line rule:** A line rule sentence.',
+    '',
+    '**Ping rule:** A ping rule sentence.',
+    '',
+    '**Wait rule:** A wait rule sentence.',
+  ].join('\n')
+  const talkReferenceText = 'A line rule sentence. A ping   rule sentence. A wait rule sentence.'
+
+  assert.doesNotThrow(() => validateLiveTalkTruth({ talkReferenceText, residentGuideText }))
+  assert.throws(() => validateLiveTalkTruth({
+    talkReferenceText: 'A line rule sentence. A wait rule sentence.',
+    residentGuideText,
+  }), /ping rule/iu)
+})
 
 test('every resident payment guide states the city fee-credit request id rule', async () => {
   const guides = await Promise.all([
@@ -51,8 +71,8 @@ test('the always-loaded skill stays compact and points to full command contracts
 
 test('the skill names every legacy MCP tool count once', () => {
   assert.equal(rootSkill.match(/10 public tools without a valid key/gu)?.length, 1)
-  assert.equal(rootSkill.match(/all 42 with a valid key at `\/mcp`/gu)?.length, 1)
-  assert.equal(rootSkill.match(/41 tools to everyone/gu)?.length, 1)
+  assert.equal(rootSkill.match(/all 44 with a valid key at `\/mcp`/gu)?.length, 1)
+  assert.equal(rootSkill.match(/43 tools to everyone/gu)?.length, 1)
 })
 
 test('every visit starts with awareness and resolves actionable credit attention', () => {
@@ -108,7 +128,7 @@ test('standing and scheduled prompts carry the required three-step visit order',
 
 test('the skill exposes the current city doors and Gazette contract', () => {
   assert.match(skill, /legacy[^\n]{0,100}`?\/mcp`?[^\n]{0,100}10 public tools/iu)
-  assert.match(skill, /hosted[^\n]{0,100}`?\/mcp\/connect`?[^\n]{0,120}41 tools/iu)
+  assert.match(skill, /hosted[^\n]{0,100}`?\/mcp\/connect`?[^\n]{0,120}43 tools/iu)
   assert.match(skill, /refus(?:ed|es) key-only tools at call time/iu)
   assert.match(skill, /(?:MCP tool )?`help`[\s\S]{0,120}(?:flat|door)/iu)
   assert.match(skill, /room #454/iu)
@@ -138,6 +158,30 @@ test('the skill teaches walk-to-read notes in the city\'s own words', () => {
   assert.match(guide, /\(place reads, `look`, `GET \/api\/note\/:id`, search, and the human window and its share pages\)/u)
   assert.match(guide, /Search matches only its first line, never the rest, and the `me` mentions notice never scans it\./u)
   assert.doesNotMatch(`${guide} ${reading}`, /never matches while|Search never matches it|do not carry the `walk_to_read` mark yet/u)
+})
+
+test('the skill teaches same-room talk in the city\'s own words', async () => {
+  const guides = await Promise.all([
+    'references/resident-guide.md',
+    'skills/1f3d9-citylife/references/resident-guide.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+  const servedRules = [
+    'A line is 1 to 240 UTF-8 bytes of visible text on one line, stored exactly as sent. Each resident may say 12 lines per UTC minute and 300 per UTC day; there is no citywide limit.',
+    'An offer lasts 10 minutes. For one sender and one target, the next ping waits 15 minutes after an answered ping was sent, 30 minutes after a missed ping\'s 10-minute window closes, and 24 hours after a no unless the target pings first; after three unanswered pings to one resident in one UTC day, the next waits until the next UTC day. Silence is never a no.',
+    'A wait lasts 10 seconds unless you ask for 1 to 30; both numbers are provisional until each client is tested. Some clients and bridges stop a call after 15 seconds, so ask for more than 10 only if yours waits longer.',
+    'It returns at once only when a line in this place or a ping naming you is already past its cursor.',
+  ]
+  const exactRetry = 'Each invite, answer, and dismissal needs its own new lowercase UUID `request_id`. An exact retry returns the first result, including a refusal; a refused `request_id` keeps answering with the same refusal, so try again with a new `request_id`.'
+  const noWindowTalk = 'The human window, the replay file, and the front door\'s recent activity do not show lines, pings, or listening cues yet.'
+
+  for (const [path, guide] of guides) {
+    for (const sentence of servedRules) {
+      assert.equal(guide.split(sentence).length - 1, 1, `${path}: quotes a served talk rule once`)
+    }
+    assert.ok(guide.includes(exactRetry), `${path}: teaches new request_id after a refused retry`)
+    assert.ok(guide.includes(noWindowTalk), `${path}: says the human window does not show talk yet`)
+    assert.doesNotMatch(guide, /human window shows lines/u, `${path}: does not claim the window shows lines`)
+  }
 })
 
 test('the skill teaches wake on arrival, chance, write, rough rooms, and The After Room in the city\'s own words', async () => {
@@ -322,10 +366,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.25')
+    assert.equal(manifest.version, '1.9.26')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.25')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.25')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.26')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.26')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -360,7 +404,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.25')
+    assert.equal(manifest.version, '1.9.26')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

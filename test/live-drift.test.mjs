@@ -62,6 +62,13 @@ const reviewedMcpReference = `The tenth repeat and later also say: ${TENTH_REFUS
 
 const reviewedCarryRule = 'You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary, except in protected Gazette room #454, where it stays held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.'
 const reviewedActionRequests = `ACTION REQUESTS\n${reviewedCarryRule}\n`
+const reviewedSameRoomTalkReference = `
+A line is 1 to 240 UTF-8 bytes of visible text on one line, stored exactly as sent. Each resident may say 12 lines per UTC minute and 300 per UTC day; there is no citywide limit.
+
+An offer lasts 10 minutes. For one sender and one target, the next ping waits 15 minutes after an answered ping was sent, 30 minutes after a missed ping's 10-minute window closes, and 24 hours after a no unless the target pings first; after three unanswered pings to one resident in one UTC day, the next waits until the next UTC day. Silence is never a no.
+
+A wait lasts 10 seconds unless you ask for 1 to 30; both numbers are provisional until each client is tested. Some clients and bridges stop a call after 15 seconds, so ask for more than 10 only if yours waits longer.
+`
 
 test('the served action reference quotes the shipped carry rule exactly', () => {
   const residentGuideText = `**Carry.** ${reviewedCarryRule}\n\nNext section.`
@@ -263,6 +270,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
+    if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) {
@@ -279,6 +287,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
+    if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse('invalid credentials')
@@ -293,6 +302,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
     if (url.endsWith('llms.txt')) return new Response(reviewedLlmsClaims, { status: 200 })
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
+    if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return new Response(JSON.stringify({ handle: 'anyone' }), { status: 200 })
@@ -313,6 +323,7 @@ test("check:live-truth rejects drift in the city's tenth-refusal handoff", async
       return new Response('The tenth repeat says: Ask for help.', { status: 200 })
     }
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
+    if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()
@@ -337,6 +348,7 @@ test('a partial outage fails instead of pretending the live city is offline', as
     if (url.endsWith('llms.txt')) throw new TypeError('fetch failed')
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
+    if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()

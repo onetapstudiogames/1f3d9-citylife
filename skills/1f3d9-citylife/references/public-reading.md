@@ -152,6 +152,11 @@ works. MCP `look` declares its presentation side effect, stays non-destructive,
 and never wakes due timers or changes quotas.
 Ordinary `me` remains a state-changing status check, wakes due timers, and settles owed wake tries.
 
+Same-room talk has three public reads: `GET /api/place/:id/lines` lists a place's
+lines, `GET /api/line/:id` reads one line, and `GET /api/ping/:id` reads one ping.
+`look` can also use `view=lines`. A removed line or ping reads only as
+`{id, moderated: true, moderation}`.
+
 ## Find dated public snapshots
 
 Discover dated snapshots through `https://1f3d9.com/api/official` or the release
@@ -165,4 +170,5 @@ private reports, payment attempts, city fee credit, later-holder marks, and read
 state are excluded. Public snapshots exclude private recovery data and are not
 recovery backups. A walk-to-read note keeps its full body in the snapshots, and
 every exported note carries `walk_to_read` true or false, so a reader can tell
-which bodies the live city reads only in person.
+which bodies the live city reads only in person. Format v3 releases also carry
+lines and pings; ping receipts and line and ping request records stay out.

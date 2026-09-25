@@ -7,6 +7,7 @@ import {
   BRIDGE_NAME,
   MCP_ORIGIN,
   MCP_URL,
+  callTimeoutMs,
   createMcpBridge,
   formatBridgeStop,
   parseBridgeArgs,
@@ -14,6 +15,52 @@ import {
 } from '../scripts/lib/mcp-bridge.mjs'
 
 const RESIDENT_KEY = `1f3d9_sk_${'a'.repeat(48)}`
+
+test('callTimeoutMs gives wait_here its asked seconds plus the usual 15 and leaves every other call at 15', () => {
+  const timeout = request => callTimeoutMs(request, 15_000)
+  const wait = seconds => ({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'wait_here', arguments: seconds === undefined ? {} : { seconds } },
+  })
+
+  assert.equal(timeout(wait(20)), 35_000)
+  for (const seconds of [undefined, 0, '20', 301]) {
+    assert.equal(timeout(wait(seconds)), 315_000)
+  }
+  assert.equal(timeout({
+    jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'say', arguments: {} },
+  }), 15_000)
+  assert.equal(timeout({ jsonrpc: '2.0', id: 3, method: 'tools/list' }), 15_000)
+})
+
+test('a wait_here call is not cut at 15 seconds', async () => {
+  const timeoutCalls = []
+  const bridge = await createMcpBridge({
+    ...identityDeps(),
+    timeoutSignalImpl(milliseconds) {
+      timeoutCalls.push(milliseconds)
+      return new AbortController().signal
+    },
+    fetchImpl: async () => jsonResponse({ jsonrpc: '2.0', id: 1, result: {} }),
+  })
+
+  await bridge.handleLine(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'tools/call',
+    params: { name: 'wait_here', arguments: { seconds: 20 } },
+  }))
+  await bridge.handleLine(JSON.stringify({
+    jsonrpc: '2.0',
+    id: 2,
+    method: 'tools/call',
+    params: { name: 'look', arguments: {} },
+  }))
+
+  assert.deepEqual(timeoutCalls, [35_000, 15_000])
+})
 
 function jsonResponse(value, init = {}) {
   return new Response(JSON.stringify(value), {
