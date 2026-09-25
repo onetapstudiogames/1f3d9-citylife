@@ -16,6 +16,7 @@ const endpoints = {
   mcpReference: 'https://1f3d9.com/reference/mcp.txt',
   actionRequests: 'https://1f3d9.com/reference/action-requests.txt',
   talkReference: 'https://1f3d9.com/reference/same-room-talk.txt',
+  abilitiesReference: 'https://1f3d9.com/reference/abilities.txt',
   window: 'https://1f3d9.com/window',
   changelog: 'https://1f3d9.com/changelog',
 }
@@ -187,6 +188,21 @@ export const validateLiveTalkTruth = ({ talkReferenceText, residentGuideText }) 
   }
 }
 
+export const validateLiveStaleToolsTruth = ({ abilitiesText, residentGuideText }) => {
+  requireClaim(typeof residentGuideText === 'string', 'resident guide stale tools fix is missing')
+  requireClaim(typeof abilitiesText === 'string', 'served abilities reference is missing')
+  const guideRule = /\*\*Stale tools:\*\*\s*([\s\S]*?)(?=\n\s*\n|$)/u.exec(residentGuideText)?.[1]
+  requireClaim(Boolean(guideRule), 'resident guide stale tools fix is missing')
+  requireClaim(
+    compact(abilitiesText).includes(compact(guideRule)),
+    'served abilities reference disagrees with the resident guide stale tools fix',
+  )
+  requireClaim(
+    !/reconnect it so it reloads the tool list/u.test(compact(abilitiesText)),
+    'served abilities reference retains the retired reconnect advice',
+  )
+}
+
 const fetchText = async (url, fetchImpl) => {
   let response
   try {
@@ -271,6 +287,7 @@ export const checkLiveTruth = async ({
     fetchText(endpoints.mcpReference, fetchImpl),
     fetchText(endpoints.actionRequests, fetchImpl),
     fetchText(endpoints.talkReference, fetchImpl),
+    fetchText(endpoints.abilitiesReference, fetchImpl),
     fetchText(endpoints.window, fetchImpl),
     fetchText(endpoints.changelog, fetchImpl),
   ])
@@ -289,7 +306,7 @@ export const checkLiveTruth = async ({
     throw new Error(`${prefix}${failureMessage(results)}`)
   }
 
-  const [llmsText, officialText, , mcpReferenceText, actionRequestsText, talkReferenceText, windowHtml, changelogHtml] = results.map((result) => result.value)
+  const [llmsText, officialText, , mcpReferenceText, actionRequestsText, talkReferenceText, abilitiesText, windowHtml, changelogHtml] = results.map((result) => result.value)
   let official
   try {
     official = JSON.parse(officialText)
@@ -301,6 +318,7 @@ export const checkLiveTruth = async ({
   const residentGuideText = await readFile(new URL('../references/resident-guide.md', import.meta.url), 'utf8')
   validateLiveCarryTruth({ actionRequestsText, residentGuideText })
   validateLiveTalkTruth({ talkReferenceText, residentGuideText })
+  validateLiveStaleToolsTruth({ abilitiesText, residentGuideText })
   validateLivePageTruth({ windowHtml, changelogHtml })
   return { valid: true }
 }
@@ -309,7 +327,7 @@ const isDirectRun = process.argv[1] && resolve(process.argv[1]) === fileURLToPat
 if (isDirectRun) {
   try {
     const result = await checkLiveTruth({ requireNetwork: process.env.REQUIRE_LIVE_TRUTH === '1' })
-    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, anonymous /api/me, /reference/mcp.txt, /reference/action-requests.txt, /reference/same-room-talk.txt, /window, and /changelog.')
+    console.log(result.skipped ? result.notice : 'Live truth check passed for llms.txt, /api/official, anonymous /api/me, /reference/mcp.txt, /reference/action-requests.txt, /reference/same-room-talk.txt, /reference/abilities.txt, /window, and /changelog.')
   } catch (error) {
     console.error(commandFailure('Live truth check failed', error, {
       outcome: 'No local or city data was changed.',
