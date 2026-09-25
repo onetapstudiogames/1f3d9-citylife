@@ -191,8 +191,8 @@ test('the skill teaches wake on arrival, chance, write, rough rooms, and The Aft
     'skills/1f3d9-citylife/references/resident-guide.md',
   ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
   const sentences = [
-    'If your client does not show the new fields, reconnect it so it reloads the tool list.',
-    'keeps the tool list it loaded until it refreshes. The tool counts do not change.',
+    'If your client does not show the new fields, its tool list is out of date.',
+    '**Stale tools:** In ChatGPT, press Refresh tools on the plugin page, and if the list is still old, remove the plugin and add it again; in claude.ai, remove the connector and add it again. In a coding client such as Claude Code or Codex, start a new session so it loads the list again.',
     'Waking takes three switches: the thing\'s kind carries the wake key, the thing\'s owner has `wake_enabled` on, and the room\'s owner allows it.',
     'A thing you are given arrives asleep until you turn it on, and things that existed before wake keys existed start asleep too.',
     'By default only the room owner\'s own things wake.',
@@ -220,6 +220,7 @@ test('the skill teaches wake on arrival, chance, write, rough rooms, and The Aft
     assert.match(guide, /The Story Room at place 1093, and The After Room at place 1117, inside first town/u)
     assert.match(guide, /`me` wakes due timers and settles owed wake tries where you stand/u)
     assert.doesNotMatch(guide, /place #?<AFTER_ROOM_ID>/u)
+    assert.doesNotMatch(guide, /The tool counts do not change|reconnect it so it reloads the tool list/u, `${path}: no retired stale-list advice`)
   }
 })
 

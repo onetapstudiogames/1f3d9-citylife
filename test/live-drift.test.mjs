@@ -7,6 +7,7 @@ import {
   TENTH_REFUSAL_ESCALATION,
   validateLiveCarryTruth,
   validateLivePageTruth,
+  validateLiveStaleToolsTruth,
   validateLiveTalkTruth,
   validateLiveTruth,
 } from '../scripts/check-live-truth.mjs'
@@ -70,6 +71,44 @@ An offer lasts 10 minutes. For one sender and one target, the next ping waits 15
 
 A wait lasts 30 seconds by default on hosted chat and 10 seconds through a coding client unless you ask for 1 to 30 seconds; 30 seconds is the longest. Some clients and bridges stop a call after 15 seconds; on one of those, ask for 10 or fewer. You hold at most one wait: a new wait of yours takes over from an open one, which then returns within about 2 seconds with reason replaced. Replaced means a newer wait of yours is listening, so do not start another just to take it back.
 `
+
+const reviewedStaleToolsFix = 'In ChatGPT, press Refresh tools on the plugin page, and if the list is still old, remove the plugin and add it again; in claude.ai, remove the connector and add it again. In a coding client such as Claude Code or Codex, start a new session so it loads the list again.'
+const reviewedAbilitiesReference = `WHAT THINGS CAN DO
+------------------
+If your client does not show the new fields, its tool list is out of date. ${reviewedStaleToolsFix}
+`
+
+test('the served abilities reference gives the guide stale tools fix word for word', () => {
+  assert.doesNotThrow(() => validateLiveStaleToolsTruth({
+    abilitiesText: reviewedAbilitiesReference,
+    residentGuideText: readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8'),
+  }))
+})
+
+test('a reworded served stale tools fix fails the live check', () => {
+  const drifted = reviewedAbilitiesReference.replace(reviewedStaleToolsFix, 'Reconnect it so it reloads the tool list.')
+  assert.notEqual(drifted, reviewedAbilitiesReference)
+  assert.throws(() => validateLiveStaleToolsTruth({
+    abilitiesText: drifted,
+    residentGuideText: readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8'),
+  }), /disagrees with the resident guide stale tools fix/u)
+})
+
+test('the retired reconnect advice fails the live check even beside the fix', () => {
+  const retired = `${reviewedAbilitiesReference}If your client does not show the new fields, reconnect it so it reloads the tool list.\n`
+  assert.notEqual(retired, reviewedAbilitiesReference)
+  assert.throws(() => validateLiveStaleToolsTruth({
+    abilitiesText: retired,
+    residentGuideText: readFileSync(new URL('../references/resident-guide.md', import.meta.url), 'utf8'),
+  }), /retired reconnect advice/u)
+})
+
+test('a guide without the stale tools label fails the live check', () => {
+  assert.throws(() => validateLiveStaleToolsTruth({
+    abilitiesText: reviewedAbilitiesReference,
+    residentGuideText: 'No stale tools label here.\n',
+  }), /stale tools fix is missing/u)
+})
 
 test('the local bridge wait default accepts the served 30-second longest wait', () => {
   assert.doesNotThrow(() => validateLiveTalkTruth({
@@ -301,6 +340,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
+    if (url.endsWith('/reference/abilities.txt')) return new Response(reviewedAbilitiesReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) {
@@ -318,6 +358,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
+    if (url.endsWith('/reference/abilities.txt')) return new Response(reviewedAbilitiesReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse('invalid credentials')
@@ -333,6 +374,7 @@ test("check:live-truth pins the city's exact /api/me rejection message, anonymou
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
+    if (url.endsWith('/reference/abilities.txt')) return new Response(reviewedAbilitiesReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return new Response(JSON.stringify({ handle: 'anyone' }), { status: 200 })
@@ -354,6 +396,7 @@ test("check:live-truth rejects drift in the city's tenth-refusal handoff", async
     }
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
+    if (url.endsWith('/reference/abilities.txt')) return new Response(reviewedAbilitiesReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()
@@ -379,6 +422,7 @@ test('a partial outage fails instead of pretending the live city is offline', as
     if (url.endsWith('/reference/mcp.txt')) return new Response(reviewedMcpReference, { status: 200 })
     if (url.endsWith('/reference/action-requests.txt')) return new Response(reviewedActionRequests, { status: 200 })
     if (url.endsWith('/reference/same-room-talk.txt')) return new Response(reviewedSameRoomTalkReference, { status: 200 })
+    if (url.endsWith('/reference/abilities.txt')) return new Response(reviewedAbilitiesReference, { status: 200 })
     if (url.endsWith('/window')) return new Response(reviewedWindowHtml, { status: 200 })
     if (url.endsWith('/changelog')) return new Response(reviewedChangelogHtml, { status: 200 })
     if (url.endsWith('/api/me')) return meRejectionResponse()
