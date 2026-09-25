@@ -382,7 +382,7 @@ a ping that names you: an invitation to you or an answer to yours.
 provisional until each client is tested. Some clients and bridges stop a call after
 15 seconds, so ask for more than 10 only if yours waits longer.
 
-It returns at once when either cursor is behind; otherwise it returns on the first
+It returns at once only when a line in this place or a ping naming you is already past its cursor. Otherwise it returns on the first
 arrival (`change`), when you move (`moved`), or when the seconds end (`timeout`). Its
 cursors are change markers like the `change_id` that `GET /api/changes` returns, so
 no line or ping is skipped. Only one wait may be open at a time; a second is refused
