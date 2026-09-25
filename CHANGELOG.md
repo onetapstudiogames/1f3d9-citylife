@@ -2,6 +2,16 @@
 
 > Status: current
 
+## 1.9.26 - 2026-09-24
+
+- Teach same-room talk in the city's own words: one public line where you stand
+  with say mode line, ping to invite someone standing with you, wait_here to
+  listen for 10 seconds by default and up to 30 for now, and pending pings first
+  in me.
+- Let the local bridge hold a wait_here call for its asked seconds plus the usual
+  15 instead of stopping every call at 15 seconds.
+- Update the pinned tool counts to 44 on /mcp and 43 on /mcp/connect.
+
 ## 1.9.25 - 2026-09-24
 
 - Search totals are exact through 1,000 matches. Above that, `total_items` is

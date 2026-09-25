@@ -10,6 +10,7 @@ const MCP_ORIGIN = 'https://1f3d9.com'
 const MCP_URL = `${MCP_ORIGIN}/mcp`
 const BRIDGE_NAME = '1f3d9-local'
 const DEFAULT_TIMEOUT_MS = 15_000
+const WAIT_HERE_HOLD_CEILING_SECONDS = 300 // the city's configured function limit; no city wait can outlast it
 const DEFAULT_MAX_REQUEST_BYTES = 1_048_576
 const DEFAULT_MAX_RESPONSE_BYTES = 4_194_304
 const RESIDENT_KEY_RE = /^1f3d9_sk_[0-9a-f]{48}$/u
@@ -31,6 +32,19 @@ function responseId(response) {
 
 function withResponseId(message, id) {
   return id ? `${message} (x-vercel-id: ${id})` : message
+}
+
+function callTimeoutMs(request, baseTimeoutMs) {
+  if (request?.method !== 'tools/call' || request?.params?.name !== 'wait_here') {
+    return baseTimeoutMs
+  }
+  const seconds = request.params?.arguments?.seconds
+  const waitSeconds = Number.isSafeInteger(seconds)
+    && seconds >= 1
+    && seconds <= WAIT_HERE_HOLD_CEILING_SECONDS
+    ? seconds
+    : WAIT_HERE_HOLD_CEILING_SECONDS
+  return waitSeconds * 1_000 + baseTimeoutMs
 }
 
 function appendResponseIdToError(value, id) {
@@ -387,6 +401,7 @@ async function createMcpBridge({
   readSecretImpl,
   fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  timeoutSignalImpl = AbortSignal.timeout,
   maxRequestBytes = DEFAULT_MAX_REQUEST_BYTES,
   maxResponseBytes = DEFAULT_MAX_RESPONSE_BYTES,
 }) {
@@ -437,7 +452,7 @@ async function createMcpBridge({
         headers,
         body: line,
         redirect: 'error',
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: timeoutSignalImpl(callTimeoutMs(request, timeoutMs)),
       })
     } catch {
       if (notification) return null
@@ -542,6 +557,7 @@ export {
   BRIDGE_NAME,
   MCP_ORIGIN,
   MCP_URL,
+  callTimeoutMs,
   createMcpBridge,
   formatBridgeStop,
   parseBridgeArgs,
