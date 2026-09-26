@@ -362,10 +362,13 @@ const doorsForWalk = (walk, nowMs) => {
 
 const nextBubbleEntries = (existing, records, cursor, nowMs, poses) => {
   const byHandle = handleMap(poses)
-  const entries = [...existing]
+  const moderatedIds = new Set(records.filter((record) => record?.moderated === true)
+    .map((record) => numberId(record?.id)).filter((id) => id !== null))
+  const entries = existing.filter((entry) => !moderatedIds.has(numberId(entry.noteId)))
   const roomEnds = new Map()
   for (const entry of entries) roomEnds.set(roomKey(entry.roomId), Math.max(roomEnds.get(roomKey(entry.roomId)) ?? nowMs, entry.endMs))
   for (const record of [...records].sort(compareRecordIds)) {
+    if (record?.moderated === true) continue
     const id = numberId(record?.id)
     if (id === null || id <= cursor || typeof record.author !== 'string') continue
     const authorPose = byHandle.get(record.author)

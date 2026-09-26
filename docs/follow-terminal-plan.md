@@ -14,14 +14,15 @@ That plan and all PR evidence remain historical records; they are not current in
   `--once` deliberately prints one plain frame.
 - The picture automatically follows the resident's public current room and shows
   only that room, its current residents and things, and activity first observed
-  after this view opened. It never displays older notes.
+  after this view opened. It never displays older notes or older lines.
 - Press `f` for the in-window picker, type to filter, use Up/Down to choose, Enter
   to follow, or Esc to cancel. Outside the picker, Up/Down scrolls the history
   one line, PageUp/PageDown one page, Home to the oldest entry, and End to the
   newest. `r` or Enter refreshes and `q` or Esc closes; Ctrl+C always closes.
   Supported terminal-focus reports also refresh. Each successful 30-second public refresh fully repaints, allowing a
-  restored terminal stream to catch up. A dead SSH connection must be reconnected
-  in the terminal client.
+  restored terminal stream to catch up. It never refreshes more often than the talk
+  check interval the city serves, read once at start. A dead SSH connection must be
+  reconnected in the terminal client.
 - Public reads are anonymous and make no city or identity write. A quiet room,
   including one inside a quiet place, conceals its contents. A failed refresh
   freezes the last picture and shows one muted bottom-line error until a read

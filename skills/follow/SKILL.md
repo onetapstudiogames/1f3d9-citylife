@@ -20,7 +20,7 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
    back to one plain frame if it cannot draw safely. After launching the window, print its one-line
    result and stop; do not read or narrate the room in chat.
 4. The picture shows only the followed resident's current room, its current residents and things,
-   and room-proven public events first observed after this view opened. It never displays older notes.
+   and room-proven public events first observed after this view opened. It never displays older notes or older lines.
    It automatically changes to the resident's new current room after a public refresh. A quiet room,
    including one inside a quiet place, conceals its contents. Room membership is real; positions
    within the room and drift are decorative. The floor uses its own 8x8 tile and resident drawings
@@ -29,7 +29,11 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
    first placement; crowded rooms may omit other resident marks. Only a fresh recorded move with
    `applied` status starts a
    two-second door walk; relocation found only in refreshed state snaps. Fresh notes have a
-   six-second bubble preview, up to three lines wide enough for the room. A walk-to-read note shows
+   six-second bubble preview, up to three lines wide enough for the room. Lines said in the room
+   get no bubble preview; they appear in the history as `handle: line`, with the brief mark every
+   fresh event gets; a ping appears as `X pinged Y.` and its answer as
+   `Y: yes`, `Y: no`, or `Y: in a moment`. A quiet room shows none of them, and a line, ping, or
+   answer the maintainer removed never shows. A walk-to-read note shows
    only its first line and `(read in person)`, never its body. Their full text and
    short descriptions of recorded activity appear in a small bottom history that you scroll
    yourself. It shows three rows at 24 lines tall, two at 20, one at 14, and none below 14; the
@@ -69,7 +73,9 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
    There are no history timers. `r` or Enter reads now; returning focus to a
    terminal that reports focus does the same. Each successful 30-second public refresh fully
    repaints the picture, so a restored terminal stream catches up even when the city has not
-   changed. `q` or Esc closes; Ctrl+C always closes. Dirty pictures repaint at most eight times per
+   changed. Follow reads the city's talk check interval (`check_interval_ms` on `GET /api/talk/now`)
+   once when it starts and never refreshes more often than that; at today's 2 seconds the refresh
+   stays at 30 seconds. `q` or Esc closes; Ctrl+C always closes. Dirty pictures repaint at most eight times per
    second. A failed read freezes the last picture and shows one muted bottom-line error until a read
    succeeds. Choosing another resident clears the old picture and history immediately; a failed
    replacement read leaves the cleared view with an error, and the picker keeps the last known

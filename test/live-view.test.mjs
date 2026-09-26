@@ -318,6 +318,33 @@ test('interactive timing separates public reads from bounded unchanged paints an
   assert.equal(fake.pending(), 0)
 })
 
+test('follow refresh waits for the served interval before reading again', async () => {
+  const { input, output, host } = makeSessionHarness()
+  const fake = makeFakeClock()
+  const reads = []
+  const source = {
+    read: async () => {
+      reads.push(fake.clock.now())
+      return observation
+    },
+    close: () => {},
+  }
+  const closed = runViewSession(source, { color: '16' }, {
+    input, output, host, env: {}, platform: 'win32', clock: fake.clock, refreshMs: 45_000,
+  })
+
+  await waitFor(() => reads.length === 1)
+  await new Promise(resolve => setImmediate(resolve))
+  await fake.advance(44_000)
+  assert.deepEqual(reads, [0], 'no second read comes before the served interval')
+  await fake.advance(1_000)
+  assert.deepEqual(reads, [0, 45_000], 'the second read comes when the served interval ends')
+
+  input.emit('keypress', 'q', { name: 'q' })
+  assert.deepEqual(await closed, { ok: true })
+  assert.equal(fake.pending(), 0)
+})
+
 test('q pauses a pristine stdin but preserves an input that was already flowing', async (t) => {
   for (const [name, readableFlowing, expectedPauses] of [
     ['pristine stdin', null, 1],

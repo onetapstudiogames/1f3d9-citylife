@@ -176,7 +176,7 @@ export const validateLiveTalkTruth = ({ talkReferenceText, residentGuideText }) 
     WAIT_HERE_DEFAULT_SECONDS <= Number(longestWaitMatch[1]),
     "the bridge's wait_here default is above the city's longest wait",
   )
-  for (const label of ['Line', 'Ping', 'Wait']) {
+  for (const label of ['Line', 'Ping', 'Wait', 'Watching']) {
     const ruleMatch = new RegExp(`\\*\\*${label} rule:\\*\\*\\s*([\\s\\S]*?)(?=\\n\\s*\\n|$)`, 'u')
       .exec(residentGuideText)
     const guideRule = ruleMatch?.[1]

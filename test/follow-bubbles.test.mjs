@@ -61,3 +61,14 @@ test('long notes stay hidden when a room becomes quiet', () => {
   const closed = stepFollowMotion(first.state, { nowMs: 4000, observation: city([note], true), size: { columns: 80, rows: 24 } })
   assert.doesNotMatch(toPlainText(paintLiveView(closed.observation, { columns: 80, rows: 24 }, closed.frame)), /BEGIN|word\d|THE END/)
 })
+
+test('a removed note gets no bubble', () => {
+  const size = { columns: 80, rows: 24 }
+  const seeded = stepFollowMotion(null, { nowMs: 0, observation: city(), size })
+  const removed = { ...note, id: 2, body: 'removed text', moderated: true }
+  const ordinary = { ...note, id: 3, body: 'ordinary text' }
+
+  const result = stepFollowMotion(seeded.state, { nowMs: 1000, observation: city([removed, ordinary]), size })
+
+  assert.deepEqual(result.frame.bubbles.map(bubble => bubble.noteId), [3])
+})
