@@ -12,6 +12,7 @@ import { TerminalScreen } from './terminal-screen.mjs'
 import { openTerminalRunning } from './terminal.mjs'
 import { prepareLegacyConsole } from './legacy-console.mjs'
 import { pluginRoot } from './paths.mjs'
+import { readFollowRefreshMs } from './follow-interval.mjs'
 
 const REFRESH_MS = 30_000
 const FRAME_MS = 125
@@ -161,6 +162,7 @@ export const runViewSession = (source, options, {
   input = process.stdin, output = process.stdout, host = process,
   env = process.env, platform = process.platform,
   clock = realClock,
+  refreshMs = REFRESH_MS,
 } = {}) => new Promise(resolveClosed => {
   const screen = new TerminalScreen({
     output,
@@ -271,7 +273,7 @@ export const runViewSession = (source, options, {
   }
   const schedule = () => {
     if (stopped || options.at !== undefined) return
-    const nextRead = source.momentTimes?.find(time => time > now()) ?? now() + REFRESH_MS
+    const nextRead = source.momentTimes?.find(time => time > now()) ?? now() + refreshMs
     if (nextRead > (source.durationMs ?? Infinity)) return
     pollTimer = clock.setTimeout(() => { void refresh() }, nextRead - now())
   }
@@ -423,7 +425,8 @@ export const runDrawnView = async (options) => {
       process.stdout.write(`${legacy.mode === 'plain' ? `${legacy.message}\n` : ''}${toPlainText(frame)}`)
       return
     }
-    const result = await runViewSession(source, options)
+    const refreshMs = options.sceneFile ? REFRESH_MS : await readFollowRefreshMs(globalThis.fetch)
+    const result = await runViewSession(source, options, { refreshMs })
     if (!result.ok) process.exitCode = 1
   } finally {
     source.close?.()
