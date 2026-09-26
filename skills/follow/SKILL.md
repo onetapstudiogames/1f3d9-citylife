@@ -30,7 +30,8 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
    `applied` status starts a
    two-second door walk; relocation found only in refreshed state snaps. Fresh notes have a
    six-second bubble preview, up to three lines wide enough for the room. Lines said in the room
-   appear only in the history, as `handle: line`; a ping appears as `X pinged Y.` and its answer as
+   get no bubble preview; they appear in the history as `handle: line`, with the brief mark every
+   fresh event gets; a ping appears as `X pinged Y.` and its answer as
    `Y: yes`, `Y: no`, or `Y: in a moment`. A quiet room shows none of them, and a line, ping, or
    answer the maintainer removed never shows. A walk-to-read note shows
    only its first line and `(read in person)`, never its body. Their full text and
