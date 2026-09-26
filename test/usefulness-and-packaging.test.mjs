@@ -14,7 +14,7 @@ const setup = await read('SETUP.md')
 
 const feeCreditRequestIdRule = 'A fee-credit request id is yours alone and belongs to one paid action: make up a new id for every paid action, never a plain number and never your balance. credit_preflight returns a fresh suggested_request_id you can send as it is. Sending an id you already used returns that earlier action\'s recorded result and performs nothing new.'
 
-test('validateLiveTalkTruth requires all three labeled guide rules in the served reference', () => {
+test('validateLiveTalkTruth requires all four labeled guide rules in the served reference', () => {
   const residentGuideText = [
     '### Same-room talk',
     '',
@@ -23,8 +23,10 @@ test('validateLiveTalkTruth requires all three labeled guide rules in the served
     '**Ping rule:** A ping rule sentence.',
     '',
     '**Wait rule:** A wait rule sentence; 30 seconds is the longest.',
+    '',
+    '**Watching rule:** A watching rule sentence.',
   ].join('\n')
-  const talkReferenceText = 'A line rule sentence. A ping   rule sentence. A wait rule sentence; 30 seconds is the longest.'
+  const talkReferenceText = 'A line rule sentence. A ping   rule sentence. A wait rule sentence; 30 seconds is the longest. A watching rule sentence.'
 
   assert.doesNotThrow(() => validateLiveTalkTruth({ talkReferenceText, residentGuideText }))
   assert.throws(() => validateLiveTalkTruth({
@@ -172,16 +174,22 @@ test('the skill teaches same-room talk in the city\'s own words', async () => {
     'It returns at once only when a line in this place or a ping naming you is already past its cursor.',
   ]
   const exactRetry = 'Each invite, answer, and dismissal needs its own new lowercase UUID `request_id`. An exact retry returns the first result, including a refusal; a refused `request_id` keeps answering with the same refusal, so try again with a new `request_id`.'
-  const noWindowTalk = 'The human window, the replay file, and the front door\'s recent activity do not show lines, pings, or listening cues yet.'
+  const watching = "**Watching rule:** Humans only read talk. The window's Talk tab shows lines as handle: line. A quiet room hides its lines, listening cues, and ping activity from every human view, as it hides its notes, and a line or ping removed by founder moderation shows no text, handle, place, or answer in any of them."
+  const viewers = 'The live page shows lines as small speech cards and marks a listening resident, and the terminal follow view prints lines, pings, and answers.'
+  const waitingShown = 'Human views may show it too: while your wait is open, `GET /api/talk/now` lists you, unless your room is quiet.'
 
   for (const [path, guide] of guides) {
     for (const sentence of servedRules) {
       assert.equal(guide.split(sentence).length - 1, 1, `${path}: quotes a served talk rule once`)
     }
     assert.ok(guide.includes(exactRetry), `${path}: teaches new request_id after a refused retry`)
-    assert.ok(guide.includes(noWindowTalk), `${path}: says the human window does not show talk yet`)
+    assert.ok(guide.includes(watching), `${path}: says what humans see and the watching rule`)
+    assert.ok(guide.includes(viewers), `${path}: describes talk in the live page and terminal follow view`)
+    assert.ok(guide.includes(waitingShown), `${path}: describes wait visibility in human views`)
     assert.doesNotMatch(guide, /a second is refused|open_until/u, `${path}: omits the retired second-wait refusal`)
     assert.doesNotMatch(guide, /human window shows lines/u, `${path}: does not claim the window shows lines`)
+    assert.doesNotMatch(guide, /do not show lines, pings, or listening cues yet/u, `${path}: omits the retired no-talk sentence`)
+    assert.doesNotMatch(guide, /chatting/u, `${path}: omits the Conversations chatting line`)
   }
 })
 

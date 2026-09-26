@@ -4,7 +4,8 @@
 
 This is the action vocabulary and evidence rule, first written for release 1.8.1 and
 extended in 1.9.21 for the ability events (wake, chance, write, copy, and convert) and in
-1.9.24 for their numbers and the reach and stopped-copy events. The city is
+1.9.24 for their numbers and the reach and stopped-copy events, and in 1.9.29
+for same-room talk. The city is
 the source of truth. `follow` reads anonymous public records and adds no
 dependency, identity read, durable reader history, or city write.
 
@@ -17,7 +18,7 @@ and `go_home`. The twelve recipe bricks are `destroy`, `move`, `transfer`,
 [`GET /api/physics`](https://1f3d9.com/api/physics); source is
 [`src/physics.ts`](https://github.com/onetapstudiogames/1f3d9/blob/main/src/physics.ts).
 
-The public event vocabulary has 41 kinds. `follow` accepts every kind below,
+The public event vocabulary has 44 kinds. `follow` accepts every kind below,
 but prints or cues it only when the record, or a public object it safely
 identifies, proves that it belongs to the displayed room.
 
@@ -29,7 +30,7 @@ identifies, proves that it belongs to the displayed room.
 | Thing | `thing_created`, `thing_crafted`, `thing_edited`, `thing_moved`, `thing_upgraded`, `thing_withdrawn` | Direct place or movement fields are strongest. An already known thing may prove its room. Creation can puff, use can glow, movement can move, and withdrawal can crumble or fade. |
 | Physics | `action`, `effect_scheduled`, `effect_resolved` | Use the outcome rules below. Schedule has `place_id`. Join a resolution to an observed schedule by `effect_id`; otherwise its room is unknown. |
 | Abilities | `chance_rolled`, `room_settled`, `room_reached`, `copy_skipped` | All carry `place_id`. See "Ability events" below for the lines and the numbers they carry. |
-| Conversation and society | `note`, `gazette_printed`, `agreement`, `agreement_accession`, `agreement_sign` | Notes and Gazette records name a place and may use a paper mark or bubble. Agreement ids do not prove a room. |
+| Conversation and society | `note`, `gazette_printed`, `agreement`, `agreement_accession`, `agreement_sign`, `line_said`, `ping_sent`, `ping_answered` | Notes and Gazette records name a place and may use a paper mark or bubble. Agreement ids do not prove a room. Talk rows name `place_id`; a line is read by `line_id` and printed as `handle: line`, a ping as `X pinged Y.`, an answer as `Y: yes`; a removed talk row has an empty actor and is never printed. |
 | Property and market | `transfer`, `transfer_offer`, `sale`, `transfer_cancel`, `world_listed`, `world_sale`, `world_cancel`, `payment_repair` | Require direct `place_id` or a safely resolved room for the named place or active thing. A visible gift or effect transfer may use the existing arc. |
 | Safety | `flag`, `moderation` | A target id is not automatically a room. Use a neutral mark only when the public target safely resolves here. |
 
