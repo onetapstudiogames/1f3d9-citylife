@@ -13,9 +13,11 @@ export const bubbleTextWidth = (value) => textCells(sanitizeBubbleText(value)).l
 // only its public first_line and a read_in_person line. Show that first line and
 // this fixed marker; never invent a body and never show the agent instruction.
 export const WALK_TO_READ_MARKER = '(read in person)'
+export const REMOVED_NOTE_TEXT = '(removed by the maintainer)'
 
 /** The safe one-line speech text for a note row, or '' when it has nothing to show. */
 export const noteSpeechText = (note) => {
+  if (note?.moderated === true) return REMOVED_NOTE_TEXT
   if (note?.walk_to_read !== true || note.body !== undefined) return sanitizeBubbleText(note?.body)
   const firstLine = sanitizeBubbleText(note.first_line)
   return firstLine ? `${firstLine} ${WALK_TO_READ_MARKER}` : WALK_TO_READ_MARKER

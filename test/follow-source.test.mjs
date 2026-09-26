@@ -64,6 +64,7 @@ const makeFollowFetch = ({
     30: [],
   },
   notes = {},
+  lines = {},
   gateRoom = null,
   directoryPlaces = places,
   mapPlaces = places,
@@ -124,6 +125,8 @@ const makeFollowFetch = ({
     }
     const noteMatch = /^\/api\/note\/(\d+)$/u.exec(url.pathname)
     if (noteMatch) return json({ note: notes[Number(noteMatch[1])] }, notes[Number(noteMatch[1])] ? 200 : 404)
+    const lineMatch = /^\/api\/line\/(\d+)$/u.exec(url.pathname)
+    if (lineMatch) return json({ line: lines[Number(lineMatch[1])] }, lines[Number(lineMatch[1])] ? 200 : 404)
     const drawingMatch = /^\/api\/drawing\/(place|resident|thing)\/(\d+)$/u.exec(url.pathname)
     if (drawingMatch) return missingDrawings.includes(Number(drawingMatch[2])) ? json({ error: 'gone' }, 404) : json(drawing(drawingMatch[1], Number(drawingMatch[2])))
     throw new Error(`unexpected public read ${path}`)
@@ -270,6 +273,70 @@ test('changes continue oldest-first across pages, keep the followed move chain, 
   const settled = await source.read(60_000, { size: { columns: 120, rows: 40 } })
   assert.deepEqual(settled.events, [])
   assert.ok(fake.calls.some(({ path }) => path === '/api/changes?since=21&limit=200'))
+})
+
+test('fresh lines in the room are read by id and a removed line is skipped without failing the read', async () => {
+  const event = (changeId, lineId) => ({
+    change_id: String(changeId), kind: 'line_said', actor: 'alpha',
+    detail: { line_id: lineId, place_id: 10 }, created_at: `2026-09-07T00:00:${changeId}Z`,
+  })
+  const fake = makeFollowFetch({
+    changePages: {
+      10: { change_marker: '12', changes: [event(11, 801), event(12, 802)], returned_items: 2, unchanged: false, has_more: false, next_since: '12' },
+    },
+    lines: {
+      801: { id: 801, place_id: 10, author_id: 999, author: 'alpha', body: 'fresh line', body_bytes: 10, created_at: '2026-09-07T00:00:11Z' },
+      802: { id: 802, moderated: true },
+    },
+  })
+  const source = await createLiveSource({ mode: 'follow-room', followHandle: 'alpha', fetchImpl: fake.fetchImpl })
+  await source.read(0, { size: { columns: 80, rows: 24 } })
+
+  const changed = await source.read(30_000, { size: { columns: 80, rows: 24 } })
+
+  assert.equal(changed.ok, true)
+  assert.deepEqual(changed.lines, [{
+    id: 801, place_id: 10, author_id: 999, author: 'alpha', body: 'fresh line', body_bytes: 10, created_at: '2026-09-07T00:00:11Z',
+  }])
+  assert.ok(fake.calls.some(({ path }) => path === '/api/line/801'))
+  assert.ok(fake.calls.some(({ path }) => path === '/api/line/802'))
+})
+
+test('a quiet room reads no line bodies', async () => {
+  const lineSaid = {
+    change_id: '11', kind: 'line_said', actor: 'alpha', detail: { line_id: 801, place_id: 10 }, created_at: '2026-09-07T00:00:11Z',
+  }
+  const quietRoom = { ...room(10), place: { ...places.find(place => place.id === 10), quiet: true } }
+  const fake = makeFollowFetch({
+    rooms: { 10: quietRoom },
+    changePages: { 10: { change_marker: '11', changes: [lineSaid], returned_items: 1, unchanged: false, has_more: false, next_since: '11' } },
+    lines: { 801: { id: 801, place_id: 10, author_id: 999, author: 'alpha', body: 'hidden' } },
+  })
+  const source = await createLiveSource({ mode: 'follow-room', followHandle: 'alpha', fetchImpl: fake.fetchImpl })
+  await source.read(0, { size: { columns: 80, rows: 24 } })
+
+  const changed = await source.read(30_000, { size: { columns: 80, rows: 24 } })
+
+  assert.equal(changed.ok, true)
+  assert.deepEqual(changed.lines, [])
+  assert.equal(fake.calls.some(({ path }) => path.startsWith('/api/line/')), false)
+})
+
+test('a line removal reaches the follow reducer', async () => {
+  const removed = {
+    change_id: '11', kind: 'moderation', actor: 'founder',
+    detail: { action: 'remove', target_type: 'line', target_id: 801 }, created_at: '2026-09-07T00:00:11Z',
+  }
+  const fake = makeFollowFetch({
+    changePages: { 10: { change_marker: '11', changes: [removed], returned_items: 1, unchanged: false, has_more: false, next_since: '11' } },
+  })
+  const source = await createLiveSource({ mode: 'follow-room', followHandle: 'alpha', fetchImpl: fake.fetchImpl })
+  await source.read(0, { size: { columns: 80, rows: 24 } })
+
+  const changed = await source.read(30_000, { size: { columns: 80, rows: 24 } })
+
+  assert.equal(changed.ok, true)
+  assert.deepEqual(changed.events.map(event => event.kind), ['moderation'])
 })
 
 test('follow-room exposes ordered public changes as context without widening rendered events', async () => {

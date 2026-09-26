@@ -428,6 +428,7 @@ const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [], clock }
     events: relevant,
     contextEvents,
     notes,
+    lines: hidden ? [] : [...(raw.lines?.lines ?? [])].filter((line) => Number(line.place_id) === placeId).sort(byId),
     directory: raw.directory,
   }
 }
@@ -441,6 +442,7 @@ const eventThingId = (event) => {
 }
 function eventRelevantToFollow(event, focus, placeId, thingIds) {
   const detail = event?.detail ?? {}
+  if (event?.kind === 'moderation' && detail.action === 'remove' && ['line', 'ping'].includes(detail.target_type)) return true
   const endpointMove = event?.actor === focus.handle && event?.kind === 'action'
     && ['move', 'go_home'].includes(detail.action)
     && Number.isSafeInteger(Number(detail.from_place_id)) && Number.isSafeInteger(Number(detail.to_place_id))
@@ -470,6 +472,18 @@ const noteBodiesFor = async (fetchImpl, events, placeId) => {
   const failed = reads.find(({ result }) => !result.ok || !result.body?.note)
   if (failed) return { ok: false, error: responseError(`note ${failed.id}`, failed.result) }
   return { ok: true, notes: reads.map(({ result }) => result.body.note) }
+}
+const lineBodiesFor = async (fetchImpl, events, placeId) => {
+  const ids = [...new Set(events.filter((event) => event.kind === 'line_said' && Number(event.detail?.place_id) === placeId)
+    .map((event) => Number(event.detail?.line_id)).filter((id) => Number.isSafeInteger(id) && id > 0))]
+  const reads = await mapWithConcurrency(ids, 8, async (id) => {
+    const result = await readCityJson(fetchImpl, `/api/line/${encodeURIComponent(id)}`)
+    return { id, result }
+  })
+  const failed = reads.find(({ result }) => !result.ok || !result.body?.line)
+  if (failed) return { ok: false, error: responseError(`line ${failed.id}`, failed.result) }
+  return { ok: true, lines: reads.map(({ result }) => result.body.line)
+    .filter((line) => typeof line.body === 'string' && line.moderated !== true) }
 }
 const mergeNotes = (...groups) => [...new Map(groups.flat().filter((note) => Number.isSafeInteger(Number(note?.id)))
   .map((note) => [Number(note.id), note])).values()].sort(byId)
@@ -699,6 +713,9 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
       const freshNotes = hidden ? { ok: true, notes: [] } : await noteBodiesFor(sourceFetch, events, placeId)
       if (!freshNotes.ok) return freshNotes
       const notes = hidden ? [] : mergeNotes(history, freshNotes.notes)
+      const freshLines = hidden ? { ok: true, lines: [] } : await lineBodiesFor(sourceFetch, events, placeId)
+      if (!freshLines.ok) return freshLines
+      const lines = hidden ? [] : freshLines.lines
       const residentLimit = size ? residentDrawingLimit(size, 1) : Number.MAX_SAFE_INTEGER
       const roomRows = hidden ? [] : [{ placeId, result: { body: roomResponse } }]
       const drawingCache = new Map()
@@ -707,7 +724,7 @@ const createFollowRoomSource = async ({ followHandle, sceneFile, failAt, fetchIm
       drawings.push(...await mapWithConcurrency(extraThingIds, 8, (id) => eventDrawing(sourceFetch, drawingCache, id)))
       const failedDrawing = drawings.find((entry) => entry.response.status < 200 || entry.response.status >= 300)
       if (failedDrawing) return { ok: false, error: `drawing ${failedDrawing.key}: ${failedDrawing.response.error ?? `HTTP ${failedDrawing.response.status}`}` }
-      const raw = { directory, presence: { pages: presenceResult.pages }, rooms: hidden ? [] : [{ placeId, response: roomResponse }], notes: { notes }, events: { events }, contextEvents: { events: contextEvents }, drawings }
+      const raw = { directory, presence: { pages: presenceResult.pages }, rooms: hidden ? [] : [{ placeId, response: roomResponse }], notes: { notes }, lines: { lines }, events: { events }, contextEvents: { events: contextEvents }, drawings }
       const observedAtEpochMs = Date.now()
       const elapsedMs = Math.max(0, Math.min(60_000, observedAtEpochMs - readStartedEpochMs))
       const result = normalizedFollowRoom({

@@ -55,6 +55,10 @@ const noteText = (note, fallbackAuthor) => {
   return author && body ? `${author}: ${body}` : null
 }
 
+const freshRows = (state, observation) => [...(observation?.contextEvents ?? observation?.events ?? [])]
+  .filter((row) => (eventId(row) ?? 0) > state.cursor)
+  .sort((left, right) => (eventId(left) ?? 0) - (eventId(right) ?? 0))
+
 const lookingRows = (observation, roomId) => (currentRoom(observation)?.residents ?? []).flatMap((resident) => {
   const signal = resident?.looking
   const id = positiveId(resident?.id)
@@ -64,16 +68,25 @@ const lookingRows = (observation, roomId) => (currentRoom(observation)?.resident
     startedAt: signal.started_at, expiresAtMs: Number(signal.expiresAtMs), active: signal.suppressed !== true }]
 })
 
-const freshEntries = (state, observation, known, roomId, switchedResident, movedRoom) => {
+const freshEntries = (state, observation, known, roomId, switchedResident, movedRoom, rows) => {
   if (!observation || switchedResident) return []
   const notes = new Map((observation.notes ?? []).map((row) => [key(row?.id), row]))
-  const rows = [...(observation.contextEvents ?? observation.events ?? [])]
-    .filter((row) => (eventId(row) ?? 0) > state.cursor)
-    .sort((left, right) => (eventId(left) ?? 0) - (eventId(right) ?? 0))
+  const lines = new Map((observation.lines ?? []).map((row) => [key(row?.id), row]))
   const eventNoteIds = new Set()
   const fromEvents = rows.flatMap((row) => {
     const id = eventId(row)
     if (id === null) return []
+    if (row.kind === 'line_said') {
+      const lineId = positiveId(row.detail?.line_id)
+      const line = lines.get(key(lineId))
+      if (lineId === null || !line || !inRoom(positiveId(row.detail?.place_id), roomId)
+        || !inRoom(positiveId(line.place_id), roomId) || line.author !== row.actor || line.moderated === true) return []
+      const author = safeName(line.author)
+      const body = sanitizeBubbleText(line.body)
+      return author && body ? [{ id: `line:${id}`, source: 'line', text: `${author}: ${body}`,
+        eventId: id, actor: author, roomId, cue: 'note', lineId }] : []
+    }
+    if (row.kind === 'moderation' && ['line', 'ping'].includes(row.detail?.target_type)) return []
     if (row.kind === 'note') {
       const noteId = positiveId(row.detail?.note_id)
       if (state.seenNoteIds?.includes(key(noteId))) return []
@@ -85,7 +98,7 @@ const freshEntries = (state, observation, known, roomId, switchedResident, moved
         actor: safeName(note.author ?? row.actor), roomId, cue: 'note' }] : []
     }
     const described = describeRoomEvent(row, known, roomId, rows)
-    return described ? [{ id: `event:${id}`, source: 'event', ...described }] : []
+    return described ? [{ id: `event:${id}`, source: row.kind === 'ping_answered' ? 'line' : 'event', ...described }] : []
   })
   if (movedRoom) return fromEvents
   const noteOnly = [...notes.values()]
@@ -112,7 +125,7 @@ const lineOffsets = (body, lines) => {
 }
 
 const entryParts = (entry) => {
-  if (entry.source === 'note') {
+  if (entry.source === 'note' || entry.source === 'line') {
     const separator = entry.text.indexOf(': ')
     if (separator > 0) return { actor: entry.text.slice(0, separator), action: '', body: entry.text.slice(separator + 2) }
   } else {
@@ -234,7 +247,25 @@ export const stepActivity = (previous, { nowMs, observation, columns, rows = 3, 
     .filter(entry => entry.active && !(state.seenLooking ?? []).includes(entry.id) && entry.expiresAtMs > time)
     .map(entry => ({ ...entry, source: 'looking', text: `${entry.actor} is looking around.`, cue: 'looking' }))
   state = { ...state, seenLooking: [...new Set([...(state.seenLooking ?? []), ...witnessedLooking.map(entry => entry.id)])].slice(-400) }
-  const additions = [...freshEntries(state, observation, known, roomId, switchedResident, movedRoom), ...unseenLooking]
+  const freshEventRows = freshRows(state, observation)
+  const removedLineIds = new Set()
+  const removedPingIds = new Set()
+  for (const row of freshEventRows) {
+    const detail = row.detail ?? {}
+    if (row.kind !== 'moderation' || detail.action !== 'remove') continue
+    const targetId = positiveId(detail.target_id)
+    if (targetId === null) continue
+    if (detail.target_type === 'line') removedLineIds.add(key(targetId))
+    if (detail.target_type === 'ping') removedPingIds.add(key(targetId))
+  }
+  const history = state.history.filter((entry) => !(entry.lineId !== undefined && removedLineIds.has(key(entry.lineId)))
+    && !(entry.pingId !== undefined && removedPingIds.has(key(entry.pingId))))
+  if (history.length !== state.history.length) {
+    state = { ...state, history, wrappedLines: history.length ? flatten(history, width) : [] }
+  }
+  const additions = [...freshEntries(state, observation, known, roomId, switchedResident, movedRoom, freshEventRows), ...unseenLooking]
+    .filter((entry) => !(entry.lineId !== undefined && removedLineIds.has(key(entry.lineId)))
+      && !(entry.pingId !== undefined && removedPingIds.has(key(entry.pingId))))
   let enriched = []
   if (additions.length) {
     const roomName = safeName(roomValue?.name) || knownValue(known.places, roomId)

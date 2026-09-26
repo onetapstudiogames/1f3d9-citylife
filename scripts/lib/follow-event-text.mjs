@@ -6,6 +6,7 @@ const lookup = (entries, value) => new Map(entries ?? []).get(String(value)) ?? 
 const thingIdFor = d => id(d.thing_id) ?? id(d.source_thing_id)
   ?? (d.asset_type === 'thing' ? id(d.asset_id) : null) ?? (d.type === 'thing' ? id(d.id) : null)
 const basic = Object.freeze({ talk: 'talked', move: 'moved', go_home: 'went home', give: 'gave', use: 'used', consume: 'consumed', make: 'made' })
+export const TALK_ANSWER_WORDS = Object.freeze({ yes: 'yes', no: 'no', in_a_moment: 'in a moment' })
 
 // These are public record descriptions, not guesses about a resident's intentions.
 const kinds = Object.freeze({
@@ -222,11 +223,22 @@ export const describeRoomEvent = (row, known, roomId, rows) => {
   const d = row?.detail ?? {}
   const actor = safe(row?.actor)
   if (!actor || roomFor(row, known, roomId) === null) return null
+  if (row.kind === 'line_said') return null
+  if (row.kind === 'ping_answered') {
+    if (!Object.hasOwn(TALK_ANSWER_WORDS, d.answer)) return null
+    return { text: `${actor}: ${TALK_ANSWER_WORDS[d.answer]}`, actor, cue: 'action', thingId: null,
+      residentId: null, eventId: id(row.id), roomId, pingId: id(d.ping_id) }
+  }
   let detail
   const ability = row.kind === 'action' ? undefined : abilityDescription(row, known)
   if (ability === null) return null
   if (row.kind === 'action') detail = actionDescription(row, known, roomId, rows)
-  else if (ability) {
+  else if (row.kind === 'ping_sent') {
+    const targetId = id(d.target_id)
+    if (targetId === null) return null
+    const target = lookup(known.residents, targetId) ?? `resident #${targetId}`
+    detail = { description: `pinged ${target}`, cue: 'action', thingId: null, pingId: id(d.ping_id) }
+  } else if (ability) {
     if (d.error !== undefined && d.error !== null) return null
     detail = ability
   } else if (Object.hasOwn(kinds, row.kind)) {
@@ -262,6 +274,7 @@ export const describeRoomEvent = (row, known, roomId, rows) => {
     detail = { description, cue, thingId }
   }
   if (!detail) return null
-  return { text: `${actor} ${detail.description}.`, actor, cue: detail.cue, thingId: detail.thingId,
+  const described = { text: `${actor} ${detail.description}.`, actor, cue: detail.cue, thingId: detail.thingId,
     residentId: row.kind === 'resident_edited' ? id(d.resident_id) : null, eventId: id(row.id), roomId }
+  return row.kind === 'ping_sent' ? { ...described, pingId: detail.pingId } : described
 }
