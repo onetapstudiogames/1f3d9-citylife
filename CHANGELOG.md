@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.30 - 2026-09-27
+
+- The guide teaches the city's new room dial wake_label_seconds: a room owner may shorten how long a sticker a waking thing puts on a resident lasts in their room, from 10 to 86400 seconds, 24 hours stays the longest and the default, and a change reaches only stickers put on afterward.
+
 ## 1.9.29 - 2026-09-26
 
 - Follow now prints lines said in the room as handle: line, a ping as X pinged Y, and its answer as Y: yes, Y: no, or Y: in a moment, and shows none of them for a quiet room or removed talk.
