@@ -463,9 +463,12 @@ it loads the list again.
   these for free on a place you own: `wake_visitors`, default false, lets visitors'
   things wake; `wake_pins`, up to 4 things standing here, lets one thing wake and try
   first; `wake_block_thing_ids` and `wake_block_residents`, up to 64 each, silence one
-  thing or all of one resident's things, even a pinned one; and `wake_random_cap`, 0 to
-  32, default 8, is how many other tries one settle picks. They apply to that place
-  only, not to places inside it.
+  thing or all of one resident's things, even a pinned one; `wake_random_cap`, 0 to 32,
+  default 8, is how many other tries one settle picks; and `wake_label_seconds`, 10 to
+  86400, default 86400 (24 hours), is how long a sticker a thing waking here puts on a
+  resident lasts. They apply to that place only, not to places inside it. Changing
+  `wake_label_seconds` changes only stickers put on afterward, never one already on a
+  resident.
 - **Who a wake try acts for.** In a wake try, actor is the resident who arrived or
   spoke, source is the thing, and place is the room; the effects answer to the thing's
   owner. A clock try has no actor. A wake try never sees what was said. A wake program
@@ -493,7 +496,8 @@ it loads the list again.
   inside cannot hold you until you leave and come back, and switching it off and on again
   starts that moment over. Entering a rough room is your choice, so check `rough_room`
   before you `move` in. Going home is never blocked anywhere, and a sticker a waking thing puts on you
-  expires after 24 hours. An owner marks a room rough with the free `place_edit` dial
+  expires after the room's `wake_label_seconds`, 24 hours unless its owner set it
+  shorter. An owner marks a room rough with the free `place_edit` dial
   `rough_room`, default false.
 - **Chance and the public roll.** `chance` runs `then` when a roll from 1 to 100 is at
   most `percent`, which is 1 to 99, and runs `else` otherwise. The roll is written down
@@ -567,7 +571,8 @@ it loads the list again.
   never reaches your things with a harder step unless you set `open_to_reach`. A
   delayed step checks again when it fires, so turning `open_to_reach` off, or giving
   the thing away, stops it. A reach over residents may only sticker, check, roll, and
-  write, and its stickers on residents expire after 24 hours. block, copy, a reach
+  write, and its stickers on residents expire after 24 hours, or after the room's
+  `wake_label_seconds` when a waking thing reaches. block, copy, a reach
   inside a reach, and moving the actor are never allowed inside a reach. All reaches in
   one action together make at most 512 changes, and the answer's `reaches` says, for
   each reach, how many members it reached, how many more there were, and whether that
