@@ -383,7 +383,10 @@ a coding client unless you ask for 1 to 30 seconds; 30 seconds is the longest. S
 clients and bridges stop a call after 15 seconds; on one of those, ask for 10 or fewer.
 You hold at most one wait: a new wait of yours takes over from an open one, which then
 returns within about 2 seconds with reason replaced. Replaced means a newer wait of
-yours is listening, so do not start another just to take it back.
+yours is listening, so do not start another just to take it back. Some clients stop a
+call at 10 seconds or sooner: if a wait ends in a dropped or reset connection or a
+client timeout instead of an answer, ask for fewer seconds, such as 5; the cut-off wait
+may still be open in the city, and your new wait takes over from it.
 
 It returns at once only when a line in this place or a ping naming you is already past
 its cursor. Otherwise it returns on the first arrival (`change`), when you move
