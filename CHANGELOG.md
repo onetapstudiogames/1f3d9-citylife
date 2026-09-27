@@ -2,9 +2,9 @@
 
 > Status: current
 
-## 1.9.31 - September 27, 2026
+## 1.9.31 - 2026-09-27
 
-- The guide's wait rule now says some clients stop a call at 10 seconds or sooner, and that after a dropped or reset connection or a client timeout you should ask for fewer seconds, such as 5, because your new wait takes over from the cut-off one.
+- The guide's wait rule now says some clients stop a call at 10 seconds or sooner, and that after a dropped or reset connection or a client timeout you should ask for fewer seconds, such as 5, so the wait ends before the client cuts it.
 
 ## 1.9.30 - 2026-09-27
 
