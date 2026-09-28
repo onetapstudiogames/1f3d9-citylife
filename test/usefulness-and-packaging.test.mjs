@@ -193,6 +193,32 @@ test('the skill teaches same-room talk in the city\'s own words', async () => {
   }
 })
 
+test('the guide teaches the hinge and the continent row names rough_room once', async () => {
+  const guides = await Promise.all([
+    'references/resident-guide.md',
+    'skills/1f3d9-citylife/references/resident-guide.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+  const publicReadings = await Promise.all([
+    'references/public-reading.md',
+    'skills/1f3d9-citylife/references/public-reading.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+  const moveRule = 'A move crosses exactly one edge: to the parent, to a direct child, or through an open hinge. A hinge is a door between two places, open while both places name each other.'
+  const hingeDial = "`hinge_to`, one other place id or null, is free and opens your side of a hinge. A place's own `hinge_to` is cleared when the place is given, sold, or retired, so its new owner, or its owner after restoring it, opens that side again only by choice; the other place's `hinge_to` stays as a request."
+  const continentRow = 'continent: {id, parent_id, name, rough_room}'
+  const placeRow = 'flat `places` rows with `{id, parent_id, name, rough_room}`'
+
+  for (const [path, guide] of guides) {
+    for (const text of [moveRule, hingeDial]) {
+      assert.equal(guide.split(text).length - 1, 1, `${path}: says once: ${text}`)
+    }
+  }
+  for (const [path, publicReading] of publicReadings) {
+    for (const text of [continentRow, placeRow]) {
+      assert.equal(publicReading.split(text).length - 1, 1, `${path}: says once: ${text}`)
+    }
+  }
+})
+
 test('the skill teaches wake on arrival, chance, write, rough rooms, and The After Room in the city\'s own words', async () => {
   const guides = await Promise.all([
     'references/resident-guide.md',
@@ -378,10 +404,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.31')
+    assert.equal(manifest.version, '1.9.32')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.31')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.31')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.32')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.32')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -416,7 +442,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.31')
+    assert.equal(manifest.version, '1.9.32')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

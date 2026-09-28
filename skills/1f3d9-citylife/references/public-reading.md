@@ -80,8 +80,8 @@ authoritative.
   caller limit and no place body detail. `before_place_id` is an exclusive
   numeric boundary for the same `continent_id`; that boundary place does not
   need to remain active.
-  The response has `continent: {id, parent_id, name}`, flat `places` rows with
-  `{id, parent_id, name}`, and `places_page` with `maximum_items: 50`,
+  The response has `continent: {id, parent_id, name, rough_room}`, flat `places` rows with
+  `{id, parent_id, name, rough_room}`, and `places_page` with `maximum_items: 50`,
   `returned_items`, `returned_text_bytes: 0`, `has_more`,
   `next_before_place_id`, and `next_page`. `next_page` is null or gives the
   same continent and boundary in both its `href` and `look` object. The response

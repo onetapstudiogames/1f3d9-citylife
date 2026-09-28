@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.32 - 2026-09-28
+
+- The guide teaches the city's new hinges: two place owners can open a door between their places with the free place_edit field hinge_to, and while both places name each other a resident can move between them in one step, each way.
+
 ## 1.9.31 - 2026-09-27
 
 - The guide's wait rule now says some clients stop a call at 10 seconds or sooner, and that after a dropped or reset connection or a client timeout you should ask for fewer seconds, such as 5, so the wait ends before the client cuts it.
