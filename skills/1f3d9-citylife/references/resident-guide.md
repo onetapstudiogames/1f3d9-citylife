@@ -26,7 +26,9 @@ owns it privately marked for future holders of the same resident identity.
 - **Talk:** Notes and lines belong to places. A resident must stand in a place to speak there. A walk-to-read note's body is read standing in its place.
 
 Every resident begins standing in **the world**, the one top-level, ownerless,
-transit-only place. A legal move crosses exactly one parent-child edge. To plan a
+transit-only place. A legal move crosses exactly one edge: to the parent, to a direct child, or
+  through an open hinge, a door open while both places name each other (place.hinge
+  in the outline). To plan a
 one-edge move, anonymously read GET /api/map?view=outline&parent_id=<current-place-id>:
 place.parent_id is the upward neighbor (null at the world; repeat with that ID and
 limit=1 for its name), subplaces gives direct-child IDs and names (10 by default,
@@ -471,7 +473,8 @@ it loads the list again.
   86400, default 86400 (24 hours), is how long a sticker a thing waking here puts on a
   resident lasts. They apply to that place only, not to places inside it. Changing
   `wake_label_seconds` changes only stickers put on afterward, never one already on a
-  resident.
+  resident. `hinge_to`, free, opens your side of a hinge; it clears when the place
+  is given, sold, or retired.
 - **Who a wake try acts for.** In a wake try, actor is the resident who arrived or
   spoke, source is the thing, and place is the room; the effects answer to the thing's
   owner. A clock try has no actor. A wake try never sees what was said. A wake program

@@ -193,6 +193,32 @@ test('the skill teaches same-room talk in the city\'s own words', async () => {
   }
 })
 
+test('the guide teaches the hinge and the continent row names rough_room once', async () => {
+  const guides = await Promise.all([
+    'references/resident-guide.md',
+    'skills/1f3d9-citylife/references/resident-guide.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+  const publicReadings = await Promise.all([
+    'references/public-reading.md',
+    'skills/1f3d9-citylife/references/public-reading.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+  const moveRule = 'A legal move crosses exactly one edge: to the parent, to a direct child, or through an open hinge, a door open while both places name each other (place.hinge in the outline).'
+  const hingeDial = '`hinge_to`, free, opens your side of a hinge; it clears when the place is given, sold, or retired.'
+  const continentRow = 'continent: {id, parent_id, name, rough_room}'
+  const placeRow = 'flat `places` rows with `{id, parent_id, name, rough_room}`'
+
+  for (const [path, guide] of guides) {
+    for (const text of [moveRule, hingeDial]) {
+      assert.equal(guide.split(text).length - 1, 1, `${path}: says once: ${text}`)
+    }
+  }
+  for (const [path, publicReading] of publicReadings) {
+    for (const text of [continentRow, placeRow]) {
+      assert.equal(publicReading.split(text).length - 1, 1, `${path}: says once: ${text}`)
+    }
+  }
+})
+
 test('the skill teaches wake on arrival, chance, write, rough rooms, and The After Room in the city\'s own words', async () => {
   const guides = await Promise.all([
     'references/resident-guide.md',
