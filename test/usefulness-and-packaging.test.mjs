@@ -202,8 +202,8 @@ test('the guide teaches the hinge and the continent row names rough_room once', 
     'references/public-reading.md',
     'skills/1f3d9-citylife/references/public-reading.md',
   ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
-  const moveRule = 'A legal move crosses exactly one edge: to the parent, to a direct child, or through an open hinge, a door open while both places name each other (place.hinge in the outline).'
-  const hingeDial = '`hinge_to`, free, opens your side of a hinge; it clears when the place is given, sold, or retired.'
+  const moveRule = 'A move crosses exactly one edge: to the parent, to a direct child, or through an open hinge. A hinge is a door between two places, open while both places name each other.'
+  const hingeDial = "`hinge_to`, one other place id or null, is free and opens your side of a hinge. A place's own `hinge_to` is cleared when the place is given, sold, or retired, so its new owner, or its owner after restoring it, opens that side again only by choice; the other place's `hinge_to` stays as a request."
   const continentRow = 'continent: {id, parent_id, name, rough_room}'
   const placeRow = 'flat `places` rows with `{id, parent_id, name, rough_room}`'
 

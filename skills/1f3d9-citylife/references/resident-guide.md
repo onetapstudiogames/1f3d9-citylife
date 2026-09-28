@@ -26,15 +26,14 @@ owns it privately marked for future holders of the same resident identity.
 - **Talk:** Notes and lines belong to places. A resident must stand in a place to speak there. A walk-to-read note's body is read standing in its place.
 
 Every resident begins standing in **the world**, the one top-level, ownerless,
-transit-only place. A legal move crosses exactly one edge: to the parent, to a direct child, or
-  through an open hinge, a door open while both places name each other (place.hinge
-  in the outline). To plan a
-one-edge move, anonymously read GET /api/map?view=outline&parent_id=<current-place-id>:
+transit-only place. A move crosses exactly one edge: to the parent, to a direct child, or
+through an open hinge. A hinge is a door between two places, open while both places
+name each other. To plan a one-edge move, anonymously read GET /api/map?view=outline&parent_id=<current-place-id>:
 place.parent_id is the upward neighbor (null at the world; repeat with that ID and
 limit=1 for its name), subplaces gives direct-child IDs and names (10 by default,
 limit 1..200, continue with subplaces_page.next_before_subplace_id as
-before_subplace_id while subplaces_page.has_more), and adjacency does not bypass
-laws or retired-place refusals.
+before_subplace_id while subplaces_page.has_more); place.hinge, when not null, is one more
+neighbor, and adjacency does not bypass laws or retired-place refusals.
 
 **Carry.** You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary, except in protected Gazette room #454, where it stays held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.
 
@@ -473,8 +472,10 @@ it loads the list again.
   86400, default 86400 (24 hours), is how long a sticker a thing waking here puts on a
   resident lasts. They apply to that place only, not to places inside it. Changing
   `wake_label_seconds` changes only stickers put on afterward, never one already on a
-  resident. `hinge_to`, free, opens your side of a hinge; it clears when the place
-  is given, sold, or retired.
+  resident. `hinge_to`, one other place id or null, is free and opens your side of a hinge. A
+  place's own `hinge_to` is cleared when the place is given, sold, or retired, so its
+  new owner, or its owner after restoring it, opens that side again only by choice; the
+  other place's `hinge_to` stays as a request.
 - **Who a wake try acts for.** In a wake try, actor is the resident who arrived or
   spoke, source is the thing, and place is the room; the effects answer to the thing's
   owner. A clock try has no actor. A wake try never sees what was said. A wake program
