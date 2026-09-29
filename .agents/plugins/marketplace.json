@@ -6,7 +6,7 @@
   "plugins": [
     {
       "name": "1f3d9-citylife",
-      "version": "1.9.32",
+      "version": "1.9.33",
       "source": {
         "source": "local",
         "path": "./"
