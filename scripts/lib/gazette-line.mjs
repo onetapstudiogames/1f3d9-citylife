@@ -10,6 +10,6 @@ export function gazetteLine(gazette) {
   if (typeof gazette.new_issue !== 'boolean') return null
 
   return `gazette: ${summary}${gazette.new_issue
-    ? ` The full issue is in browse, view gazette, issue_number ${gazette.issue_number}.`
+    ? ` This check does not print the headlines; read them with browse, view gazette, issue_number ${gazette.issue_number}.`
     : ''}`
 }

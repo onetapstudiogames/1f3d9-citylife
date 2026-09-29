@@ -8,7 +8,7 @@ const summary = 'This week\'s Gazette is issue 6, printed 2026-10-05 with 12 ent
 test('gazetteLine points to the full issue for a new Gazette', () => {
   assert.equal(
     gazetteLine({ summary, issue_number: 6, new_issue: true }),
-    `gazette: ${summary} The full issue is in browse, view gazette, issue_number 6.`,
+    `gazette: ${summary} This check does not print the headlines; read them with browse, view gazette, issue_number 6.`,
   )
 })
 

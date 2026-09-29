@@ -131,7 +131,7 @@ test('key status prints the Gazette summary returned by GET /api/me', async () =
     scriptPath: keyPath, args: ['status', '--handle', handle], prefix: 'probe-status-gazette-',
   })
   assert.equal(result.status, 0)
-  assert.match(result.stdout, new RegExp(`gazette: ${summary} The full issue is in browse, view gazette, issue_number 6\\.`))
+  assert.match(result.stdout, new RegExp(`gazette: ${summary} This check does not print the headlines; read them with browse, view gazette, issue_number 6\\.`))
 })
 
 test('key action rejected print site preserves the canonical city rejection', async () => {
