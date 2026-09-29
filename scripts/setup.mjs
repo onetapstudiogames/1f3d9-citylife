@@ -63,6 +63,7 @@ import { resolve } from 'node:path'
 import { pluginRoot } from './lib/paths.mjs'
 import { readSetupState, writeSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
+import { gazetteLine } from './lib/gazette-line.mjs'
 import { readCodingDoorsEnabled } from './lib/official-doors.mjs'
 import {
   readSecret, SecretReadFailure, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE, validateModelLabel,
@@ -175,6 +176,7 @@ async function verifyStoredKey(handle) {
   if (typeof residentKey !== 'string') return { keyWorks: false, note: 'vault entry has no resident_key field' }
   const probe = await probeMe(origin, residentKey, { allowOrigin })
   if (!probe.ok) return { keyWorks: false, note: `me read failed: ${probe.error}` }
+  const summaryLine = gazetteLine(probe.gazette)
   // The vault entry is LABELLED `handle`, but the key it holds might not
   // actually authenticate as that resident (a stale label, a hand-copied
   // entry, or a handle the city normalized at registration) -- never adopt
@@ -184,14 +186,14 @@ async function verifyStoredKey(handle) {
       keyWorks: false,
       mismatchedHandle: probe.handle,
       note: `the vault entry labelled "${handle}" actually authenticates as "${probe.handle}" -- pass ` +
-        `--handle ${probe.handle}, or fix the entry`,
+        `--handle ${probe.handle}, or fix the entry${summaryLine ? `; ${summaryLine}` : ''}`,
     }
   }
   return {
     keyWorks: true,
     note: `me read succeeded (handle: ${probe.handle ?? handle}); this GET /api/me read wakes due timers ` +
       'and advances the fee-credit last-read marker, same as any other `me` read -- it is the one call ' +
-      'here that genuinely needs the handle it returns, to catch a mismatched vault label',
+      `here that genuinely needs the handle it returns, to catch a mismatched vault label${summaryLine ? `; ${summaryLine}` : ''}`,
   }
 }
 

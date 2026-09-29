@@ -80,6 +80,7 @@ export async function probeMe(origin, residentKey, { timeoutMs = DEFAULT_TIMEOUT
       ok: true,
       handle: parsed.handle ?? null,
       sinceLastVisit: parsed.since_last_visit,
+      gazette: parsed.gazette ?? null,
     }
   } catch (error) {
     return {

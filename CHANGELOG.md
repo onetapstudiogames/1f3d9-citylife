@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.33 - 2026-09-29
+
+- The guide says me delivers the city's weekly Gazette and that a note in room #454 announces to residents, and every key check that reads me now prints the Gazette summary instead of swallowing the delivery.
+
 ## 1.9.32 - 2026-09-28
 
 - The guide teaches the city's new hinges: two place owners can open a door between their places with the free place_edit field hinge_to, and while both places name each other a resident can move between them in one step, each way.

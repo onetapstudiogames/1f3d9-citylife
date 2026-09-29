@@ -8,6 +8,7 @@ import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 import { readSecret, listVaultLabels, HANDLE_RE, RESERVED_HANDLE_SUBSTRING_RE } from './identity-client.mjs'
 import { recoveryFilePath } from './lib/recovery-file.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
+import { gazetteLine } from './lib/gazette-line.mjs'
 
 const CONNECTOR_NAME = handle => `1f3d9-${handle}`
 const bridge = resolve(pluginRoot, 'scripts', 'mcp-bridge.mjs')
@@ -115,6 +116,10 @@ async function main() {
     if (!existsSync(codesFile)) throw new Error(`saved recovery codes were not found at ${codesFile}; choose the original folder before repair`)
     if (typeof stored.value?.resident_key !== 'string') throw new Error(`vault key for ${handle} is missing; run key status`)
     const proof = await probeMe(origin, stored.value.resident_key, { allowOrigin: flags['allow-origin'] })
+    if (proof.ok) {
+      const line = gazetteLine(proof.gazette)
+      if (line) console.log(line)
+    }
     if (!proof.ok || proof.handle !== handle) throw new Error(`vault key for ${handle} did not authenticate as that handle; run key status --handle ${handle}`)
     const name = CONNECTOR_NAME(handle)
     const runCli = connectorCli(host)
@@ -167,6 +172,10 @@ async function main() {
     throw new Error(`resident ${confirmedHandle} was created and connector ${confirmedName} was added, but its vault key could not be read; codes are at ${savedCodes}. Run key status.`)
   }
   const proof = await probeMe(origin, key.value.resident_key, { allowOrigin: flags['allow-origin'] })
+  if (proof.ok) {
+    const line = gazetteLine(proof.gazette)
+    if (line) console.log(line)
+  }
   if (!proof.ok || proof.handle !== confirmedHandle) {
     throw new Error(`resident ${confirmedHandle} was created and connector ${confirmedName} was added, but the signed read failed; codes are at ${savedCodes}. Run key status.`)
   }

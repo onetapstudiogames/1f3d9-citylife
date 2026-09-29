@@ -22,6 +22,7 @@ import { pluginRoot } from './lib/paths.mjs'
 import { LOST_KEY_ADVICE, UNREADABLE_ENTRY_ADVICE } from './lib/recovery-guidance.mjs'
 import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
+import { gazetteLine } from './lib/gazette-line.mjs'
 import { readSecret, SecretReadFailure, HANDLE_RE, promoteReplacementKey } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 import { commandFailure } from './lib/cli-error.mjs'
@@ -146,6 +147,10 @@ async function status() {
   const residentKey = requireStoredKey(handle, { showMissingStatus: true })
   if (!residentKey) return
   const probe = await probeMe(origin, residentKey, { allowOrigin })
+  if (probe.ok) {
+    const line = gazetteLine(probe.gazette)
+    if (line) console.log(line)
+  }
   console.log(`handle: ${handle}`)
   if (!probe.ok) {
     if (probe.rejected) {
@@ -194,6 +199,8 @@ async function probeMatchesOrRefuse(label, handle, residentKey) {
     console.log(`${label}: one me read: FAILED (${probe.error}) -- proceeding, since there is nothing this check can validate.`)
     return true
   }
+  const line = gazetteLine(probe.gazette)
+  if (line) console.log(line)
   if (probe.handle && probe.handle !== handle) {
     console.error(
       `${label}: refusing -- the vault entry labelled "${handle}" actually authenticates as "${probe.handle}", ` +
@@ -376,6 +383,10 @@ async function adopt() {
   }
   const residentKey = stored.value.resident_key
   const probe = await probeMe(origin, residentKey, { allowOrigin })
+  if (probe.ok) {
+    const line = gazetteLine(probe.gazette)
+    if (line) console.log(line)
+  }
   console.log('key adopt: probed the staged key with one GET /api/me read — this wakes any due timers and')
   console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read.')
   if (!probe.ok) {
@@ -423,6 +434,10 @@ async function adopt() {
     deadReason = 'it held no resident_key'
   } else if (existingLive.found) {
     const liveProbe = await probeMe(origin, existingLive.value.resident_key, { allowOrigin })
+    if (liveProbe.ok) {
+      const line = gazetteLine(liveProbe.gazette)
+      if (line) console.log(line)
+    }
     console.log(
       liveProbe.ok
         ? `key adopt: one me read on the existing entry at "${handle}": OK (handle: ${liveProbe.handle ?? 'unknown'}).`
