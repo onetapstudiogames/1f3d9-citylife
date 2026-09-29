@@ -26,6 +26,7 @@ import { pluginRoot } from './lib/paths.mjs'
 import { LOST_KEY_ADVICE, UNREADABLE_ENTRY_ADVICE } from './lib/recovery-guidance.mjs'
 import { readSetupState, SetupStateReadFailure } from './lib/identity-state.mjs'
 import { probeMe } from './lib/identity-probe.mjs'
+import { gazetteLine } from './lib/gazette-line.mjs'
 import { readSecret, SecretReadFailure } from './identity-client.mjs'
 import { assertAllowedOrigin } from './lib/origin-guard.mjs'
 import { bridgeGuidance } from './lib/bridge-guidance.mjs'
@@ -254,6 +255,10 @@ async function connectHost() {
     return
   }
   const probe = await probeMe(origin, stored.value.resident_key, { allowOrigin })
+  if (probe.ok) {
+    const line = gazetteLine(probe.gazette)
+    if (line) console.log(line)
+  }
   if (!probe.ok) {
     console.log(`one me read: FAILED (${probe.error})`)
     process.exitCode = 1

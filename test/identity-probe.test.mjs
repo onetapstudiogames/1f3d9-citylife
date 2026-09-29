@@ -120,6 +120,20 @@ test('key status unverifiable print site replaces unsafe server prose with the r
   assertUnsafeProseHidden(result, /stored key: could not be verified right now \(the city answered with HTTP 503 but no readable message\)/u)
 })
 
+test('key status prints the Gazette summary returned by GET /api/me', async () => {
+  const summary = 'This week\'s Gazette is issue 6, printed 2026-10-05 with 12 entries.'
+  const { result } = await runWithVault({
+    answerForKey: () => ({
+      status: 200,
+      body: { handle, gazette: { summary, issue_number: 6, new_issue: true } },
+    }),
+    entries: [{ label: handle, key: residentKey }],
+    scriptPath: keyPath, args: ['status', '--handle', handle], prefix: 'probe-status-gazette-',
+  })
+  assert.equal(result.status, 0)
+  assert.match(result.stdout, new RegExp(`gazette: ${summary} The full issue is in browse, view gazette, issue_number 6\\.`))
+})
+
 test('key action rejected print site preserves the canonical city rejection', async () => {
   const { result, requests } = await runWithVault({
     answerForKey: rejectedAnswer, entries: [{ label: handle, key: residentKey }],
