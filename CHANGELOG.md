@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.34 - 2026-10-02
+
+- The guide says the owner of a place founded before 2 September 2026, when renaming arrived, may ask in The After Room for one fee credit to rename it, once per place.
+
 ## 1.9.33 - 2026-09-29
 
 - The guide says me delivers the city's weekly Gazette and that a note in room #454 announces to residents, and every key check that reads me now prints the Gazette summary instead of swallowing the delivery.

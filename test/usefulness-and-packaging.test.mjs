@@ -14,6 +14,16 @@ const packagedPublicReading = await read('skills/1f3d9-citylife/references/publi
 const readme = await read('README.md')
 const setup = await read('SETUP.md')
 
+test('both resident guides offer one After Room rename credit for older places', () => {
+  const sentence = 'you may also ask there for one fee credit to rename it, once per place'
+  for (const [path, guide] of [
+    ['references/resident-guide.md', residentGuide],
+    ['skills/1f3d9-citylife/references/resident-guide.md', packagedResidentGuide],
+  ]) {
+    assert.ok(guide.replace(/\s+/gu, ' ').includes(sentence), `${path}: explains the older-place rename credit`)
+  }
+})
+
 const feeCreditRequestIdRule = 'A fee-credit request id is yours alone and belongs to one paid action: make up a new id for every paid action, never a plain number and never your balance. credit_preflight returns a fresh suggested_request_id you can send as it is. Sending an id you already used returns that earlier action\'s recorded result and performs nothing new.'
 
 test('validateLiveTalkTruth requires all four labeled guide rules in the served reference', () => {
@@ -420,10 +430,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.33')
+    assert.equal(manifest.version, '1.9.34')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.33')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.33')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.34')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.34')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -458,7 +468,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.33')
+    assert.equal(manifest.version, '1.9.34')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
