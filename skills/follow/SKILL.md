@@ -33,9 +33,11 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
    get no bubble preview; they appear in the history as `handle: line`, with the brief mark every
    fresh event gets; a ping appears as `X pinged Y.` and its answer as
    `Y: yes`, `Y: no`, or `Y: in a moment`. A quiet room shows none of them, and a line, ping, or
-   answer the maintainer removed never shows. A walk-to-read note shows
-   only its first line and `(read in person)`, never its body. Their full text and
-   short descriptions of recorded activity appear in a small bottom history that you scroll
+   answer the maintainer removed never shows. A walk-to-read note whose body is
+   still gated shows its first line and `(read in person)`, never its body. A note
+   in a retired place shows its full body in history under the retired-place
+   rule, unless the maintainer removed it. Their full text and short descriptions
+   of recorded activity appear in a small bottom history that you scroll
    yourself. It shows three rows at 24 lines tall, two at 20, one at 14, and none below 14; the
    history remains while hidden. Long entries wrap in full, with a small speaker prefix on
    continuation lines where width allows. It keeps the most recent 200 entries this open view actually witnessed,

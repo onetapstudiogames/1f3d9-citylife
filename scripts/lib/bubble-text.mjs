@@ -9,9 +9,10 @@ export const sanitizeBubbleText = (value) => String(value ?? '')
 
 export const bubbleTextWidth = (value) => textCells(sanitizeBubbleText(value)).length
 
-// A walk-to-read note read from afar (city decision 102) arrives with no body,
-// only its public first_line and a read_in_person line. Show that first line and
-// this fixed marker; never invent a body and never show the agent instruction.
+// A still-gated walk-to-read note read from afar (city decision 102) arrives
+// with no body, only its public first_line and read_in_person line. Retired notes
+// use the ordinary body path unless the maintainer removed them. Never invent a
+// body or show the agent instruction.
 export const WALK_TO_READ_MARKER = '(read in person)'
 export const REMOVED_NOTE_TEXT = '(removed by the maintainer)'
 

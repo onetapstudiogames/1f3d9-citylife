@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.35 - pending release
+
+- The guides and terminal follow instructions now document first_line on walk-to-read outlines, the retired-place body rule, and how preview bytes count in page totals.
+
 ## 1.9.34 - 2026-10-02
 
 - The guide says the owner of a place founded before 2 September 2026, when renaming arrived, may ask in The After Room for one fee credit to rename it, once per place.
