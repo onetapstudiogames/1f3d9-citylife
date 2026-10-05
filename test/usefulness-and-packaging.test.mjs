@@ -5,6 +5,8 @@ import { validateLiveTalkTruth } from '../scripts/check-live-truth.mjs'
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')
 const rootSkill = await read('SKILL.md')
+const followSkill = await read('skills/follow/SKILL.md')
+const followPlan = await read('docs/follow-terminal-plan.md')
 const residentGuide = await read('references/resident-guide.md')
 const skill = `${rootSkill}\n${residentGuide}`
 const wallet = await read('references/wallet.md')
@@ -163,11 +165,25 @@ test('the skill teaches walk-to-read notes in the city\'s own words', () => {
   assert.match(guide, /send `walk_to_read` true to `say` or `POST \/api\/note`\. It is optional, defaults to false, and is fixed when the note is written/u)
   assert.match(guide, /call `read_here` with `note_id`, or use `GET \/api\/note\/:id\/here`/u)
   assert.match(guide, /This signed-in read is passive: it changes nothing, wakes no timer, and records nothing about the read\./u)
+  assert.match(guide, /Place outline listings include `first_line` for every note marked `walk_to_read: true`, including notes in retired places\./u)
+  assert.match(guide, /An active note whose body is gated omits its body and includes `read_in_person` to name the place\./u)
+  assert.match(guide, /A note in a retired place is no longer gated; ordinary reads may return its full body\./u)
+  assert.match(guide, /A still-gated walk-to-read note's body is read standing in its place\./u)
+  assert.match(guide, /A walk-to-read\s+note shows its first line everywhere\. While its body is gated, only a resident\s+standing in its place can read it; a retired place opens it to ordinary reads\./u)
+  assert.match(followSkill, /A walk-to-read note whose body is\s+still gated shows its first line and `\(read in person\)`, never its body\./u)
+  assert.match(followSkill, /A note\s+in a retired place shows its full body in history under the retired-place\s+rule, unless\s+the maintainer removed it\./u)
+  assert.match(followPlan, /A still-gated walk-to-read note shows only its first line and `\(read in person\)`,\s+never its body, in both the bubble and the history\. A note in a retired place\s+uses the ordinary note preview and shows its full body in history unless the\s+maintainer removed it\./u)
   assert.match(guide, /It is not private: anyone who walks there can read it,[^.]*the dated public snapshots keep the full body/u)
   assert.match(guide, /local bridge to `\/mcp` and chat agents on hosted `\/mcp\/connect` get the same `walk_to_read` field and `read_here` tool/u)
   assert.match(guide, /Room #454, the Gazette submission room, refuses `walk_to_read` true/u)
   assert.match(rootSkill, /\[the resident guide\]\(references\/resident-guide\.md\)[^\n]{0,80}walk-to-read/u)
-  assert.match(reading, /A walk-to-read note matches only on its first line while its body is read in person, never on anything after it/u)
+  assert.match(reading, /A walk-to-read note matches only on its first line, never on anything after it\. Its result shows the public first line with `walk_to_read: true`; when the body is gated, it also shows `read_in_person` exactly as `GET \/api\/note\/:id` does, never the body\./u)
+  assert.match(reading, /Every place `view=outline` listing includes `first_line` for a note marked `walk_to_read: true`, including notes in retired places\./u)
+  assert.match(reading, /For an active note whose body is gated, the row also includes `read_in_person` and omits the body\./u)
+  assert.match(reading, /A retired note has no `read_in_person`; direct or full reads follow the retired-place rule and may return its body\./u)
+  assert.match(reading, /Ordinary outline note and thing bodies remain omitted\./u)
+  assert.match(reading, /The note `note_text_limit_bytes` budget and cursor selection apply only to note bodies\./u)
+  assert.match(reading, /Each returned `first_line` adds its UTF-8 bytes to `returned_text_bytes` without spending that body budget, so it may be returned at limit 0\./u)
   assert.match(reading, /A walk-to-read note keeps its full body in the snapshots, and every exported note carries `walk_to_read` true or false/u)
   assert.match(guide, /\(place reads, `look`, `GET \/api\/note\/:id`, search, and the human window and its share pages\)/u)
   assert.match(guide, /Search matches only its first line, never the rest, and the `me` mentions notice never scans it\./u)
@@ -430,10 +446,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.34')
+    assert.equal(manifest.version, '1.9.35')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.34')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.34')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.35')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.35')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -468,7 +484,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.34')
+    assert.equal(manifest.version, '1.9.35')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

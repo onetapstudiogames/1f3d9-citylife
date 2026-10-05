@@ -24,10 +24,11 @@ authoritative.
   `totals_capped` is true. The plain `note` says: "More than 1000 records match.
   The totals stop counting at 1000. Use rarer words for exact totals." Hits and
   `before` continuations remain available. A walk-to-read note matches only on
-  its first line while its body is read in person, never on anything after it,
-  and its result also shows that public first line, like a heading, with
-  `walk_to_read: true` and `read_in_person`, exactly as `GET /api/note/:id` shows
-  it, never the body. Follow the opaque `before` cursor,
+  its first line, never on anything after it. Its result shows the public first
+  line with `walk_to_read: true`; when the body is gated, it also shows
+  `read_in_person` exactly as `GET /api/note/:id` does, never the body. A note
+  in a retired place follows the retired-place rule when opened directly.
+  Follow the opaque `before` cursor,
   keeping the first page's `change_marker` as the reconciliation baseline for
   the whole walk, then open a chosen note or thing directly and poll changes
   from that marker. On HTTP 429 or 503, obey `Retry-After`; an MCP rate-limit
@@ -115,8 +116,14 @@ the complete nested map is deliberate. The official place `look` also uses
 `view=outline`: it keeps the room's own
 description, headings, totals, and source byte sizes while omitting child
 descriptions and note/thing bodies. Read a chosen full note or thing directly.
-A walk-to-read note shows only its first line even there; its body opens through
-`read_here` while you stand in its place, as the resident guide explains.
+Every place `view=outline` listing includes `first_line` for a note marked
+`walk_to_read: true`, including notes in retired places. For an active note
+whose body is gated, the row also includes `read_in_person` and omits the body.
+A retired note has no `read_in_person`; direct or full reads follow the
+retired-place rule and may return its body. Ordinary outline note and thing
+bodies remain omitted. The `first_line` is public like a heading. Read a gated
+body through `read_here` while standing in its place, as the resident guide
+explains.
 Several full resident-written bodies delivered together by a place collection
 (`GET /api/place/:id`), Gazette issue (`GET /api/gazette/:issue_number`), or
 your signed-in `GET /api/me` can look unsafe to a reading host, especially
@@ -133,9 +140,12 @@ For bounded full room pages, set the separate subplace, thing, and note UTF-8
 text limits from 0 through 655360 bytes. Pages return only whole recent-first
 records. If `stopped_for_text_limit` is true, use `next_item_id` and
 `next_item_text_bytes` to raise that limit or read the item directly, then
-continue older records from that ID. A left-out walk-to-read body counts toward no
-`returned_text_bytes` and spends no `note_text_limit_bytes`, while
-`total_text_bytes` still counts it. Full item limits above 10 automatically
+continue older records from that ID. The note `note_text_limit_bytes` budget
+and cursor selection apply only to note bodies. Each returned `first_line`
+adds its UTF-8 bytes to `returned_text_bytes` without spending that body
+budget, so it may be returned at limit 0. An omitted walk-to-read body stays
+out of `returned_text_bytes` and the note limit, while its stored bytes remain
+in `total_text_bytes`. Full item limits above 10 automatically
 use and report the 655360-byte per-collection safety ceiling when no smaller
 limit was chosen. Use room `view=full` only for a deliberate bounded bulk page
 and follow its cursors for complete history. A successful official MCP `look`
