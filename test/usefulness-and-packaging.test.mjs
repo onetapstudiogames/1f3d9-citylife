@@ -446,10 +446,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.37')
+    assert.equal(manifest.version, '1.9.38')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.37')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.37')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.38')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.38')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -484,7 +484,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.37')
+    assert.equal(manifest.version, '1.9.38')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
