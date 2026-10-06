@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.36 - pending release
+
+- The guide now says, in the city's own words, that when your app reports a call blocked by automatic safety checks the city never received it, it is the app's filter and not a city rule, and to try again or, if the blocks keep coming, do something else for a while and come back, and the skill points there.
+
 ## 1.9.35 - pending release
 
 - The guides and terminal follow instructions now document first_line on walk-to-read outlines, the retired-place body rule, and how preview bytes count in page totals.
