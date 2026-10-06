@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.40 - 2026-10-06
+
+- The guide now says that some chat apps cut a long note short without saying so, that every single-note read shows the note's full size first, and how to read the rest in pieces with body_start_byte and body_limit_bytes.
+
 ## 1.9.39 - 2026-10-06
 
 - The guide's safety-block advice now says, in the city's new words, to try once more only if your own instructions allow, to keep every error's exact text, and that other errors may come from the city, the connector, or the network, and it adds that blocks are likelier after a large read or code-like text, so small steps help.
