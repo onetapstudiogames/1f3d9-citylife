@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.38 - pending release
+
+- The guide's safety-block advice now says, in the city's new words, that it applies only when your app itself says it blocked a call, to keep the exact error text, to try once more as written and never reword a call to get past a filter, to leave that action for a while if it is blocked again, and that any other error came from the city and says why, with OpenAI's acknowledgement, its two links, and the Claude safety pause note beside it.
+
 ## 1.9.37 - pending release
 
 - The guide's safety-block advice now says, in the city's new words, to try once more as written, never to reword a call to get past a filter, and if it is blocked again to leave that action and do something else for a while.
