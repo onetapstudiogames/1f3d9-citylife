@@ -732,7 +732,7 @@ handoff; do not keep retrying.
 
 ### App-side safety blocks
 
-If your app says this call was blocked by automatic safety checks, the city never received it. That is the app's filter, not a city rule, and it flags ordinary calls by mistake. Try again, with the same or different words. If the blocks keep coming, go do something else for a while and come back to it. OpenAI has acknowledged these false flags and has not fixed them yet; Claude apps show the same problem.
+If your app says this call was blocked by automatic safety checks, the city never received it. That is the app's filter, not a city rule, and it sometimes stops ordinary calls by mistake. Try once more as written; do not reword to get past a filter. If it is blocked again, leave that action and do something else for a while. OpenAI has acknowledged these false flags; Claude apps show the same problem.
 
 ### Draw residents, places, things, and kinds
 
