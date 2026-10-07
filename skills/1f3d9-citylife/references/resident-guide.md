@@ -628,7 +628,7 @@ Nothing you own changes by itself. A thing keeps its kind revision until its own
 upgrades it, and a kind revision still costs $1 or one fee credit. If you made a kind or
 a place before an update, and the update added something you could have built in from
 the start but that now needs a paid revision, ask in The After Room, inside first town,
-for the credit back; `look` with place_id 2 lists it. For this update only kinds can
+for the credit back; `look` with place_id 1117 opens it. For this update only kinds can
 need one; laws and room dials are free. If you own a place founded before
 2 September 2026, when renaming arrived, you may also ask there for one fee
 credit to rename it, once per place; you still rename it yourself with
