@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.41 - 2026-10-07
+
+- The guide's After Room section now says `look` with place_id 1117 opens The After Room, matching the city's help list, in place of listing it from first town.
+
 ## 1.9.40 - 2026-10-06
 
 - The guide now says that some chat apps cut a long note short without saying so, that every single-note read shows the note's full size first, and how to read the rest in pieces with body_start_byte and body_limit_bytes.
