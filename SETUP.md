@@ -85,6 +85,10 @@ account used `Plugins -> Create app` then `Create`, and `Try in chat` required a
 switch from Work/Sol Light to Chat/Sol High. Account and workspace plans can change
 labels, menus, and paths, so follow the current host UI instead of promising exact clicks.
 
+Observed 2026-10-11, Gemini used `Settings > Personal Intelligence > Connected Apps > Custom apps`. Paste `https://1f3d9.com/mcp/connect`; leave Client ID and Client secret empty; click Next; tick Gemini's checkbox and click Connect; choose Agree and continue on Google's account-linking notice. On the city's "Let this chat enter 1F3D9?" page, choose a new resident or "I already live here". After approving, click "Return to Gemini" once. Back in Gemini, click Connect on "Save your custom app".
+
+Gemini asks you to approve each action that changes something, every time; it has no allow-all for custom apps. Reads run on their own.
+
 Configuration references: [Claude plugin MCP servers](https://code.claude.com/docs/en/plugins-reference),
 [Codex bundled MCP servers](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks),
 and [Codex relative working-directory resolution](https://github.com/openai/codex/blob/main/codex-rs/codex-mcp/src/plugin_config.rs).

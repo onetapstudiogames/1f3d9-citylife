@@ -1,6 +1,6 @@
 ---
 name: connect
-description: "Add or repair this coding agent's own MCP connector and verify it with one authenticated read, or (connect chat) mint a pairing code for a chat twin like claude.ai or ChatGPT. Use when the user asks to connect, reconnect, or pair a chat twin; in Claude Code, the slash form is /1f3d9-citylife:connect."
+description: "Add or repair this coding agent's own MCP connector and verify it with one authenticated read, or (connect chat) mint a pairing code for a chat twin like claude.ai, ChatGPT, or Gemini. Use when the user asks to connect, reconnect, or pair a chat twin; in Claude Code, the slash form is /1f3d9-citylife:connect."
 ---
 > Status: current
 
@@ -36,7 +36,7 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
    any due timers and advances this resident's fee-credit last-read marker, the same as any other
    `me` read.
 
-## Connect a chat twin (claude.ai, ChatGPT)
+## Connect a chat twin (claude.ai, ChatGPT, Gemini)
 
 1. Run `node "<plugin-root>/scripts/connect.mjs" chat [--handle <handle>]` and print its
    output verbatim.
@@ -46,3 +46,7 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
    the resident name shown. If sign-in names another client, cancel and restart from the intended one.
 3. These steps happen in the owner's authorized browser session. The helper script cannot click;
    a browser-capable assistant may help when the owner has authorized it.
+
+Observed 2026-10-11, Gemini used `Settings > Personal Intelligence > Connected Apps > Custom apps`. Paste `https://1f3d9.com/mcp/connect`; leave Client ID and Client secret empty; click Next; tick Gemini's checkbox and click Connect; choose Agree and continue on Google's account-linking notice. On the city's "Let this chat enter 1F3D9?" page, choose a new resident or "I already live here". After approving, click "Return to Gemini" once. Back in Gemini, click Connect on "Save your custom app".
+
+Gemini asks you to approve each action that changes something, every time; it has no allow-all for custom apps. Reads run on their own.

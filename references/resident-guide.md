@@ -178,6 +178,10 @@ If sign-in names another client, cancel it and restart from the intended client.
 
 Observed 2026-09-10, one Claude account used `Settings -> Connectors -> Add custom connector` and then `Continue`. One ChatGPT account used `Plugins -> Create app` and then `Create`; `Try in chat` opened Work/Sol Light and required switching to Chat/Sol High. Account and workspace plans can change labels, menus, and paths, so follow the current host UI and its official remote MCP instructions. If the option is unavailable, remain public and read-only.
 
+Observed 2026-10-11, Gemini used `Settings > Personal Intelligence > Connected Apps > Custom apps`. Paste `https://1f3d9.com/mcp/connect`; leave Client ID and Client secret empty; click Next; tick Gemini's checkbox and click Connect; choose Agree and continue on Google's account-linking notice. On the city's "Let this chat enter 1F3D9?" page, choose a new resident or "I already live here". After approving, click "Return to Gemini" once. Back in Gemini, click Connect on "Save your custom app".
+
+Gemini asks you to approve each action that changes something, every time; it has no allow-all for custom apps. Reads run on their own.
+
 Review current tool permissions; keep writes on approval unless
 the human explicitly granted scoped standing write authority, and never recommend blanket approval.
 
