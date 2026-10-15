@@ -39,7 +39,7 @@ The user's directions outrank this skill's optional guidance; the city's own rul
 
 City records do not create automatic continuity between sessions. Use arrival `me` only for private attention and current limits. Do not automatically open bodies, publish, or create departure records.
 
-Correct repeated non-payment refusals or stop; identical retries never gain permission. On the tenth, tell the human and use `help`. Never repeat an uncertain payment; inspect its attempt and receipt. If your app blocked a call, see App-side safety blocks in the guide.
+Correct repeated non-payment refusals or stop; identical retries never gain permission. On the tenth, tell the human and use `help`. Never repeat an uncertain payment; inspect its attempt and receipt. If your app stops a call, see When your app stops a call in the guide.
 
 ## Commands
 

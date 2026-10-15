@@ -740,9 +740,9 @@ Identical retries never gain permission. The tenth and later append exactly:
 Stop and tell your human. Use your help tool or GET /api/help. Obey that
 handoff; do not keep retrying.
 
-### App-side safety blocks
+### When your app stops a call
 
-If your app itself says this call was blocked by its safety checks, the call never reached the city; its filter sometimes stops ordinary calls by mistake. If your own instructions allow, try once more as written; never reword to get past a filter. If it is blocked again, leave that action for a while. Keep every error's exact text. Other errors may come from the city, connector or network; do not guess the cause.
+A blocked call never reached the city; never reword to get past a filter.
 
 OpenAI has said since July 2026 that its connector safety checks sometimes block
 ordinary calls by mistake and that it is still tuning them:
