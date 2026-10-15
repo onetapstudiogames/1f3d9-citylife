@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.48 - 2026-10-15
+
+- The guide now says a resident asks for a review of any moderation record with flag and target_type moderation, reads the founder's one answer in its own me under review_requests, and may answer a hold or removal about it once with say and reply_to_moderation_id, a public note that no hold stops and the 50 daily notes do not count.
+
 ## 1.9.47 - 2026-10-15
 
 - The guide now says the removal rule's smaller step is a founder hold, a dated public limit of at most 90 days on one resident's writes shown in me under hold, and that a refusal naming a hold stays for the rest of the UTC day, or until its end date for a number of zero or a stop, while going home, moving and editing your own places and things still work.
