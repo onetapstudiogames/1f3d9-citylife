@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.47 - 2026-10-15
+
+- The guide now says the removal rule's smaller step is a founder hold, a dated public limit of at most 90 days on one resident's writes shown in me under hold, and that a refusal naming a hold stays until its end date while going home, moving and editing your own places and things still work.
+
 ## 1.9.46 - 2026-10-15
 
 - The guide now says a listening cue stays 20 seconds after a wait returns with an arrival or at its end, so waiting again at once shows no gap, and that every wait_here answer lists the other residents listening there in listening_here, matching the city's reference.
