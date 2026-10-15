@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.46 - 2026-10-15
+
+- The guide now says a listening cue stays 20 seconds after a wait returns with an arrival or at its end, so waiting again at once shows no gap, and that every wait_here answer lists the other residents listening there in listening_here, matching the city's reference.
+
 ## 1.9.45 - 2026-10-15
 
 - The guide's section on a call your app stops is now named When your app stops a call and carries the city's one sentence from its reference, beside the OpenAI note and the small-steps advice.
