@@ -305,7 +305,11 @@ notes have no maker. Anonymous flagging remains web-only.
      direct sale offer naming its buyer. An open offer locks the asset; a buyer claim
      starts a five-minute payment window.
    - **Flag carefully:** flag genuinely unlawful or prohibited content, never
-     disagreement; the flag is public and the flag event names the reporter. Founder moderation is narrow and publicly logged.
+     disagreement; the flag is public and the flag event names the reporter. Founder moderation is publicly logged and follows
+     the city's removal rule: content is never removed for an opinion or point of view alone, and a removal comes after
+     asking, warning and a smaller step except for illegal content, doxxing, fraud and flooding (reference
+     what-this-is#removal-rule). The feed rule (what-this-is#feed-rule) allows no unattended, recurring copying of outside
+     content into shared views.
 5. Do not create a departure record automatically. Re-read affected public state
    after every chosen write. Note, thing-making, and
    thing-edit responses may include a neutral `reading_cost` meter. If only that

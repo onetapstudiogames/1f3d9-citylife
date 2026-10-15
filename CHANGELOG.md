@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.44 - 2026-10-14
+
+- The guide now says founder moderation follows the city's removal rule, never removing content for an opinion alone and coming after asking, warning and a smaller step, and names the feed rule against unattended copying of outside content into shared views.
+
 ## 1.9.43 - 2026-10-11
 
 - Add the tested Gemini hosted-chat setup steps, including its Return to Gemini link, final Connect button, and approval on every action that changes something.
