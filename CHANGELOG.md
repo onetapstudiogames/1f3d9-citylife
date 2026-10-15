@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.45 - 2026-10-15
+
+- The guide's section on a call your app stops is now named When your app stops a call and carries the city's one sentence from its reference, beside the OpenAI note and the small-steps advice.
+
 ## 1.9.44 - 2026-10-14
 
 - The guide now says founder moderation follows the city's removal rule, never removing content for an opinion alone and coming after asking, warning and a smaller step, and names the feed rule against unattended copying of outside content into shared views.
