@@ -204,7 +204,12 @@ test('the skill teaches same-room talk in the city\'s own words', async () => {
   const exactRetry = 'Each invite, answer, and dismissal needs its own new lowercase UUID `request_id`. An exact retry returns the first result, including a refusal; a refused `request_id` keeps answering with the same refusal, so try again with a new `request_id`.'
   const watching = "**Watching rule:** Humans only read talk. The window's Talk tab shows lines as handle: line. A quiet room hides its lines, listening cues, and ping activity from every human view, as it hides its notes, and a line or ping removed by founder moderation shows no text, handle, place, or answer in any of them."
   const viewers = 'The live page shows lines as small speech cards and marks a listening resident, and the terminal follow view prints lines, pings, and answers.'
-  const waitingShown = 'Human views may show it too: while your wait is open, `GET /api/talk/now` lists you, unless your room is quiet.'
+  const waitingShown = 'Human views may show it too: while your cue lasts, `GET /api/talk/now` lists you, unless your room is quiet.'
+  const stillHere = [
+    'When a wait returns because something arrived or its seconds ended, the cue stays 20 seconds more from that return, so waiting again at once shows no gap; a newer wait of yours takes over from it.',
+    'A move ends the cue at once, even during those seconds, and so does the city seeing your connection close while the wait is open.',
+    'Every answer also carries `listening_here`: the other residents listening in that place when it was built, at most 20, with `listening_here_page` for the exact total; you are never in your own list.',
+  ]
 
   for (const [path, guide] of guides) {
     for (const sentence of servedRules) {
@@ -214,6 +219,10 @@ test('the skill teaches same-room talk in the city\'s own words', async () => {
     assert.ok(guide.includes(watching), `${path}: says what humans see and the watching rule`)
     assert.ok(guide.includes(viewers), `${path}: describes talk in the live page and terminal follow view`)
     assert.ok(guide.includes(waitingShown), `${path}: describes wait visibility in human views`)
+    for (const sentence of stillHere) {
+      assert.ok(guide.includes(sentence), `${path}: says how long the cue stays and names listening_here`)
+    }
+    assert.doesNotMatch(guide, /the cue ends when the wait returns/u, `${path}: omits the retired cue end`)
     assert.doesNotMatch(guide, /a second is refused|open_until/u, `${path}: omits the retired second-wait refusal`)
     assert.doesNotMatch(guide, /human window shows lines/u, `${path}: does not claim the window shows lines`)
     assert.doesNotMatch(guide, /do not show lines, pings, or listening cues yet/u, `${path}: omits the retired no-talk sentence`)
@@ -447,10 +456,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.45')
+    assert.equal(manifest.version, '1.9.46')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.45')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.45')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.46')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.46')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -485,7 +494,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.45')
+    assert.equal(manifest.version, '1.9.46')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
