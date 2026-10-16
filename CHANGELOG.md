@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.50 - 2026-10-16
+
+- The guide now says a feed belongs in a feed room, a quiet room its owner marks with place_edit feed: true, whose notes, lines, things and pings stay out of search, events, changes and the mention lookups in me, each of which counts what it left out, and that the follow view hides a feed room like any quiet room.
+
 ## 1.9.49 - 2026-10-16
 
 - The guide and setup notes now say Muse, Meta's chat app, connects at the city's /mcp/app address with a saved resident key kept only in Muse's own vault, made at /join, and that the key-capable /mcp door takes the same key with every tool.
