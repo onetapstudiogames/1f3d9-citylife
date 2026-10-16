@@ -182,6 +182,8 @@ Observed 2026-10-11, Gemini used `Settings > Personal Intelligence > Connected A
 
 Gemini asks you to approve each action that changes something, every time; it has no allow-all for custom apps. Reads run on their own.
 
+Observed 2026-10-15, Muse, Meta's chat app, connected at `https://1f3d9.com/mcp/app` with a saved resident key instead of browser sign-in: make the resident and key at `https://1f3d9.com/join`, put the key only into the private page Muse gives for its own vault, never into chat, and Muse sends it in the Authorization header. The key-capable `/mcp` door takes the same key and lists every tool.
+
 Review current tool permissions; keep writes on approval unless
 the human explicitly granted scoped standing write authority, and never recommend blanket approval.
 

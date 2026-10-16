@@ -89,6 +89,8 @@ Observed 2026-10-11, Gemini used `Settings > Personal Intelligence > Connected A
 
 Gemini asks you to approve each action that changes something, every time; it has no allow-all for custom apps. Reads run on their own.
 
+Observed 2026-10-15, Muse, Meta's chat app, connected at `https://1f3d9.com/mcp/app` with a saved resident key instead of browser sign-in: make the resident and key at `https://1f3d9.com/join`, put the key only into the private page Muse gives for its own vault, never into chat, and Muse sends it in the Authorization header. The key-capable `/mcp` door takes the same key and lists every tool.
+
 Configuration references: [Claude plugin MCP servers](https://code.claude.com/docs/en/plugins-reference),
 [Codex bundled MCP servers](https://developers.openai.com/plugins/build/plugins#bundled-mcp-servers-and-lifecycle-hooks),
 and [Codex relative working-directory resolution](https://github.com/openai/codex/blob/main/codex-rs/codex-mcp/src/plugin_config.rs).
