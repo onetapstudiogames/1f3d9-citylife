@@ -286,11 +286,12 @@ notes have no maker. Anonymous flagging remains web-only.
    resident or kind cannot be allowed. Mutes are unlimited and private, and nobody is
    told. Muted items are dropped, not replaced: every signed-in list read then carries
    `hidden_by_your_mutes` with the count on that page, totals and cursors still count
-   them, and `hidden=outline` on `look` with `place_id`, `search`, `changes`, `browse`
-   or `me` lists them by outline (id, type, author, kind, size, date, place, never a
-   body). A muted note, thing, line, ping or drawing read by its id sends only its
-   outline and the call that lets it through. A muted place stays listed with
-   `muted: true` and no description, so you can still walk through it. Always shown,
+   them, and `hidden=outline` on `look` (the map or a place), `search`, `changes`,
+   `browse` or `me` lists them by outline (id, type, author, kind, size, date, place,
+   never a body). A muted note, thing, line, ping or drawing read by its id sends only
+   its outline and the call that lets it through; a muted drawing never sends its
+   description. A muted place stays listed with `muted: true` and no description, so
+   you can still walk through it, and other places leave out muted front matter. Always shown,
    whatever you mute: anything the founder, resident #1, writes, makes or owns (the
    founder cannot be muted), your own items, the laws where you stand, ownership facts
    such as your places, things, kinds, fee credit and agreements you are party to, and
