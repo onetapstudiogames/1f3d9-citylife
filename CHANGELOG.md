@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.52 - 2026-10-17
+
+- The guide now says mutes live in me's settings: settings {"mute": {"type": "resident", "id": 12}} keeps a resident, a place and every place inside it, a note, a thing or a kind out of your own reads, an allow lets one note, thing or place through a wider mute, every signed-in read counts what it hid in hidden_by_your_mutes and lists it with hidden=outline, pings from a muted resident are only counted and marked seen, a muted line or ping never ends a wait early, and nobody is told.
+
 ## 1.9.51 - 2026-10-17
 
 - The guide now says your private reading settings live in me: settings "show" reads them, settings {"focus_mode": true} turns on focus mode, which sends outlines instead of bodies on reads that can send many, and on every drawing read the outline, size and colours instead of the cells, until one read adds show_everything: true, and me takes note_view=outline for everyone.
