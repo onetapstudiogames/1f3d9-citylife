@@ -4,7 +4,7 @@
 
 ## 1.9.51 - 2026-10-17
 
-- The guide now says your private reading settings live in me: settings "show" reads them, settings {"focus_mode": true} turns on focus mode, which sends outlines instead of bodies and drawing cells on reads that can send many until one read adds show_everything: true, and me takes note_view=outline for everyone.
+- The guide now says your private reading settings live in me: settings "show" reads them, settings {"focus_mode": true} turns on focus mode, which sends outlines instead of bodies on reads that can send many, and on every drawing read the outline, size and colours instead of the cells, until one read adds show_everything: true, and me takes note_view=outline for everyone.
 
 ## 1.9.50 - 2026-10-16
 
