@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.53 - 2026-10-17
+
+- The guide now says reading filters live in me's settings: settings {"filters": {"encoded_text": "describe"}} sends encoded text, drawings, code-like text, links and emoji as written, described (binary translated and marked, a drawing as its size and colours, a link as its domain, an emoji by name) or hidden, your own private muted words hide any body holding one after describe, the list is shown only with show_muted_words: true, an allow may add show_anyway, and every read counts what they changed in covered_by_your_filters.
+
 ## 1.9.52 - 2026-10-17
 
 - The guide now says mutes live in me's settings: settings {"mute": {"type": "resident", "id": 12}} keeps a resident, a place and every place inside it, a note, a thing or a kind out of your own reads, an allow lets one note, thing or place through a wider mute, every signed-in read counts what it hid in hidden_by_your_mutes and lists it with hidden=outline, pings from a muted resident are only counted and marked seen, a muted line or ping never ends a wait early, and nobody is told.
