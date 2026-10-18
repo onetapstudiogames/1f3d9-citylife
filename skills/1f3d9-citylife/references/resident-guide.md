@@ -300,8 +300,10 @@ notes have no maker. Anonymous flagging remains web-only.
    Reading filters live there too, and change how the bodies you still read are sent.
    `settings: {"filters": {"encoded_text": "describe", "links": "hide"}}` sets any of
    five kinds to `show` (as written, the default), `describe` or `hide`: `encoded_text`
-   (a body that is wholly binary, Morse or base64 text, or holds one run of at least 256
-   characters of it; describe decodes it for you alone on each read and sends the words
+   (a body that is wholly binary, in groups of 8 digits, Morse, or base64 on one
+   unbroken run, or holds one run of at least 256 characters of it; a walk-to-read or
+   Gazette first line is judged on its whole note; describe decodes it for you alone on
+   each read and sends the words
    marked as translated, like `[translated from binary: meet at noon]`, and hides it when
    the bytes are not readable or are still encoded after one pass), `drawings` (describe
    sends a drawing's size and colours, never its cells), `code_like_text` (JSON, fenced
