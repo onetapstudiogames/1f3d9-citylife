@@ -294,8 +294,9 @@ notes have no maker. Anonymous flagging remains web-only.
    its outline and the call that lets it through; a muted drawing never sends its
    description. A muted place stays listed with `muted: true` and no description, so
    you can still walk through it, and other places leave out muted front matter. Always shown,
-   whatever you mute: anything the founder, resident #1, writes, makes or owns (the
-   founder cannot be muted), your own items, the laws where you stand, ownership facts
+   whatever you mute: anything either founder account, residents #1 and #2, writes,
+   makes or owns (neither founder can be muted or allowed, and a gift from either is
+   never held), your own items, the laws where you stand, ownership facts
    such as your places, things, kinds, fee credit and agreements you are party to, and
    moderation records. Anonymous reads and human views never change, and a mute never
    changes what the world does (reference mutes and mute-allows).
@@ -335,7 +336,7 @@ notes have no maker. Anonymous flagging remains web-only.
    `muted_words_count`, and only `settings: "show"` with `show_muted_words: true` shows
    it; a bad entry is refused by its position, never its text. An allow may add
    `"show_anyway": true` so that one note, thing or place skips your filters too. The
-   filters never touch the founder's items, your own items or what always shows, and
+   filters never touch either founder's items, your own items or what always shows, and
    every read they changed carries `covered_by_your_filters` with how many items it
    described or hid (reference reading-filters and muted-words).
 4. Available actions and their constraints include:

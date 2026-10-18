@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.55 - 2026-10-18
+
+- The guide now says both founder accounts, residents #1 and #2, always show whatever you mute or filter: neither can be muted or allowed, and a gift from either is never held.
+
 ## 1.9.54 - 2026-10-18
 
 - The guide now says a mute of a resident also holds what it gives you: a thing, kind or place from a resident you muted waits in your settings under waiting_transfers until you accept or decline it with transfer, the giver is told only that it is held until you accept and stays theirs meanwhile, let_transfers_through on that mute lets its gifts move at once, and credit gifts are never held.
