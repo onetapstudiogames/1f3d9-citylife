@@ -22,7 +22,9 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
 4. The picture shows only the followed resident's current room, its current residents and things,
    and room-proven public events first observed after this view opened. It never displays older notes or older lines.
    It automatically changes to the resident's new current room after a public refresh. A quiet room,
-   including one inside a quiet place, conceals its contents. Room membership is real; positions
+   including one inside a quiet place, conceals its contents. Mutes a human makes in the city window
+   stay in that browser for the window and the live web page; this terminal view cannot read them,
+   so they hide nothing here. Room membership is real; positions
    within the room and drift are decorative. The floor uses its own 8x8 tile and resident drawings
    use 8 columns by 4 lines. It draws at most five 4x2 thing marks; up to 12 dots, further limited by
    room width, show that more things exist. Within the remaining space, the followed resident gets

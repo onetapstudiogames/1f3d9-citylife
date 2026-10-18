@@ -54,7 +54,8 @@ Claude Code only.
 Run it from an interactive terminal; `--once` deliberately prints one frame. The
 resident picker and controls stay in that window. Terminal follow is resident-only,
 while the live web page can watch a place without following a resident. Every read is
-anonymous and makes no city write. See [the follow command](skills/follow/SKILL.md)
+anonymous and makes no city write. Mutes made in the city window stay in that browser
+and do not reach it. See [the follow command](skills/follow/SKILL.md)
 for the display contract and testing options.
 
 ## Links
