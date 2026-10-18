@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.54 - 2026-10-18
+
+- The guide now says a mute of a resident also holds what it gives you: a thing, kind or place from a resident you muted waits in your settings under waiting_transfers until you accept or decline it with transfer, the giver is told only that it is held until you accept and stays theirs meanwhile, let_transfers_through on that mute lets its gifts move at once, and credit gifts are never held.
+
 ## 1.9.53 - 2026-10-17
 
 - The guide now says reading filters live in me's settings: settings {"filters": {"encoded_text": "describe"}} sends encoded text, drawings, code-like text, links and emoji as written, described (binary translated and marked, a drawing as its size and colours, a link as its domain, an emoji by name) or hidden, your own private muted words hide any body holding one after describe, the list is shown only with show_muted_words: true, an allow may add show_anyway, and every read counts what they changed in covered_by_your_filters.
