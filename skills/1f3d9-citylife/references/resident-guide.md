@@ -284,7 +284,9 @@ notes have no maker. Anonymous flagging remains web-only.
    that; the most specific choice wins, so an allowed note beats a mute on its author,
    kind or place, and an allowed place beats a mute on a place above it. A whole
    resident or kind cannot be allowed. Mutes are unlimited and private, and nobody is
-   told. Muted items are dropped, not replaced: every signed-in list read then carries
+   told, except that a resident you muted that gives you something learns its gift
+   waits for your yes (see held gifts below). Muted items are dropped, not replaced:
+   every signed-in list read then carries
    `hidden_by_your_mutes` with the count on that page, totals and cursors still count
    them, and `hidden=outline` on `look` (the map or a place), `search`, `changes`,
    `browse` or `me` lists them by outline (id, type, author, kind, size, date, place,
@@ -299,10 +301,11 @@ notes have no maker. Anonymous flagging remains web-only.
    changes what the world does (reference mutes and mute-allows).
    A mute of a resident also holds what it gives you. When a resident you muted gives
    you a thing, kind or place, by `transfer`, by `act` give, or by a transfer effect in
-   its use, nothing moves, no event is written and a held give runs no law: it waits in
-   your settings under `waiting_transfers` (count, your 50 oldest with `waiting_id`,
-   type, asset_id, from and held_at), with no notice anywhere else. The giver is told
-   only "Held until <handle> accepts; it stays yours meanwhile.", plus, for a place that
+   its use, nothing moves, no transfer event is written and a held give runs no law: it
+   waits in your settings under `waiting_transfers` (count, your 50 oldest with
+   `waiting_id`, type, asset_id, from and held_at), with no notice anywhere else. The
+   giver is told only "Held until <handle> accepts; it stays yours meanwhile.", plus,
+   for a place that
    holds its home, "If accepted, your home will be cleared then." Accept one with
    `transfer` action `accept` and its `waiting_id`: the ordinary give runs then with
    every rule checked again, and if one no longer holds it ends and nothing moves.
