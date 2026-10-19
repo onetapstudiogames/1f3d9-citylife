@@ -370,6 +370,8 @@ const residentForHandle = (residents, handle) => {
   const wanted = typeof handle === 'string' ? handle.trim() : ''
   return wanted ? residents.find((resident) => resident.handle === wanted) ?? null : residents[0] ?? null
 }
+// Quiet rooms are the only thing this view hides. A human's mutes (city decision #160) live
+// in that browser's storage for the window and /live/; a terminal cannot read them.
 const quietAncestor = (placeId, directoryIndex) => directoryIndex.ancestorsOf(placeId)
   .some((id) => directoryIndex.byId.get(id)?.quiet === true)
 const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [], clock }) => {
