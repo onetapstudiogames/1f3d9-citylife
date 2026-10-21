@@ -324,6 +324,57 @@ test('the skill teaches the post-live-test fixes in the city\'s own words', asyn
   }
 })
 
+const placeLabelAvailability = 'Continue only when it lists law_place for label and check_label and seconds for place labels; otherwise'
+const sharedPlaceRecipe = {
+  use: [{ effect: 'label', target: 'law_place', label: 'shared_rain_223', seconds: 600 }],
+  talk: [{
+    effect: 'check_label', target: 'law_place', label: 'shared_rain_223',
+    then: [{ effect: 'label', target: 'place', label: 'rain_seen_223', seconds: 60 }],
+    else: [{ effect: 'label', target: 'place', label: 'clear_seen_223', seconds: 60 }],
+  }],
+}
+
+test('the packaged resident guide stays byte-identical to the root guide', () => {
+  assert.equal(packagedResidentGuide, residentGuide)
+})
+
+for (const [path, guide] of [
+  ['references/resident-guide.md', residentGuide],
+  ['skills/1f3d9-citylife/references/resident-guide.md', packagedResidentGuide],
+]) {
+  test(`${path}: shared place labels require the city's physics support`, () => {
+    const explanation = guide.match(/\*\*Shared place labels:\*\*([\s\S]*?)\n   - \*\*Use room orientation:/u)
+    assert.ok(explanation, `${path}: distinct place-label explanation after thing labels`)
+    const prose = explanation[1].replace(/\s+/gu, ' ').trim()
+    assert.ok(prose.startsWith(`Before using shared place labels, read physics from the city you are using. ${placeLabelAvailability} shared place labels are not available there yet.`))
+    const patterns = [
+      /law_place names the original defining place of the law being run, never a law named by a later check; place still names the run's current room/u,
+      /law_place works only for label and check_label in a place law/u,
+      /label on law_place requires seconds, a whole number from 1 to 86400 inclusive[\s\S]*label on literal place may use the same range; omitting seconds keeps its permanent label/u,
+      /actor, source, and target refuse seconds, even when target names a place[\s\S]*check_label takes no seconds[\s\S]*duration starts when the label is written, including after a wait/u,
+      /unbroken same-owner parent chain[\s\S]*none may be retired[\s\S]*exact source law must still be effective[\s\S]*checked again when delayed work runs[\s\S]*action is refused if they no longer hold/u,
+      /Ordinary visitors can trigger an installed law through a permitted action[\s\S]*A hinge, even with one owner at both ends, grants no shared state/u,
+      /check_label on law_place reads active labels only, never an adopted law's name, and grants no named-law authority[\s\S]*Existing check_label targets keep matching active labels or a law name/u,
+      /Repeated label rows append; a name remains present until its final matching row expires[\s\S]*permanent same-name row keeps the name present, so use a fresh condition name/u,
+      /public place read lists only label names local to that place in labels[\s\S]*sourcePlaceId to inspect the shared label at its defining place[\s\S]*Expired names are absent without a write[\s\S]*Place reads stay passive[\s\S]*No expiry timestamp is added to the place response/u,
+    ]
+    for (const pattern of patterns) assert.ok(pattern.test(prose), `${path}: ${pattern}`)
+    const compact = guide.replace(/\s+/gu, ' ')
+    assert.ok(compact.includes('snapshots carry the same `labels` and `labels_total` for every exported thing. - **Shared place labels:**'))
+    assert.ok(compact.includes('a kind refuses a trait whose convert names one. Where physics lists law_place, that target also works only as a law.'))
+  })
+
+  test(`${path}: the shared place example keeps its availability condition and exact recipe`, () => {
+    const example = guide.match(/\*\*Example: a shared temporary condition\*\*\s+([\s\S]*?)\s+```json\s+([\s\S]*?)\s+```/u)
+    assert.ok(example, `${path}: shared condition JSON example`)
+    assert.equal(example[1].replace(/\s+/gu, ' '), `Before using this example, read physics from the city you are using. ${placeLabelAvailability} this example is not available there yet.`)
+    assert.deepEqual(JSON.parse(example[2]), sharedPlaceRecipe)
+    const instructions = guide.slice(example.index + example[0].length).split('If your client does not show the new fields')[0].replace(/\s+/gu, ' ')
+    assert.match(instructions, /Own a parent and two nested rooms[\s\S]*Coin an ordinary free trait[\s\S]*install it as a law on the parent[\s\S]*use an ordinary usable thing in one child[\s\S]*later note in the other child's room runs the inherited talk law and writes the local witness label/u)
+    assert.match(instructions, /No bystander moves, no room is eagerly updated[\s\S]*line-only talk mode that does not run note laws is not the test trigger[\s\S]*witness labels can overlap from separate past actions[\s\S]*only test evidence, not an exclusive weather state[\s\S]*fresh condition name and fresh fixture rooms[\s\S]*Labels do not change written room descriptions or edges by themselves/u)
+  })
+}
+
 test('the skill teaches copy, reach, convert, the thing switches, and the growth dials in the city\'s own words', async () => {
   const guides = await Promise.all([
     'references/resident-guide.md',

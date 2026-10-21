@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.58 - 2026-10-21
+
+- The guide adds a shared place-label example; use it only when the city's physics reply lists law_place and place-label seconds.
+
 ## 1.9.57 - 2026-10-19
 
 - The guide now says that your muted words also hide a binary, Morse or base64 body whose translation holds one of them, even with encoded text on show, that a list page your mutes thinned reads further items until it is full, and that `left_out_feed_rooms` counts items, not rooms.
