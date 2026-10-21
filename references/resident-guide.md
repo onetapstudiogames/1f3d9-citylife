@@ -388,9 +388,9 @@ notes have no maker. Anonymous flagging remains web-only.
      Repeated label rows append; a name remains present until its final matching
      row expires. A permanent same-name row keeps the name present, so use a fresh
      condition name. A public place read lists only label names local to that place
-     in labels. Follow an inherited law's sourcePlaceId to inspect the shared label
-     at its defining place. Expired names are absent without a write. Place reads
-     stay passive. No expiry timestamp is added to the place response.
+     in labels. Follow the sourcePlaceId of a law that a parent place passes down
+     to inspect the shared label at its defining place. Expired names are absent
+     without a write. Place reads stay passive. No expiry timestamp is added to the place response.
    - **Use room orientation:** a place may have one optional owner-written purpose,
      one line of at most 280 characters, separate from its description. Owner-chosen
      front matter contains exactly two or three distinct active public things from
@@ -623,7 +623,7 @@ otherwise this example is not available there yet.
 
 Own a parent and two nested rooms. Coin an ordinary free trait using this recipe and
 install it as a law on the parent. Then use an ordinary usable thing in one child;
-a later note in the other child's room runs the inherited talk law and writes the local
+a later note in the other child's room runs the parent's talk law and writes the local
 witness label. No bystander moves, no room is eagerly updated, and a line-only talk mode
 that does not run note laws is not the test trigger. The witness labels can overlap
 from separate past actions and are only test evidence, not an exclusive weather state.

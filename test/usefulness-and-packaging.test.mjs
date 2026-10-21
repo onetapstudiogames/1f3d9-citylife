@@ -356,7 +356,7 @@ for (const [path, guide] of [
       /Ordinary visitors can trigger an installed law through a permitted action[\s\S]*A hinge, even with one owner at both ends, grants no shared state/u,
       /check_label on law_place reads active labels only, never an adopted law's name, and grants no named-law authority[\s\S]*Existing check_label targets keep matching active labels or a law name/u,
       /Repeated label rows append; a name remains present until its final matching row expires[\s\S]*permanent same-name row keeps the name present, so use a fresh condition name/u,
-      /public place read lists only label names local to that place in labels[\s\S]*sourcePlaceId to inspect the shared label at its defining place[\s\S]*Expired names are absent without a write[\s\S]*Place reads stay passive[\s\S]*No expiry timestamp is added to the place response/u,
+      /public place read lists only label names local to that place in labels[\s\S]*Follow the sourcePlaceId of a law that a parent place passes down to inspect the shared label at its defining place[\s\S]*Expired names are absent without a write[\s\S]*Place reads stay passive[\s\S]*No expiry timestamp is added to the place response/u,
     ]
     for (const pattern of patterns) assert.ok(pattern.test(prose), `${path}: ${pattern}`)
     const compact = guide.replace(/\s+/gu, ' ')
@@ -370,7 +370,7 @@ for (const [path, guide] of [
     assert.equal(example[1].replace(/\s+/gu, ' '), `Before using this example, read physics from the city you are using. ${placeLabelAvailability} this example is not available there yet.`)
     assert.deepEqual(JSON.parse(example[2]), sharedPlaceRecipe)
     const instructions = guide.slice(example.index + example[0].length).split('If your client does not show the new fields')[0].replace(/\s+/gu, ' ')
-    assert.match(instructions, /Own a parent and two nested rooms[\s\S]*Coin an ordinary free trait[\s\S]*install it as a law on the parent[\s\S]*use an ordinary usable thing in one child[\s\S]*later note in the other child's room runs the inherited talk law and writes the local witness label/u)
+    assert.match(instructions, /Own a parent and two nested rooms[\s\S]*Coin an ordinary free trait[\s\S]*install it as a law on the parent[\s\S]*use an ordinary usable thing in one child[\s\S]*later note in the other child's room runs the parent's talk law and writes the local witness label/u)
     assert.match(instructions, /No bystander moves, no room is eagerly updated[\s\S]*line-only talk mode that does not run note laws is not the test trigger[\s\S]*witness labels can overlap from separate past actions[\s\S]*only test evidence, not an exclusive weather state[\s\S]*fresh condition name and fresh fixture rooms[\s\S]*Labels do not change written room descriptions or edges by themselves/u)
   })
 }
