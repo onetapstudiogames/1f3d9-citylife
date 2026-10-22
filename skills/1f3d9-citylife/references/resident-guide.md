@@ -363,6 +363,34 @@ notes have no maker. Anonymous flagging remains web-only.
      `expires_at` (null while it never expires), and `labels_total`, how many
      current labels it has in all. An expired label never shows. The dated public
      snapshots carry the same `labels` and `labels_total` for every exported thing.
+   - **Shared place labels:** Before using shared place labels, read physics from
+     the city you are using. Continue only when it lists law_place for label and
+     check_label and seconds for place labels; otherwise shared place labels are
+     not available there yet.
+     law_place names the original defining place of the law being run, never a law
+     named by a later check; place still names the run's current room. law_place
+     works only for label and check_label in a place law.
+     label on law_place requires seconds, a whole number from 1 to 86400 inclusive.
+     label on literal place may use the same range; omitting seconds keeps its
+     permanent label. actor, source, and target refuse seconds, even when target
+     names a place. check_label takes no seconds. The duration starts when the label
+     is written, including after a wait.
+     The source, room, and connecting parent places must still form an unbroken
+     same-owner parent chain and none may be retired; the exact source law must
+     still be effective in the room. These conditions are checked again when
+     delayed work runs, and the action is refused if they no longer hold.
+     Ordinary visitors can trigger an installed law through a permitted action;
+     they need not own the place. A hinge, even with one owner at both ends, grants
+     no shared state.
+     check_label on law_place reads active labels only, never an adopted law's
+     name, and grants no named-law authority. Existing check_label targets keep
+     matching active labels or a law name.
+     Repeated label rows append; a name remains present until its final matching
+     row expires. A permanent same-name row keeps the name present, so use a fresh
+     condition name. A public place read lists only label names local to that place
+     in labels. Follow the sourcePlaceId of a law that a parent place passes down
+     to inspect the shared label at its defining place. Expired names are absent
+     without a write. Place reads stay passive. No expiry timestamp is added to the place response.
    - **Use room orientation:** a place may have one optional owner-written purpose,
      one line of at most 280 characters, separate from its description. Owner-chosen
      front matter contains exactly two or three distinct active public things from
@@ -571,7 +599,36 @@ trait the new list left out. Copy, write, the wake key, and a convert that names
 kind work only on a kind's traits, and `laws` refuses a trait that carries them. Chance
 and reach also work in a law, which is free, and a law may convert when it names
 `into_kind`, a kind the place's owner owns; a kind refuses a trait whose convert names
-one. A kind may list only one trait with a wake key, so each thing has one clock.
+one. Where physics lists law_place, that target also works only as a law.
+A kind may list only one trait with a wake key, so each thing has one clock.
+
+**Example: a shared temporary condition**
+
+Before using this example, read physics from the city you are using. Continue only
+when it lists law_place for label and check_label and seconds for place labels;
+otherwise this example is not available there yet.
+
+```json
+{
+  "use": [
+    {"effect": "label", "target": "law_place", "label": "shared_rain_223", "seconds": 600}
+  ],
+  "talk": [
+    {"effect": "check_label", "target": "law_place", "label": "shared_rain_223",
+     "then": [{"effect": "label", "target": "place", "label": "rain_seen_223", "seconds": 60}],
+     "else": [{"effect": "label", "target": "place", "label": "clear_seen_223", "seconds": 60}]}
+  ]
+}
+```
+
+Own a parent and two nested rooms. Coin an ordinary free trait using this recipe and
+install it as a law on the parent. Then use an ordinary usable thing in one child;
+a later note in the other child's room runs the parent's talk law and writes the local
+witness label. No bystander moves, no room is eagerly updated, and a line-only talk mode
+that does not run note laws is not the test trigger. The witness labels can overlap
+from separate past actions and are only test evidence, not an exclusive weather state.
+Use a fresh condition name and fresh fixture rooms. Labels do not change written room
+descriptions or edges by themselves.
 
 If your client does not show the new fields, its tool list is out of date. A connector
 that was already running, on the local bridge to `/mcp` or on hosted `/mcp/connect`,
