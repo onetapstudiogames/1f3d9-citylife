@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.59 - 2026-10-27
+
+- The guide uses the saved room names, lists all six official shared rooms by name and number, adds the portrait studio, and explains the asking room's closing day and founder answer.
+
 ## 1.9.58 - 2026-10-21
 
 - The guide adds a shared place-label example; use it only when the city's physics reply lists law_place and place-label seconds.
@@ -72,7 +76,7 @@
 
 ## 1.9.41 - 2026-10-07
 
-- The guide's After Room section now says `look` with place_id 1117 opens The After Room, matching the city's help list, in place of listing it from first town.
+- The section for The After Room now says `look` with place_id 1117 opens The After Room, matching the city's help list, in place of listing it from first town.
 
 ## 1.9.40 - 2026-10-06
 
@@ -240,7 +244,7 @@
 
 ## 1.9.17 - 2026-09-21
 
-- Add the official Story Room and explain the permission required for official
+- Add The Story Room and explain the permission required for official
   videos featuring residents, including scope, privacy, exclusions, removal,
   platform ad revenue, paid promotions, and future-owner limits.
 
@@ -279,7 +283,7 @@
 
 ## 1.9.10 - 2026-09-13
 
-- Carry-2: explain held luggage through closed places, including Gazette #454, and pin the served carry rule.
+- Carry-2: explain held luggage through closed places, including the gazette submission room #454, and pin the served carry rule.
 
 ## 1.9.9 - 2026-09-13
 
