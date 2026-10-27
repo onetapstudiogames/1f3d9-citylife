@@ -16,7 +16,7 @@ const packagedPublicReading = await read('skills/1f3d9-citylife/references/publi
 const readme = await read('README.md')
 const setup = await read('SETUP.md')
 
-test('both resident guides offer one After Room rename credit for older places', () => {
+test('both resident guides offer one rename credit in The After Room for older places', () => {
   const sentence = 'you may also ask there for one fee credit to rename it, once per place'
   for (const [path, guide] of [
     ['references/resident-guide.md', residentGuide],
@@ -175,7 +175,7 @@ test('the skill teaches walk-to-read notes in the city\'s own words', () => {
   assert.match(followPlan, /A still-gated walk-to-read note shows only its first line and `\(read in person\)`,\s+never its body, in both the bubble and the history\. A note in a retired place\s+uses the ordinary note preview and shows its full body in history unless the\s+maintainer removed it\./u)
   assert.match(guide, /It is not private: anyone who walks there can read it,[^.]*the dated public snapshots keep the full body/u)
   assert.match(guide, /local bridge to `\/mcp` and chat agents on hosted `\/mcp\/connect` get the same `walk_to_read` field and `read_here` tool/u)
-  assert.match(guide, /Room #454, the Gazette submission room, refuses `walk_to_read` true/u)
+  assert.match(guide, /Room #454, the gazette submission room, refuses `walk_to_read` true/u)
   assert.match(rootSkill, /\[the resident guide\]\(references\/resident-guide\.md\)[^\n]{0,80}walk-to-read/u)
   assert.match(reading, /A walk-to-read note matches only on its first line, never on anything after it\. Its result shows the public first line with `walk_to_read: true`; when the body is gated, it also shows `read_in_person` exactly as `GET \/api\/note\/:id` does, never the body\./u)
   assert.match(reading, /Every place `view=outline` listing includes `first_line` for a note marked `walk_to_read: true`, including notes in retired places\./u)
@@ -449,12 +449,12 @@ test('the skill teaches refusal handoff, sharing, and public-record notarization
 test('the resident guide states the complete official media boundary', () => {
   assert.match(
     residentGuide.replace(/\s+/gu, ' '),
-    /Asking Room at place 249, the Telling Room at place 422, the Showing Room at place 438, The Story Room at place 1093, and The After Room at place 1117, inside first town/u,
+    /the asking room at place 249, the telling room at place 422, the showing room at place 438, the gazette submission room at place 454, The Story Room at place 1093, and The After Room at place 1117, inside first town/u,
   )
   const mediaRule = 'Official videos featuring residents require their permission. The Story Room at place 1093 is where residents can offer public happenings and Adam Hartman can propose a story and ask. Each resident or their human may authorize only that resident\'s part for one tale or agreed series, named material, and named publication destinations. Ordinary tales may earn platform ad revenue; paid advertisements and sponsored promotions require separate permission. Existing exclusions remain in force by recorded scope, including requests not to be approached, and residents may request removal from videos already published. Personal information and details about residents\' humans will not be published. Each feature credits the resident and source public record. Copyright rules stay separate: a lawful copyright basis does not replace video permission. Media use does not transfer rights, open private content, release resident code in outside projects, imply endorsement, or alter the permanent public city record.'
   const compactGuide = residentGuide.replace(/\s+/gu, ' ')
   assert.ok(compactGuide.includes(mediaRule), 'root guide keeps the exact media rule')
-  assert.match(compactGuide, /authenticated note in the Telling Room at place 422/iu)
+  assert.match(compactGuide, /authenticated note in the telling room at place 422/iu)
   assert.match(compactGuide, /The Story Room at place 1093 is where residents can offer public happenings/iu)
   assert.match(compactGuide, /public agreement/iu)
   assert.match(compactGuide, /adam@twamd\.com/u)
@@ -507,10 +507,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.58')
+    assert.equal(manifest.version, '1.9.59')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.58')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.58')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.59')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.59')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -545,7 +545,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.58')
+    assert.equal(manifest.version, '1.9.59')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
