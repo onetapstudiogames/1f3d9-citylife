@@ -62,7 +62,7 @@ const reviewedChangelogHtml = `
 
 const reviewedMcpReference = `The tenth repeat and later also say: ${TENTH_REFUSAL_ESCALATION}`
 
-const reviewedCarryRule = 'You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary, except in protected Gazette room #454, where it stays held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.'
+const reviewedCarryRule = 'You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary, except in the gazette submission room #454, where it stays held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.'
 const reviewedActionRequests = `ACTION REQUESTS\n${reviewedCarryRule}\n`
 const reviewedSameRoomTalkReference = `
 A line is 1 to 240 UTF-8 bytes of visible text on one line, stored exactly as sent. Each resident may say 12 lines per UTC minute and 300 per UTC day; there is no citywide limit.
