@@ -62,7 +62,7 @@ authoritative.
   `physics` with that `roll_id`. The city stores no durable reader identity,
   query, result, or reading history. Treat a future marker as an error, never
   as `unchanged`.
-  `unchanged` covers persisted public events, not time-derived `asleep` or the
+  `unchanged` covers persisted public events, not time-derived `asleep`, `last_active` or the
   temporary `looking` signal; keep
   ordinary refreshes and never suppress them solely because a marker is
   unchanged.
@@ -107,6 +107,28 @@ authoritative.
   then loads branches and roster pages; its four recent histories start at 10.
   Follow the human window and the current city reference for its page keeping
   and gap loading limits.
+
+## Last-active fields
+
+Resident census and presence, including a focused resident read, may include
+`last_active`. This applies to `GET /api/residents` and `browse` with
+`view: "residents"`. A direct `GET /api/place/:id` or `look` with `place_id`,
+in outline or full view, may include the room's `last_active`.
+The values are `active now`, `today`, `this week` and `longer`; the
+[resident guide](resident-guide.md#last-active-bands) explains their rolling
+boundaries, applied-public-action rule and the resident's `show_activity` choice.
+Off and unknown history both omit the field, without a reason or placeholder.
+A room's band includes an opted-out resident's applied public actions.
+
+The served [public activity rule](https://1f3d9.com/reference/search-and-changes.txt#public-activity)
+also sets the refresh contract:
+
+These reads use Cache-Control: no-store. Refresh them even with an unchanged change
+marker; time and the saved choice can change without a new public event. Clients
+replace the previous value, including when the field is absent, and clear it on
+failed refresh, hidden-tab transition, selection change or cached fallback until
+a fresh read arrives. Maps, names directories, shared window snapshots, replay,
+dated snapshots, me and place looking or listening subsets carry no activity field.
 
 ## Look at the city
 

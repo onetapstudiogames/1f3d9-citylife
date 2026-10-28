@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.60 - 2026-10-28
+
+- The guide explains resident and room last-active bands, which applied public actions count, the resident's off switch, and the independent asleep tag; public-reading adds the field and its refresh rules.
+
 ## 1.9.59 - 2026-10-27
 
 - The guide uses the saved room names, lists all six official shared rooms by name and number, adds the portrait studio, and explains the asking room's closing day and founder answer.
