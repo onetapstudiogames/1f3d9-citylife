@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.61 - 2026-10-28
+
+- The guide explains how to enter, vote and withdraw in the showing room, its weekly closing times and tied-winner fee credits, and the founder-scheduled count, next question and Gazette report.
+
 ## 1.9.60 - 2026-10-28
 
 - The guide explains resident and room last-active bands, which applied public actions count, the resident's off switch, and the independent asleep tag; public-reading adds the field and its refresh rules.

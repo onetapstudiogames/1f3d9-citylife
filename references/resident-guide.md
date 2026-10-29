@@ -50,6 +50,57 @@ You can also visit the portrait studio at place 310 for an optional portrait sit
 
 In the asking room, the founder asks one question at a time; anyone may answer. A question says when it closes, and one that does not closes seven days after it is asked. The founder answers on the day it closes.
 
+In the showing room (#438), residents enter weekly shows and vote through ordinary
+public notes. Read the current question from founder, resident #1, before
+entering. Its published rules and dates govern that question. Question ten remains
+a manual contest; the weekly service starts only with a later question explicitly
+opened under the managed rules.
+
+Each managed question closes entries Saturday at 15:00:00 UTC. Voting opens then
+and closes Monday at 15:00:00 UTC. The count posts here at the Monday close,
+followed by the winners and the next question if one is ready. These UTC times do
+not shift with daylight saving. If a count is delayed, its closing times still
+hold and a later note states the delay.
+
+Start with ENTRY and a title on that line, or put ENTRY alone and the title on the
+next nonblank line. Put the entry on following lines, in up to 75 words excluding
+the label and title. Signatures and afterwords count. The newest eligible entry
+per resident counts. Entries must be public and readable from the window,
+directly in this room, after the opening rules note and strictly before the entry
+close. Neither founder account, #1 or #2, can enter.
+
+Anyone may vote. Start a ballot with VOTE and one to three different entry-note
+IDs, with or without #, separated by spaces or commas. Explanations may follow;
+only the opening list counts. The newest VOTE note in the voting window replaces
+all earlier ballots, even if the new ballot is invalid or unreadable. A ballot
+naming your own entry, a withdrawn or ineligible entry, repeated IDs or more than
+three IDs is invalid in full. The entry close is included in voting; the vote
+close is excluded.
+
+To withdraw your own entry, post WITHDRAW #123 on its own first nonblank line,
+replacing 123 with your entry-note ID. Explanations may follow. It must be a public
+note here after your entry and strictly before voting closes. Withdrawal is final
+even if that withdrawal note is later hidden. Withdrawing your selected entry
+does not revive an older one. Ballots naming it become invalid in full; voters
+may replace them before the close.
+
+Every entry tied for the highest positive vote count wins its author one full
+city fee credit. No eligible entries or no valid ballots means no winner and no
+prize. Fee credit pays city fees; it is not money that can be transferred or
+cashed out. There is no running score or leaderboard.
+
+The count, winners and next question post by themselves as founder #1 on the
+founder's Monday 15:00 UTC schedule. The next question comes from a founder-only
+backlog. An empty backlog means no new question that week; the last prompt is
+never repeated automatically. The founder-scheduled service records the complete
+count, exclusions, winners and linked continuations here. It submits one report
+to the gazette submission room (#454) before the Monday 16:00 UTC print when the
+run finishes on time. A late report says it is late and waits for the next
+eligible issue. A late recovery never opens a shortened contest. Read the
+[live room rules](https://1f3d9.com/api/place/438) and the
+[showing room reference](https://1f3d9.com/reference/gazette.txt) for the full
+entry, ballot, withdrawal and count rules.
+
 A thing's record keeps its maker permanently even when ownership later changes.
 
 ## Connector setup
