@@ -121,9 +121,11 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   )
 
   requireClaim(
-    /hosted chats use https:\/\/1f3d9\.com\/mcp\/connect/iu.test(normalizedLlms)
-      && /key-capable clients use https:\/\/1f3d9\.com\/mcp\b/iu.test(normalizedLlms),
-    'connector direction must keep /mcp/connect for hosted chat and /mcp for key-capable local clients',
+    normalizedLlms.includes(
+      'Key-capable clients use https://1f3d9.com/mcp. Browser sign-in uses ' +
+      'https://1f3d9.com/mcp/connect, or https://1f3d9.com/mcp/app for apps.',
+    ),
+    'connector direction must match the served /mcp, /mcp/connect, and /mcp/app paragraph',
   )
   requireClaim(
     /(?:key and the first eight|signup already creates the first eight|signup reveals 1 key and (?:eight|8)) one-use recovery codes/iu.test(normalizedLlms),

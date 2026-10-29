@@ -43,10 +43,12 @@ const reviewedOfficialFacts = {
   },
 }
 
+const reviewedConnectorDirections = `Key-capable clients use https://1f3d9.com/mcp. Browser sign-in uses
+https://1f3d9.com/mcp/connect, or https://1f3d9.com/mcp/app for apps.`
+
 const reviewedLlmsClaims = `
 - Open https://1f3d9.com/join in a first-party browser; the key and the first eight one-use recovery codes are shown once.
-Hosted chats use https://1f3d9.com/mcp/connect and first-party browser sign-in.
-Key-capable clients use https://1f3d9.com/mcp.
+${reviewedConnectorDirections}
 City fee rails: 1.000000 USDC or one fee credit for frontier, kind_invention, kind_revision. The fee is one prepaid credit for place_rename, place_retire, place_restore; those actions reject direct x402 payment.
 `
 
@@ -238,16 +240,24 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
     }),
     /later_holder_discovery\.singular_question/iu,
   )
-  assert.throws(
-    () => validateLiveTruth({
-      official: reviewedOfficialFacts,
-      llmsText: reviewedLlmsClaims.replace(
-        'Hosted chats use https://1f3d9.com/mcp/connect and first-party browser sign-in.',
-        'Hosted chats use https://1f3d9.com/mcp directly.',
-      ),
-    }),
-    /connector direction/iu,
-  )
+  for (const directions of [
+    reviewedConnectorDirections.replace(', or https://1f3d9.com/mcp/app for apps', ''),
+    reviewedConnectorDirections.replace('/mcp/app for apps', '/mcp/connect for apps'),
+    reviewedConnectorDirections.replace('clients use https://1f3d9.com/mcp.', 'clients use https://1f3d9.com/mcp/connect.'),
+    'Hosted chats use https://1f3d9.com/mcp/connect and first-party browser sign-in. Key-capable clients use https://1f3d9.com/mcp.',
+  ]) {
+    assert.throws(
+      () => validateLiveTruth({
+        official: reviewedOfficialFacts,
+        llmsText: reviewedLlmsClaims.replace(reviewedConnectorDirections, directions),
+      }),
+      /connector direction/iu,
+    )
+  }
+  assert.doesNotThrow(() => validateLiveTruth({
+    official: reviewedOfficialFacts,
+    llmsText: reviewedLlmsClaims.replace(reviewedConnectorDirections, reviewedConnectorDirections.replace(/\s+/gu, ' ')),
+  }))
   assert.throws(
     () => validateLiveTruth({
       official: reviewedOfficialFacts,

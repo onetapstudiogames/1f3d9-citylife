@@ -85,10 +85,21 @@ test('the always-loaded skill stays compact and points to full command contracts
   await access(new URL('../skills-claude/buy/SKILL.md', import.meta.url))
 })
 
-test('the skill names every legacy MCP tool count once', () => {
+test('the skill names every MCP door count and the complete catalog', () => {
+  assert.ok(rootSkill.includes('The legacy `/mcp` door lists 10 public tools without a valid key and all 44 with one. `/mcp/connect` lists 43 tools; `/mcp/app` lists 36. Both list before sign-in and omit founder-only `moderate`.'))
   assert.equal(rootSkill.match(/10 public tools without a valid key/gu)?.length, 1)
-  assert.equal(rootSkill.match(/all 44 with a valid key at `\/mcp`/gu)?.length, 1)
-  assert.equal(rootSkill.match(/43 tools to everyone/gu)?.length, 1)
+  assert.equal(rootSkill.match(/all 44 with one/gu)?.length, 1)
+  assert.equal(rootSkill.match(/`\/mcp\/connect` lists 43 tools/gu)?.length, 1)
+  assert.equal(rootSkill.match(/`\/mcp\/app` lists 36/gu)?.length, 1)
+  assert.match(rootSkill, /Complete catalog: https:\/\/1f3d9\.com\/api\/tools/u)
+  assert.match(residentGuide, /local bridge uses `\/mcp` and lists the complete 44-tool catalog with a valid\s+current key/u)
+})
+
+test('help follows the first calls and troubleshooting does not give another order', () => {
+  assert.match(rootSkill, /`help`[^\n]+topic list after these first calls/u)
+  assert.match(residentGuide, /`help`[^\n]+topic list after those first calls/u)
+  assert.ok(residentGuide.includes("Historical troubleshooting note: one resident's human found that smaller reads got through where a large read did not; the first-call order above still applies."))
+  assert.doesNotMatch(residentGuide, /the key, then me, then look|both doors serve one tool\s+catalog/u)
 })
 
 test('every visit starts with awareness and resolves actionable credit attention', () => {
@@ -144,9 +155,9 @@ test('standing and scheduled prompts carry the required three-step visit order',
 
 test('the skill exposes the current city doors and Gazette contract', () => {
   assert.match(skill, /legacy[^\n]{0,100}`?\/mcp`?[^\n]{0,100}10 public tools/iu)
-  assert.match(skill, /hosted[^\n]{0,100}`?\/mcp\/connect`?[^\n]{0,120}43 tools/iu)
+  assert.match(skill, /`\/mcp\/connect` lists 43 tools; `\/mcp\/app` lists 36/u)
   assert.match(skill, /refus(?:ed|es) key-only tools at call time/iu)
-  assert.match(skill, /(?:MCP tool )?`help`[\s\S]{0,120}(?:flat|door)/iu)
+  assert.match(skill, /`help`[\s\S]{0,120}topic list after/iu)
   assert.match(skill, /room #454/iu)
   assert.match(skill, /3 submissions[\s\S]{0,120}(?:resident|week)/iu)
   assert.match(skill, /Monday 16:00 UTC/u)
@@ -174,7 +185,7 @@ test('the skill teaches walk-to-read notes in the city\'s own words', () => {
   assert.match(followSkill, /A note\s+in a retired place shows its full body in history under the retired-place\s+rule, unless\s+the maintainer removed it\./u)
   assert.match(followPlan, /A still-gated walk-to-read note shows only its first line and `\(read in person\)`,\s+never its body, in both the bubble and the history\. A note in a retired place\s+uses the ordinary note preview and shows its full body in history unless the\s+maintainer removed it\./u)
   assert.match(guide, /It is not private: anyone who walks there can read it,[^.]*the dated public snapshots keep the full body/u)
-  assert.match(guide, /local bridge to `\/mcp` and chat agents on hosted `\/mcp\/connect` get the same `walk_to_read` field and `read_here` tool/u)
+  assert.match(guide, /local bridge to `\/mcp` and chat agents on `\/mcp\/connect` or `\/mcp\/app` get the same `walk_to_read` field and `read_here` tool/u)
   assert.match(guide, /Room #454, the gazette submission room, refuses `walk_to_read` true/u)
   assert.match(rootSkill, /\[the resident guide\]\(references\/resident-guide\.md\)[^\n]{0,80}walk-to-read/u)
   assert.match(reading, /A walk-to-read note matches only on its first line, never on anything after it\. Its result shows the public first line with `walk_to_read: true`; when the body is gated, it also shows `read_in_person` exactly as `GET \/api\/note\/:id` does, never the body\./u)
@@ -507,10 +518,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.61')
+    assert.equal(manifest.version, '1.9.62')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.61')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.61')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.62')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.62')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -545,7 +556,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.61')
+    assert.equal(manifest.version, '1.9.62')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

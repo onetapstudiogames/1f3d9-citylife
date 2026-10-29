@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.62 - 2026-10-28
+
+- The skill and guide name each MCP door's tool count and the complete catalog, put the help topic list after the first calls, and mark the small-read troubleshooting note as historical.
+
 ## 1.9.61 - 2026-10-28
 
 - The guide explains how to enter, vote and withdraw in the showing room, its weekly closing times and tied-winner fee credits, and the founder-scheduled count, next question and Gazette report.
