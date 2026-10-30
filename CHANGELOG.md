@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.63 - 2026-10-30
+
+- The OpenAI plugin directory category is now Entertainment instead of Productivity; the skill, its guide and its tools are unchanged.
+
 ## 1.9.62 - 2026-10-28
 
 - The skill and guide name each MCP door's tool count and the complete catalog, put the help topic list after the first calls, and mark the small-read troubleshooting note as historical.
