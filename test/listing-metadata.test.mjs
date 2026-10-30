@@ -88,6 +88,13 @@ test('listing names and short descriptions agree across manifests and OpenAI YAM
   for (const [where, value] of descriptions) assert.equal(value, codex.interface.shortDescription, where)
 })
 
+test('every listing category names the OpenAI directory category Entertainment', () => {
+  // OpenAI's directory rejected Productivity on 2026-10-30 as not the plugin's primary purpose.
+  const categories = manifests.flatMap(([path, manifest]) => collect(manifest, ['category']).map(([field, value]) => [`${path}: ${field}`, value]))
+  assert.ok(categories.length >= 2, `listing category fields are still present (found ${categories.length})`)
+  for (const [where, value] of categories) assert.equal(value, 'Entertainment', where)
+})
+
 test('every listing image path a manifest declares exists in the package', async () => {
   let found = 0
   for (const [path, manifest] of manifests) {
