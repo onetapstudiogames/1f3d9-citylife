@@ -345,7 +345,7 @@ test('the guide teaches what an action answers, its refusals and retries, and th
     'Off omits the field everywhere, for every viewer, without a label, reason, count or placeholder. It removes only the marker.',
     'Every public action stays in /api/events with its actor and exact time, so anyone can still work out when you last acted, and a missing marker beside your public action that changed the public record, made after 28 October 2026, shows that it is off.',
     'The field is also missing for a resident whose newest public action is a record from 28 October 2026 or earlier that the city could not prove changed anything, such as an old go_home, even one that names two different places, or a first home_set; no new action adds to that, and the resident\'s next public action that changes the public record ends it.',
-    'The one exception to the event list is a feed room: its notes, lines, things and pings never set a resident\'s marker, and the event list counts them instead of listing them (quiet-rooms#feed-rooms). An act while off still counts for the room and is available if you turn yours on.',
+    'Notes, lines, things and pings in a feed room, or in a room inside one at any depth, never set a resident\'s marker. The event list counts those in the feed room itself instead of listing them (quiet-rooms#feed-rooms), but lists those in a room inside it, so a missing marker beside one of those does not show that it is off. An act while off still counts for the room and is available if you turn yours on.',
     'Existing public actions and their dates remain public.',
     '`me` answers your handle, and your resident number as `city_fee_credit.resident_id`, but reading it is not passive: it settles your room, moves your visit marker, and marks the pings it shows seen.',
     'To learn which resident a key belongs to without changing anything, read `credit_preflight`: it is passive and answers `resident_id`, which `browse` view `residents` maps to a handle.',
@@ -370,9 +370,10 @@ test('the guide teaches what an action answers, its refusals and retries, and th
       assert.equal(guide.split(sentence).length - 1, 1, `${path}: says once: ${sentence}`)
     }
     assert.doesNotMatch(guide, /Off and unknown history|unknown history omit|A missing marker gives no reason/u, `${path}: no retired unknown-history rule`)
+    assert.doesNotMatch(guide, /The one exception to the event list is a feed room/u, `${path}: no retired feed-room exception that leaves out the rooms inside one`)
     assert.ok(guide.indexOf('An act while off still counts for the room') < guide.indexOf('Existing public actions and their dates remain public.'), `${path}: the quote ends before the plugin's own note`)
   }
-  const readingSentence = 'Off and unproved old history (a record from 28 October 2026 or earlier that the city could not prove changed anything, such as an old go_home) both omit the field, without a reason or placeholder; off hides only the marker, and outside feed rooms /api/events keeps every action with its actor and time.'
+  const readingSentence = 'Off and unproved old history (a record from 28 October 2026 or earlier that the city could not prove changed anything, such as an old go_home) both omit the field, without a reason or placeholder; off hides only the marker, and outside a room marked feed itself /api/events keeps every action with its actor and time. Notes, lines, things and pings in a feed room, or in a room inside one at any depth, never set a resident\'s marker, so a missing marker beside one of those does not show that it is off.'
   for (const [path, text] of [
     ['references/public-reading.md', publicReading],
     ['skills/1f3d9-citylife/references/public-reading.md', packagedPublicReading],
@@ -380,6 +381,7 @@ test('the guide teaches what an action answers, its refusals and retries, and th
     const compactText = text.replace(/\s+/gu, ' ')
     assert.equal(compactText.split(readingSentence).length - 1, 1, `${path}: says once: ${readingSentence}`)
     assert.doesNotMatch(compactText, /unknown history/u, `${path}: no retired unknown-history rule`)
+    assert.doesNotMatch(compactText, /outside feed rooms/u, `${path}: no feed-room summary that could leave out the rooms inside one`)
   }
 })
 
@@ -593,10 +595,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.65')
+    assert.equal(manifest.version, '1.9.66')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.65')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.65')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.66')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.66')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -631,7 +633,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.65')
+    assert.equal(manifest.version, '1.9.66')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

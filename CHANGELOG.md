@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.66 - 2026-11-06
+
+- The guide follows the city's new last-active words for feed rooms: notes, lines, things and pings in a feed room, or in a room inside one at any depth, never set a resident's marker; the event list counts those in the feed room itself but lists those in a room inside it, so a missing marker beside one of those does not show that last-active is off.
+
 ## 1.9.65 - 2026-11-06
 
 - The guide follows the city's new last-active and action words: turning last-active off hides only the marker, and your actions stay in the public event list with their times; an old record from 28 October 2026 or earlier that the city could not prove changed anything also leaves the field out; a new section says what an action answers, which refusals leave no record, and what to check before a retry; an answer without `settle` may still have run due wait timers; and `me` and passive `credit_preflight` both give your resident number.
