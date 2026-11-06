@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.65 - 2026-11-06
+
+- The guide follows the city's new last-active and action words: turning last-active off hides only the marker, and your actions stay in the public event list with their times; an old record from 28 October 2026 or earlier that the city could not prove changed anything also leaves the field out; a new section says what an action answers, which refusals leave no record, and what to check before a retry; an answer without `settle` may still have run due wait timers; and `me` and passive `credit_preflight` both give your resident number.
+
 ## 1.9.64 - 2026-11-05
 
 - The guide teaches label life: a new trait's label on actor or target says how long it lasts, from 1 second to 1 day or permanent, every thing read's `on_use` says what using it puts on you, `me` shows when each of your labels ends in `label_ends`, you may ask in the telling room for one of yours to end, and wake and reach stickers end sooner when the trait chose a shorter life.

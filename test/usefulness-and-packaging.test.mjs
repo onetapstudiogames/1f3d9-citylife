@@ -320,7 +320,7 @@ test('the skill teaches the post-live-test fixes in the city\'s own words', asyn
     'Labels on a thing are public. Every thing read shows `labels`, the thing\'s current labels newest first, at most 32,',
     'An expired label never shows.',
     '`settle` in the answer to the move, note, or `me` read that caused it,',
-    'An answer with no `settle` means the room had nothing to settle or had settled in the last 10 seconds.',
+    'An answer with no `settle` means the room had no wake tries to settle or had settled them in the last 10 seconds; due wait timers run either way and never appear in `settle`.',
     'A use that waits, moves a thing, or transfers still leaves its public action notice with `source_thing_id`, `place_id`, and `effects_applied`;',
   ]
   for (const [path, guide] of guides) {
@@ -328,10 +328,58 @@ test('the skill teaches the post-live-test fixes in the city\'s own words', asyn
       assert.equal(guide.split(sentence).length - 1, 1, `${path}: says once: ${sentence}`)
     }
     assert.doesNotMatch(guide, /settle` in the answer to the move or note that caused it/u)
+    assert.doesNotMatch(guide, /the room had nothing to settle/u, `${path}: no retired settle rule that hides due timers`)
   }
   for (const path of ['references/resident-guide.md', 'skills/1f3d9-citylife/references/resident-guide.md', 'SETUP.md', 'skills/connect/SKILL.md']) {
     const text = (await read(path)).replace(/\s+/gu, ' ')
     assert.doesNotMatch(text, /normal chat only the read-only tools run/u, `${path}: no ChatGPT normal-chat limit`)
+  }
+})
+
+test('the guide teaches what an action answers, its refusals and retries, and the last-active words in the city\'s served words', async () => {
+  const guides = await Promise.all([
+    'references/resident-guide.md',
+    'skills/1f3d9-citylife/references/resident-guide.md',
+  ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
+  const sentences = [
+    'Off omits the field everywhere, for every viewer, without a label, reason, count or placeholder. It removes only the marker.',
+    'Every public action stays in /api/events with its actor and exact time, so anyone can still work out when you last acted, and a missing marker beside your public action that changed the public record, made after 28 October 2026, shows that it is off.',
+    'The field is also missing for a resident whose newest public action is a record from 28 October 2026 or earlier that the city could not prove changed anything, such as an old go_home, even one that names two different places, or a first home_set; no new action adds to that, and the resident\'s next public action that changes the public record ends it.',
+    'The one exception to the event list is a feed room: its notes, lines, things and pings never set a resident\'s marker, and the event list counts them instead of listing them (quiet-rooms#feed-rooms). An act while off still counts for the room and is available if you turn yours on.',
+    'Existing public actions and their dates remain public.',
+    '`me` answers your handle, and your resident number as `city_fee_credit.resident_id`, but reading it is not passive: it settles your room, moves your visit marker, and marks the pings it shows seen.',
+    'To learn which resident a key belongs to without changing anything, read `credit_preflight`: it is passive and answers `resident_id`, which `browse` view `residents` maps to a handle.',
+    '`place_id` is where you stood when the action finished, read before the room you arrived in settles.',
+    'That settle can still move you: a thing waking in a rough room can send you home, and a due wait timer there, such as one you set before you left, can go off as you arrive. The answer then still names the room you walked into.',
+    '`settle.woke` above 0 hints at a wake; a timer leaves no hint.',
+    'To know where you stand afterward, read `me`, or the public presence with `browse` view `residents`, `resident_view` `presence`, and your handle',
+    'Body and field checks, sign-in, a `to_place_id` or `thing_id` that names nothing, a `to_handle` that names no resident, and the checks on a give that would wait for a resident who muted you come before that settle and leave no action record.',
+    'A `to_place_id` or `thing_id` that names no place or thing at all is refused with 404, and no event is written.',
+    'A retired place or a withdrawn thing still exists, so it meets its own refusal, which is recorded like any other.',
+    'Any other id that names nothing, such as a `carry_thing_id` or a `target_id`, reaches the action itself and is recorded with its outcome.',
+    'A refusal from the action itself is recorded: the answer\'s action object keeps its id, and its public action event says status failed or blocked with the same error',
+    '`act` has no idempotency key: POST /api/action accepts no `request_id` and reads no Idempotency-Key or X-Request-ID header.',
+    'Every request that runs is a new action with a new id and a new public record, so a retry after a lost answer may run twice.',
+    'A retried move whose first try landed is a move to the place you already stand in. It is not refused for standing there already: it runs as an ordinary move, so that place\'s laws run, as leaving it would, and one of them may still move you, label you, or block your next step.',
+    'Before you retry, check what happened: `browse` view `events` with kind `action` and actor your handle lists every move and go_home, every recorded refusal, and most uses, each with its status.',
+    'A give or consume that landed, and a use whose only change was a destroy, may show only as its `transfer` or `thing_withdrawn` event instead, so read those kinds too.',
+    'Lines and pings differ: an exact retry with the same `request_id` replays its first answer',
+  ]
+  for (const [path, guide] of guides) {
+    for (const sentence of sentences) {
+      assert.equal(guide.split(sentence).length - 1, 1, `${path}: says once: ${sentence}`)
+    }
+    assert.doesNotMatch(guide, /Off and unknown history|unknown history omit|A missing marker gives no reason/u, `${path}: no retired unknown-history rule`)
+    assert.ok(guide.indexOf('An act while off still counts for the room') < guide.indexOf('Existing public actions and their dates remain public.'), `${path}: the quote ends before the plugin's own note`)
+  }
+  const readingSentence = 'Off and unproved old history (a record from 28 October 2026 or earlier that the city could not prove changed anything, such as an old go_home) both omit the field, without a reason or placeholder; off hides only the marker, and outside feed rooms /api/events keeps every action with its actor and time.'
+  for (const [path, text] of [
+    ['references/public-reading.md', publicReading],
+    ['skills/1f3d9-citylife/references/public-reading.md', packagedPublicReading],
+  ]) {
+    const compactText = text.replace(/\s+/gu, ' ')
+    assert.equal(compactText.split(readingSentence).length - 1, 1, `${path}: says once: ${readingSentence}`)
+    assert.doesNotMatch(compactText, /unknown history/u, `${path}: no retired unknown-history rule`)
   }
 })
 
@@ -545,10 +593,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.64')
+    assert.equal(manifest.version, '1.9.65')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.64')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.64')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.65')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.65')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -583,7 +631,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.64')
+    assert.equal(manifest.version, '1.9.65')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
