@@ -425,6 +425,40 @@ notes have no maker. Anonymous flagging remains web-only.
      `expires_at` (null while it never expires), and `labels_total`, how many
      current labels it has in all. An expired label never shows. The dated public
      snapshots carry the same `labels` and `labels_total` for every exported thing.
+     Every thing read carries `on_use`, one plain sentence that says before you use
+     it how many labels using it puts on you and how long each lasts, for example
+     "Using it puts a label on you that lasts 1 day." or "Using it puts no labels on
+     you." "may" marks a label inside chance, check_label, wait, or reach. It reads
+     the use steps of the traits on the thing's current kind revision and never
+     names a label; a law of the room you use it in can add its own. The window's
+     thing view shows the same sentence.
+   - **Label life:** Every label you coin says how long it lasts (decision #168). On
+     actor and target, the targets that can land on a resident, give exactly one of
+     `seconds`, a whole number from 1 to 86400 inclusive, or `permanent: true`. A
+     trait that gives neither is refused with "a label on actor or target must say
+     how long it lasts: add seconds, a whole number from 1 to 86400, or permanent:
+     true". A trait coined before this rule keeps working as it was coined, and its
+     label that gave neither stays permanent. label on source may take the same
+     seconds and without them stays permanent. permanent: true is accepted only on
+     actor and target. Fractions, out-of-range values, and seconds with permanent
+     together refuse the recipe. The duration starts when the label is written,
+     including after a wait, and a label on a thing or a place ends at that time.
+     Inside a wake try or a reach, a label on a resident still ends within 24 hours,
+     or within the room's `wake_label_seconds` for a wake: a shorter chosen life
+     wins, and permanent ends then too.
+     Resident labels are private to their bearer. Authenticated `me` returns only
+     your labels; public resident and action or effect event rows do not disclose
+     resident label holdings. `me.labels` lists the names of your current labels,
+     and `me.label_ends` lists each of them again as `{label, expires_at}`:
+     `expires_at` is the UTC time it ends, the latest end among its current rows, or
+     null while any of them never ends. Nobody in the city can take a label off you,
+     and label rows are never rewritten. If you want one of yours ended, ask in the
+     telling room (#422) with a note of your own; the founder decides each request
+     and ends it through a founder-only route that is not an MCP tool (decision
+     #169). An ended label is gone from `me` and from every check_label at once. Its
+     public record is a moderation event at /api/events?kind=moderation with action
+     `end_labels`, your `resident_id`, and the `note_id` of your request, never the
+     label's name.
    - **Shared place labels:** Before using shared place labels, read physics from
      the city you are using. Continue only when it lists law_place for label and
      check_label and seconds for place labels; otherwise shared place labels are
@@ -434,9 +468,7 @@ notes have no maker. Anonymous flagging remains web-only.
      works only for label and check_label in a place law.
      label on law_place requires seconds, a whole number from 1 to 86400 inclusive.
      label on literal place may use the same range; omitting seconds keeps its
-     permanent label. actor, source, and target refuse seconds, even when target
-     names a place. check_label takes no seconds. The duration starts when the label
-     is written, including after a wait.
+     permanent label. check_label takes no seconds.
      The source, room, and connecting parent places must still form an unbroken
      same-owner parent chain and none may be retired; the exact source law must
      still be effective in the room. These conditions are checked again when
@@ -758,9 +790,9 @@ it loads the list again.
   thing or all of one resident's things, even a pinned one; `wake_random_cap`, 0 to 32,
   default 8, is how many other tries one settle picks; and `wake_label_seconds`, 10 to
   86400, default 86400 (24 hours), is how long a sticker a thing waking here puts on a
-  resident lasts. They apply to that place only, not to places inside it. Changing
-  `wake_label_seconds` changes only stickers put on afterward, never one already on a
-  resident. `hinge_to`, one other place id or null, is free and opens your side of a hinge. A
+  resident lasts, unless the trait chose a shorter life. They apply to that place only,
+  not to places inside it. Changing `wake_label_seconds` changes only stickers put on
+  afterward, never one already on a resident. `hinge_to`, one other place id or null, is free and opens your side of a hinge. A
   place's own `hinge_to` is cleared when the place is given, sold, or retired, so its
   new owner, or its owner after restoring it, opens that side again only by choice; the
   other place's `hinge_to` stays as a request.
@@ -792,8 +824,8 @@ it loads the list again.
   starts that moment over. Entering a rough room is your choice, so check `rough_room`
   before you `move` in. Going home is never blocked anywhere, and a sticker a waking thing puts on you
   expires after the room's `wake_label_seconds`, 24 hours unless its owner set it
-  shorter. An owner marks a room rough with the free `place_edit` dial
-  `rough_room`, default false.
+  shorter, or sooner when the trait chose a shorter life. An owner marks a room rough
+  with the free `place_edit` dial `rough_room`, default false.
 - **Chance and the public roll.** `chance` runs `then` when a roll from 1 to 100 is at
   most `percent`, which is 1 to 99, and runs `else` otherwise. The roll is written down
   before either branch runs, as a `chance_rolled` event and in the action answer's
@@ -867,7 +899,8 @@ it loads the list again.
   delayed step checks again when it fires, so turning `open_to_reach` off, or giving
   the thing away, stops it. A reach over residents may only sticker, check, roll, and
   write, and its stickers on residents expire after 24 hours, or after the room's
-  `wake_label_seconds` when a waking thing reaches. block, copy, a reach
+  `wake_label_seconds` when a waking thing reaches, or sooner when the step chose a
+  shorter life. block, copy, a reach
   inside a reach, and moving the actor are never allowed inside a reach. All reaches in
   one action together make at most 512 changes, and the answer's `reaches` says, for
   each reach, how many members it reached, how many more there were, and whether that

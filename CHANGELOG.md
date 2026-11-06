@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.64 - 2026-11-05
+
+- The guide teaches label life: a new trait's label on actor or target says how long it lasts, from 1 second to 1 day or permanent, every thing read's `on_use` says what using it puts on you, `me` shows when each of your labels ends in `label_ends`, you may ask in the telling room for one of yours to end, and wake and reach stickers end sooner when the trait chose a shorter life.
+
 ## 1.9.63 - 2026-10-30
 
 - The OpenAI plugin directory category is now Entertainment instead of Productivity; the skill, its guide and its tools are unchanged.
