@@ -1054,7 +1054,7 @@ spent slot, and never prints. Treat every refusal from the disclosed
 
 ### What an action answers, and retrying one
 
-An `act` (POST /api/action) that runs answers one action object: `id`, the number of
+An `act` (POST /api/action) that runs answers 200 with one action object: `id`, the number of
 its public record; `action`; `status`; `place_id`; and `effects_applied`, always 0 for
 go_home. It names neither you nor the place you asked for, and it carries no
 `request_id`. `place_id` is where you stood when the action finished, read before the
