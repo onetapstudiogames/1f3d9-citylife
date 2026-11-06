@@ -279,7 +279,7 @@ test('the skill teaches wake on arrival, chance, write, rough rooms, and The Aft
     'A thing you are given arrives asleep until you turn it on, and things that existed before wake keys existed start asleep too.',
     'By default only the room owner\'s own things wake.',
     '`wake_block_thing_ids` and `wake_block_residents`, up to 64 each, silence one thing or all of one resident\'s things, even a pinned one',
-    '`wake_random_cap`, 0 to 32, default 8, is how many other tries one settle picks; and `wake_label_seconds`, 10 to 86400, default 86400 (24 hours), is how long a sticker a thing waking here puts on a resident lasts.',
+    '`wake_random_cap`, 0 to 32, default 8, is how many other tries one settle picks; and `wake_label_seconds`, 10 to 86400, default 86400 (24 hours), is how long a sticker a thing waking here puts on a resident lasts, unless the trait chose a shorter life.',
     'Changing `wake_label_seconds` changes only stickers put on afterward, never one already on a resident.',
     'Things have no clock of their own. Only a visit settles a room: when someone arrives, speaks, acts, or checks `me` there,',
     'Each thing tries at most 8 times in one settle, and clock tries it was owed beyond that are dropped.',
@@ -287,7 +287,7 @@ test('the skill teaches wake on arrival, chance, write, rough rooms, and The Aft
     'A room whose owner marked it rough says so before you enter: `rough_room` is true on its place read and on its row in every list you pick a destination from',
     'There a waking thing may also block you or send you home, but only while you are still in the room and only if you came in at or after the moment its owner last switched `rough_room` on.',
     'A room that turns rough while you are inside cannot hold you until you leave and come back, and switching it off and on again starts that moment over.',
-    'Going home is never blocked anywhere, and a sticker a waking thing puts on you expires after the room\'s `wake_label_seconds`, 24 hours unless its owner set it shorter.',
+    'Going home is never blocked anywhere, and a sticker a waking thing puts on you expires after the room\'s `wake_label_seconds`, 24 hours unless its owner set it shorter, or sooner when the trait chose a shorter life.',
     'The roll is written down before either branch runs, as a `chance_rolled` event and in the action answer\'s `rolls`.',
     'Once the day is over, `physics` with a `roll_id` shows the secret, so anyone can recompute the roll,',
     '`write` keeps a small box of values on its own thing, never on another\'s, and never touches the name or body its owner wrote.',
@@ -362,7 +362,7 @@ for (const [path, guide] of [
       /law_place names the original defining place of the law being run, never a law named by a later check; place still names the run's current room/u,
       /law_place works only for label and check_label in a place law/u,
       /label on law_place requires seconds, a whole number from 1 to 86400 inclusive[\s\S]*label on literal place may use the same range; omitting seconds keeps its permanent label/u,
-      /actor, source, and target refuse seconds, even when target names a place[\s\S]*check_label takes no seconds[\s\S]*duration starts when the label is written, including after a wait/u,
+      /omitting seconds keeps its permanent label\. check_label takes no seconds\./u,
       /unbroken same-owner parent chain[\s\S]*none may be retired[\s\S]*exact source law must still be effective[\s\S]*checked again when delayed work runs[\s\S]*action is refused if they no longer hold/u,
       /Ordinary visitors can trigger an installed law through a permitted action[\s\S]*A hinge, even with one owner at both ends, grants no shared state/u,
       /check_label on law_place reads active labels only, never an adopted law's name, and grants no named-law authority[\s\S]*Existing check_label targets keep matching active labels or a law name/u,
@@ -371,7 +371,10 @@ for (const [path, guide] of [
     ]
     for (const pattern of patterns) assert.ok(pattern.test(prose), `${path}: ${pattern}`)
     const compact = guide.replace(/\s+/gu, ' ')
-    assert.ok(compact.includes('snapshots carry the same `labels` and `labels_total` for every exported thing. - **Shared place labels:**'))
+    assert.ok(compact.includes('snapshots carry the same `labels` and `labels_total` for every exported thing. Every thing read carries `on_use`,'))
+    assert.ok(compact.includes('The window\'s thing view shows the same sentence. - **Label life:**'))
+    assert.ok(compact.includes('never the label\'s name. - **Shared place labels:**'))
+    assert.doesNotMatch(compact, /refuse seconds/u, `${path}: no retired rule that actor, source, and target refuse seconds`)
     assert.ok(compact.includes('a kind refuses a trait whose convert names one. Where physics lists law_place, that target also works only as a law.'))
   })
 
@@ -383,6 +386,30 @@ for (const [path, guide] of [
     const instructions = guide.slice(example.index + example[0].length).split('If your client does not show the new fields')[0].replace(/\s+/gu, ' ')
     assert.match(instructions, /Own a parent and two nested rooms[\s\S]*Coin an ordinary free trait[\s\S]*install it as a law on the parent[\s\S]*use an ordinary usable thing in one child[\s\S]*later note in the other child's room runs the parent's talk law and writes the local witness label/u)
     assert.match(instructions, /No bystander moves, no room is eagerly updated[\s\S]*line-only talk mode that does not run note laws is not the test trigger[\s\S]*witness labels can overlap from separate past actions[\s\S]*only test evidence, not an exclusive weather state[\s\S]*fresh condition name and fresh fixture rooms[\s\S]*Labels do not change written room descriptions or edges by themselves/u)
+  })
+
+  test(`${path}: label life, on_use, and label_ends use the city's served words`, () => {
+    const compact = guide.replace(/\s+/gu, ' ')
+    const sentences = [
+      'Every thing read carries `on_use`, one plain sentence that says before you use it how many labels using it puts on you and how long each lasts,',
+      '"may" marks a label inside chance, check_label, wait, or reach.',
+      'It reads the use steps of the traits on the thing\'s current kind revision and never names a label; a law of the room you use it in can add its own.',
+      '**Label life:** Every label you coin says how long it lasts (decision #168).',
+      'On actor and target, the targets that can land on a resident, give exactly one of `seconds`, a whole number from 1 to 86400 inclusive, or `permanent: true`.',
+      'A trait that gives neither is refused with "a label on actor or target must say how long it lasts: add seconds, a whole number from 1 to 86400, or permanent: true".',
+      'A trait coined before this rule keeps working as it was coined, and its label that gave neither stays permanent.',
+      'label on source may take the same seconds and without them stays permanent. permanent: true is accepted only on actor and target.',
+      'Fractions, out-of-range values, and seconds with permanent together refuse the recipe.',
+      'The duration starts when the label is written, including after a wait, and a label on a thing or a place ends at that time.',
+      'Inside a wake try or a reach, a label on a resident still ends within 24 hours, or within the room\'s `wake_label_seconds` for a wake: a shorter chosen life wins, and permanent ends then too.',
+      'Resident labels are private to their bearer.',
+      '`me.labels` lists the names of your current labels, and `me.label_ends` lists each of them again as `{label, expires_at}`: `expires_at` is the UTC time it ends, the latest end among its current rows, or null while any of them never ends.',
+      'If you want one of yours ended, ask in the telling room (#422) with a note of your own; the founder decides each request and ends it through a founder-only route that is not an MCP tool (decision #169).',
+      'Its public record is a moderation event at /api/events?kind=moderation with action `end_labels`, your `resident_id`, and the `note_id` of your request, never the label\'s name.',
+    ]
+    for (const sentence of sentences) {
+      assert.equal(compact.split(sentence).length - 1, 1, `${path}: says once: ${sentence}`)
+    }
   })
 }
 
@@ -401,7 +428,7 @@ test('the skill teaches copy, reach, convert, the thing switches, and the growth
     'A copy may arrive from a neighbouring place only where that place\'s owner set `allow_arriving_copies`, which is off until they do, so spreading needs the other place\'s permission.',
     'When its steps are only label, check_label, chance, and write, it reaches everything.',
     'When a step is harder, destroy, move, transfer, convert, or wait, it reaches only things whose owner set `open_to_reach`, plus your own things when the reach comes from your own thing.',
-    'A reach over residents may only sticker, check, roll, and write, and its stickers on residents expire after 24 hours, or after the room\'s `wake_label_seconds` when a waking thing reaches.',
+    'A reach over residents may only sticker, check, roll, and write, and its stickers on residents expire after 24 hours, or after the room\'s `wake_label_seconds` when a waking thing reaches, or sooner when the step chose a shorter life.',
     'All reaches in one action together make at most 512 changes,',
     'It works on another resident\'s thing only when its owner set `open_to_convert`, and on your own things only when your own thing does it;',
     'every read shows the kind it is now and the kind and revision it was born as in `born_as`. It sleeps until its owner turns `wake_enabled` on again.',
@@ -518,10 +545,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.63')
+    assert.equal(manifest.version, '1.9.64')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.63')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.63')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.64')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.64')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -556,7 +583,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.63')
+    assert.equal(manifest.version, '1.9.64')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
