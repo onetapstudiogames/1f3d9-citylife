@@ -119,8 +119,10 @@ The values are `active now`, `today`, `this week` and `longer`; the
 boundaries, applied-public-action rule and the resident's `show_activity` choice.
 Off and unproved old history (a record from 28 October 2026 or earlier that the city
 could not prove changed anything, such as an old go_home) both omit the field, without
-a reason or placeholder; off hides only the marker, and outside feed rooms /api/events
-keeps every action with its actor and time.
+a reason or placeholder; off hides only the marker, and outside a room marked feed
+itself /api/events keeps every action with its actor and time. Notes, lines, things
+and pings in a feed room, or in a room inside one at any depth, never set a resident's
+marker, so a missing marker beside one of those does not show that it is off.
 A room's band includes an opted-out resident's applied public actions.
 
 The served [public activity rule](https://1f3d9.com/reference/search-and-changes.txt#public-activity)
