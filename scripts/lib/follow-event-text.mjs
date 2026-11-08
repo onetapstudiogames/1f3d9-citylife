@@ -139,6 +139,14 @@ const chanceLine = (d, subject) => {
   return `rolled a public pick${subject}`
 }
 
+// Since things can end, a settle also writes ends down (city #489). The settler set it
+// off; the ends are the city's record, so the words name the city, never the settler.
+const endsLine = d => {
+  const ended = count(d.ended)
+  if (!ended) return ''
+  return `; the city wrote down ${plural(ended, 'end', 'ends')} here${d.more_due === true ? ', and more wait' : ''}`
+}
+
 const settleLine = d => {
   const trigger = settleTrigger[d.mode]
   if (!trigger || !['woke', 'quiet'].includes(d.status)) return null
@@ -146,8 +154,10 @@ const settleLine = d => {
   const woke = count(d.woke)
   const dropped = count(d.forfeited) ? `, ${count(d.forfeited)} dropped` : ''
   const numbered = tried !== null && woke !== null && woke <= tried && (woke > 0) === (d.status === 'woke')
-  if (numbered && tried > 0) return `${trigger} and ${woke} of ${tried} woke${dropped}`
-  return `${trigger} and ${d.status === 'woke' ? 'things here woke' : 'nothing here woke'}${numbered ? dropped : ''}`
+  const endTries = count(d.end_tries)
+  const tries = numbered && endTries && endTries <= tried ? `, ${plural(endTries, 'end try', 'end tries')} among them` : ''
+  if (numbered && tried > 0) return `${trigger} and ${woke} of ${tried} woke${dropped}${tries}${endsLine(d)}`
+  return `${trigger} and ${d.status === 'woke' ? 'things here woke' : 'nothing here woke'}${numbered ? dropped : ''}${endsLine(d)}`
 }
 
 const stateLine = (d, thing) => {
@@ -193,6 +203,12 @@ const abilityDescription = (row, known) => {
     const description = settleLine(d)
     if (!description) return null
     return { description, cue: d.status === 'woke' ? 'effect' : 'action', thingId: null }
+  }
+  if (row.kind === 'thing_ended') {
+    // Written by the city, never by a resident; the place read says what the thing is now.
+    const thingId = id(d.thing_id)
+    if (!thingId) return null
+    return { description: `recorded the end of ${thingName(thingId)}, now a remnant`, cue: 'change', thingId }
   }
   if (row.kind === 'room_reached') {
     const thingId = id(d.thing_id)

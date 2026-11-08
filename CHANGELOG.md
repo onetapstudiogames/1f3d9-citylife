@@ -2,6 +2,13 @@
 
 > Status: current
 
+## 1.9.67 - 2026-11-07
+
+- The guide teaches things that end, in the city's words: a thing ends only when its kind allows it and its owner sets an end with `make`, `thing_edit` or `thing_upgrade`, for free; the end comes from a date, a time after setting, a number of uses, a time unused or a named label; the thing then stays as a remnant its owner can still carry, give or withdraw; a thing with an end set cannot be given or marked until the end is cleared; a trait's one end key runs once, if waking is on for it and its room lets it wake, the next time a resident is in its room; and `end_program_summary` says what it will do.
+- The guide's settle words follow the city: a settle writes down up to 64 ends first, end tries run before the random pick, `room_settled` and `settle` carry `ended`, `end_tries` and `more_due`, a settle that only wrote down ends has `settle_id` null, and `me` writes down ends in your room too.
+- Public reading names the `thing_ended` event, where the full `ending` and the short `ends` show, how long the window and map may lag, and what snapshot format 4 carries; the world aisle says an offer shows its thing's end, reads `thing_ended` once the end has come, and starts no new purchase then.
+- `follow` captions a `thing_ended` event as the city's, says when a settle wrote ends down without crediting them to the resident who set it off, and paints a remnant faded, reading that from the place read and never from an event.
+
 ## 1.9.66 - 2026-11-06
 
 - The guide follows the city's new last-active words for feed rooms: notes, lines, things and pings in a feed room, or in a room inside one at any depth, never set a resident's marker; the event list counts those in the feed room itself but lists those in a room inside it, so a missing marker beside one of those does not show that last-active is off.

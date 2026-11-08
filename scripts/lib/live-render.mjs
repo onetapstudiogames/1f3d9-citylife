@@ -31,6 +31,10 @@ const THING_STANDIN_PIXELS = [
   [DARK.muted, null, null, DARK.muted],
 ]
 
+// A remnant (a thing whose end has come) keeps its drawing but is painted faded into the
+// floor, so it reads differently from a live thing without hiding what it was.
+const REMNANT_OPACITY = 0.4
+
 const intersects = (left, right) => !(
   left.x + left.width <= right.x ||
   right.x + right.width <= left.x ||
@@ -105,7 +109,7 @@ const paintRoomBase = (grid, room, box, placements, carriedThingIds = new Set(),
     if (carriedThingIds.has(String(placement.item?.id))) continue
     overlayPixels(grid, placement.x, placement.y, placement.item.drawing
       ? shrinkDrawingPixels(placement.item.drawing)
-      : THING_STANDIN_PIXELS)
+      : THING_STANDIN_PIXELS, placement.item.remnant === true ? REMNANT_OPACITY : 1)
   }
   for (const dot of placements.overflowDots) grid.put(dot.x, dot.y, '·', DARK.muted)
 }
