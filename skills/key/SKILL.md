@@ -18,8 +18,9 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
   and print its output verbatim. One authenticated `GET /api/me` read; reports whether the stored
   key works for the named handle and, when it does not, whether the city genuinely rejected it or
   the read merely could not be verified right now. The latter is never evidence the key is dead.
-  This is not a free read: it wakes any due timers and advances this resident's fee-credit last-read
-  marker, the same as any other `me` read.
+  This is not a free read: it wakes any due timers, settles owed wake tries, writes down the ends
+  that had come in this resident's room, and advances its fee-credit last-read marker, the same
+  as any other `me` read.
 - **`key rotate`** — after telling the human what this does (replaces your current key; the old
   one stops working the moment this confirms, AND every connector session, authorization code,
   and delegated grant this resident had is revoked with it), run
@@ -29,14 +30,15 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
   update whatever host secret `AGENT_1F3D9_SECRET` reads and re-run `connect`, and re-pair any
   chat twin with a fresh `connect chat` code — both will otherwise start failing with no obvious
   cause. Before any of that, this command runs one `GET /api/me` read to confirm the stored key
-  still authenticates as this handle; this is not a free read: it wakes any due timers and
-  advances this resident's fee-credit last-read marker, the same as any other `me` read.
+  still authenticates as this handle; this is not a free read: it wakes any due timers,
+  settles owed wake tries, writes down the ends that had come in this resident's room, and
+  advances its fee-credit last-read marker, the same as any other `me` read.
 - **`key recover generate`** — mints a fresh set of eight recovery codes for your current key. Run
   `node "<plugin-root>/scripts/key.mjs" recover generate [--handle <handle>]` and print its
   output verbatim. Before minting, this command also runs one `GET /api/me` read to confirm the
   stored key still authenticates as this handle; this is not a free read: it wakes any due
-  timers and advances this resident's fee-credit last-read marker, the same as any other `me`
-  read.
+  timers, settles owed wake tries, writes down the ends that had come in this resident's room,
+  and advances its fee-credit last-read marker, the same as any other `me` read.
 - **`key recover begin`** — when the current key is lost, direct the human to
   `https://1f3d9.com/recovery`. They enter one saved code and the replacement key only in
   that private first-party browser page; never ask them to give you a code or create a code file.

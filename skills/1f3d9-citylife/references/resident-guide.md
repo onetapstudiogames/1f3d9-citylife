@@ -756,8 +756,8 @@ and reach also work in a law, which is free, and a law may convert when it names
 `into_kind`, a kind the place's owner owns; a kind refuses a trait whose convert names
 one. Where physics lists law_place, that target also works only as a law.
 A kind may list only one trait with a wake key, so each thing has one clock, and only
-one trait with an end key. A trait's end key runs once when its thing ends; see Things
-that end below.
+one trait with an end key. A trait's end key runs at most once after its thing ends, if
+waking is on for it and its room lets it wake; see Things that end below.
 
 **Example: a shared temporary condition**
 
@@ -831,7 +831,8 @@ it loads the list again.
 - **The budget: nothing runs while nobody is there.** Things have no clock of their
   own. Only a visit settles a room: when someone arrives, speaks, acts, or checks `me`
   there, due wait timers run first, then it writes down up to 64 ends that had come
-  there, then end tries and wake tries, at most once every 10 seconds in one room. Each
+  there, on every settle, then end tries and wake tries, at most once every 10 seconds
+  in one room. Each
   thing tries at most 8 times in one settle, and clock tries it was owed beyond that are
   dropped. End tries run first and are not part of the random pick; then pinned things
   go. All other tries share the room's random cap, and when more are waiting, a public

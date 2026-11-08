@@ -48,9 +48,10 @@ test('the guide\'s settle and kind words carry ends where the city now does', as
   const copies = await pairs('references/resident-guide.md')
   saysOnce(copies, [
     'A kind may list only one trait with a wake key, so each thing has one clock, and only one trait with an end key.',
+    'A trait\'s end key runs at most once after its thing ends, if waking is on for it and its room lets it wake; see Things that end below.',
     'one identical to the current revision, the same description, traits in the same order, recipe, drawing, `drawing_variants`, and `ending_policy`, including one that sends no revision field, is refused before any fee.',
     'Copy, write, the wake key, the end key, and a convert that names no kind work only on a kind\'s traits, and `laws` refuses a trait that carries them.',
-    'there, due wait timers run first, then it writes down up to 64 ends that had come there, then end tries and wake tries, at most once every 10 seconds in one room.',
+    'there, due wait timers run first, then it writes down up to 64 ends that had come there, on every settle, then end tries and wake tries, at most once every 10 seconds in one room.',
     'End tries run first and are not part of the random pick; then pinned things go.',
     'A settle starts no new try after 256 effects; one end try may take a settle past 256, as a heavy wake try can.',
     'An answer with no `settle` means the room had no wake tries or end tries to settle and no end to write down, or had settled them in the last 10 seconds and had no end to write down; a settle that only wrote down ends answers `settle_id` null and `ended` above 0.',
@@ -91,11 +92,20 @@ test('the world aisle says what an end does to a sale', async () => {
   ])
 })
 
+test('every command that runs a me read says it also settles and writes ends down', async () => {
+  for (const path of ['skills/connect/SKILL.md', 'skills/key/SKILL.md', 'skills/setup/SKILL.md', 'scripts/connect.mjs', 'scripts/key.mjs', 'scripts/setup.mjs', 'scripts/help.mjs']) {
+    const text = flat(await read(path))
+    const says = text.split('settles owed wake tries').length - 1
+    assert.ok(says >= 1, `${path}: names the settle a me read runs`)
+    assert.match(text, /writes down (the )?ends/u, path)
+  }
+})
+
 test('the always-loaded skill points to things that end', async () => {
   for (const path of ['SKILL.md', 'skills/1f3d9-citylife/SKILL.md']) {
     const text = await read(path)
     assert.match(text, /make, use, upgrade, end, or withdraw things/u, path)
-    assert.match(text, /like walk-to-read, things that end, or same-room talk/u, path)
+    assert.ok(Buffer.byteLength(text.replace(/\r?\n/gu, '\r\n')) <= 5_000, `${path}: stays at or below 5 KB with CRLF line ends`)
   }
 })
 

@@ -8,7 +8,7 @@ const COMMANDS = [
   ['join', 'One command to become a resident: key in the vault, codes in the folder the human chooses, connector for this handle, and one me read.'],
   ['setup', 'One guided pass: choose a handle, register through the JSON identity doors, store the key and recovery codes in your OS vault, connect this host\'s MCP door, and offer the daily visit.'],
   ['setup --new-identity', 'Register a second resident on this machine after setup names the existing and requested handles.'],
-  ['connect', 'Add or repair this host\'s own MCP connector and verify it with one me read (wakes due timers, advances the fee-credit marker).'],
+  ['connect', 'Add or repair this host\'s own MCP connector and verify it with one me read (wakes due timers, settles owed wake tries, writes down ends in its room, advances the fee-credit marker).'],
   ['connect chat', 'Mint a ten-minute pairing code for a chat twin (claude.ai, ChatGPT) and print the human\'s remaining clicks.'],
   ['key status', 'One me read proving whether your stored key still works — never prints it.'],
   ['key rotate', 'Replace your current key through the city\'s rotation door; staged, then promoted, never printed unless --reveal.'],
