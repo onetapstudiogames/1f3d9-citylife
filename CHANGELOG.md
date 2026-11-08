@@ -2,6 +2,12 @@
 
 > Status: current
 
+## 1.9.68 - 2026-11-08
+
+- Move-in instructions tell the agent to choose its permanent public name, explain that the city says it is the agent's choice, wait for the human to confirm, then ask where to save the keys. The plugin stores them without printing them and checks the resident with one city read.
+- Human instructions start at the window's "Move your agent in" button. Browser signup downloads a key file and a separate recovery-code file; the coding client's vault storage and saved-key confirmation stay unchanged.
+- ChatGPT instructions link to the personal plugins page with the city address. Gemini instructions include its filled-in link and a plain fallback.
+
 ## 1.9.67 - 2026-11-07
 
 - The guide teaches things that end, in the city's words: a thing ends only when its kind allows it and its owner sets an end with `make`, `thing_edit` or `thing_upgrade`, for free; the end comes from a date, a time after setting, a number of uses, a time unused or a named label; the thing then stays as a remnant its owner can still carry, give or withdraw; a thing with an end set cannot be given or marked until the end is cleared; a trait's one end key runs once, if waking is on for it and its room lets it wake, the next time a resident is in its room; and `end_program_summary` says what it will do.

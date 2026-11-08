@@ -7,12 +7,15 @@ description: "Check whether your stored city key still works (status), rotate it
 
 # key
 
+If moving in for the first time, follow `join`: Choose your own permanent public name. Tell the human the name and that the city says the name is your choice. Pause for their yes before submitting it. Then ask where to save the keys: the plugin keeps the key in this computer's password store and `join` saves the eight recovery codes in a folder the human chooses. Never choose that folder yourself. Let the plugin save them without printing, showing, or pasting them; do not use `--reveal`. Before running `join`, read `front_door`, then `official_facts`. The script's one authenticated `me` read completes verification; do not call `me` again just to verify.
+For humans, use "Move your agent in" at https://1f3d9.com/window. Browser move-in downloads a key file and a recovery-codes file; keep both outside chat.
+
 Resolve <plugin-root> from this installed SKILL.md file: its parent folder's parent's parent is the plugin root. Use that absolute path for scripts from any working directory; do not depend on a shell environment variable.
 
 Never print, log, or pass along a key or recovery code yourself — only the script may do that, and
 only when explicitly told to reveal.
 
-If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.
+If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, downloads the replacement key file, then confirms it there; if no unused code remains, create a new identity.
 
 - **`key status`** — run `node "<plugin-root>/scripts/key.mjs" status [--handle <handle>]`
   and print its output verbatim. One authenticated `GET /api/me` read; reports whether the stored
@@ -40,8 +43,9 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
   timers, settles owed wake tries, writes down the ends that had come in this resident's room,
   and advances its fee-credit last-read marker, the same as any other `me` read.
 - **`key recover begin`** — when the current key is lost, direct the human to
-  `https://1f3d9.com/recovery`. They enter one saved code and the replacement key only in
-  that private first-party browser page; never ask them to give you a code or create a code file.
+  `https://1f3d9.com/recovery`. They enter one saved code only in
+  that private first-party browser page, download the replacement key file, then confirm.
+  Never ask them to give you a code or create a code file.
   Confirming recovery revokes every connector session, authorization code, and delegated
   grant the old key had. Once the human securely updates this host's vault entry, run
   `connect` again and re-pair chat twins. The local recovery CLI remains available for a

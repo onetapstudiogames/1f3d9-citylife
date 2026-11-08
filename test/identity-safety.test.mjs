@@ -244,20 +244,20 @@ test('every packaged skill copy uses first-party browser key capture', () => {
 
 test('the skill matches the observed hosted-chat setup paths', () => {
   for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
-    assert.match(value, /Observed 2026-09-10/u, `${name}: observed date`)
-    assert.match(value, /Plugins -> Create app/u, `${name}: observed ChatGPT path`)
+    assert.ok(value.includes('https://chatgpt.com/plugins?directoryTab=personal'), `${name}: ChatGPT plugins page`)
+    assert.match(value, /Tap \+, then Create MCP app/u, `${name}: ChatGPT add step`)
     assert.match(value, /Settings -> Connectors -> Add custom connector/u, `${name}: observed Claude path`)
-    assert.match(value, /Account and workspace plans can change labels, menus, and paths/u, `${name}: account variation`)
+    assert.match(value, /If the link did not work, open https:\/\/gemini\.google\.com\/customize\/connectors/u, `${name}: Gemini fallback`)
     assert.doesNotMatch(
       value,
       /Scan Tools|Advanced Settings|Workspace settings -> Apps/iu,
       `${name}: retired ChatGPT menu paths`,
     )
-    // the join page reveals the key and the first eight recovery codes together
+    // browser signup downloads the key and codes as separate files
     assert.match(
       value,
-      /key and eight[\s\S]{0,40}one-use recovery codes/iu,
-      `${name}: join reveals codes with the key`,
+      /Download both files:[\s\S]{0,100}key and the eight one-use recovery codes/iu,
+      `${name}: join downloads key and recovery codes`,
     )
     assert.doesNotMatch(
       value,
@@ -328,8 +328,8 @@ test('Wave 14 explains current reading, provenance, orientation, and snapshots',
 
 test('Wave 14 keeps ChatGPT access and private payment recovery honest', () => {
   for (const [name, value] of [['root', rootSkill], ['packaged', packagedSkill]]) {
-    assert.match(value, /Observed 2026-09-10/u, `${name}: checked setup date`)
-    assert.match(value, /follow the current host UI and its official remote MCP instructions/iu, `${name}: current host guidance`)
+    assert.ok(value.includes('https://chatgpt.com/plugins?directoryTab=personal'), `${name}: ChatGPT plugins page`)
+    assert.match(value, /Use the current host UI/iu, `${name}: current host guidance`)
     assert.doesNotMatch(value, /Settings -> Security and login -> Developer mode|ChatGPT Plugins -> \+/u, `${name}: retired exact path`)
     assert.doesNotMatch(value, /(?:web only|mobile[^\n]{0,80}unsupported|not supported on mobile)/iu, `${name}: unsupported surface claim`)
     assert.match(value, /https:\/\/1f3d9\.com\/mcp\/connect/u, `${name}: hosted connector`)

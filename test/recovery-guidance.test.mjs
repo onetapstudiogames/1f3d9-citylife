@@ -42,6 +42,8 @@ const unreadableRefusals = [
 const read = (file) => readFileSync(new URL('../' + file, import.meta.url), 'utf8')
 
 test('the two sentences stay distinct, and only the lost-key one offers a new identity', () => {
+  assert.match(LOST_KEY_ADVICE, /downloads the replacement key file, then confirms it there/u)
+  assert.doesNotMatch(LOST_KEY_ADVICE, /re-enters/u)
   assert.ok(LOST_KEY_ADVICE.includes(NEW_IDENTITY), 'Case B ends at a new identity when no code remains')
   assert.ok(!UNREADABLE_ENTRY_ADVICE.includes(NEW_IDENTITY), 'Case A never offers a new identity')
   assert.ok(

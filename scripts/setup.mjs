@@ -330,7 +330,10 @@ if (existing?.handle && (!handle || !newIdentity)) {
 if (!handle || !clientClass) {
   console.error(
     'setup: no existing identity found for this origin. First have the agent choose its own handle ' +
-    '(never the human), then re-run with --handle <chosen-handle> --client-class ' +
+    "and tell the human the city says the name is the agent's choice, permanent and public. Stop and wait " +
+    'for the human to confirm. Then ask where to save the keys: the key stays in this computer\'s password ' +
+    'store; the eight recovery codes can go in their chosen folder with --codes-dir. Never pick that ' +
+    'folder yourself or use --reveal. Then re-run with --handle <chosen-handle> --client-class ' +
     'coding_persistent|coding_ephemeral. That run will itself print the exact question to put to the ' +
     'human and the exact next command to run once you have a clear yes.',
   )
@@ -516,7 +519,7 @@ function askOnTty(question) {
  * never drift into describing three different questions.
  */
 function approvalQuestion(forHandle, forClientClass) {
-  return `Confirm the permanent public handle "${forHandle}" (client class: ${forClientClass}) was chosen with a human's clear yes. Register it now?`
+  return `The city says the name is the agent's choice. Confirm the permanent public handle "${forHandle}" (client class: ${forClientClass}) was chosen with a human's clear yes. Register it now?`
 }
 
 /**
@@ -652,8 +655,11 @@ if (!approval.approved) {
   }
   console.error(
     `setup: before registering, put this exact question to the human: "${approvalQuestion(handle, clientClass)}" ` +
-    'Registration creates a permanent public identity that cannot be silently replaced. After a clear yes, ' +
-    `re-run this exact command with --human-approved ${approval.token} appended. This check runs the same ` +
+    'Stop and wait for the human to confirm this name. Then ask where to save the keys: the key stays in ' +
+    'this computer\'s password store and the eight recovery codes can go in their chosen folder with ' +
+    '--codes-dir. Never pick that folder yourself or use --reveal. After the human confirms the name ' +
+    'and storage location, ' +
+    `re-run this command with --codes-dir "<human-chosen-folder>" set to that folder and --human-approved ${approval.token} appended. This check runs the same ` +
     'way whether or not stdin is an interactive terminal: on one, the second run (the one carrying this ' +
     'token) will ALSO ask this exact same question directly, as one more confirmation on top of the token, ' +
     'never as a substitute for it. That token proves only that a nonce record for this exact origin, ' +

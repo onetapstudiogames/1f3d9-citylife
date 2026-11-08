@@ -6,7 +6,7 @@
 // Case B — the key is known to be lost. A new identity is the last resort.
 export const LOST_KEY_ADVICE =
   'If the key is gone, the human enters one unused recovery code at https://1f3d9.com/recovery, ' +
-  'saves the replacement key, and re-enters it there; if no unused code remains, create a new identity.'
+  'downloads the replacement key file, then confirms it there; if no unused code remains, create a new identity.'
 
 // Case A — the entry could not be read, so the key is NOT known to be gone.
 // Never suggest a new identity here: a second identity abandons a resident who

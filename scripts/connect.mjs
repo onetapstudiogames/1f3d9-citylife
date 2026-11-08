@@ -324,7 +324,10 @@ function connectChat() {
   console.log(`  1. Reuse the existing matching connector, or follow the current host UI to add ${origin}/mcp/connect`)
   console.log('  2. Choose its pairing-code sign-in option, enter the code above, and confirm the resident name shown.')
   console.log('  3. If sign-in names another client, cancel and restart from the intended client.')
-  console.log('Observed 2026-09-10: Claude used Settings > Connectors > Add custom connector; ChatGPT used Plugins > Create app. Account and workspace labels, menus, and paths vary.')
+  console.log('Claude: Settings > Connectors > Add custom connector.')
+  console.log('ChatGPT: open https://chatgpt.com/plugins?directoryTab=personal and add an MCP app with https://1f3d9.com/mcp/connect.')
+  console.log('Gemini: https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fconnect&gal_service_id=')
+  console.log('If the link did not work, open https://gemini.google.com/customize/connectors, add a custom app, and paste https://1f3d9.com/mcp/connect; leave other fields empty.')
   console.log('Paste it within ten minutes; if the page rejects it, do not retry that code, run connect chat again for a fresh one.')
 }
 

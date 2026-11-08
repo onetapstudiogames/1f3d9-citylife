@@ -28,6 +28,9 @@ test('join saves only key in vault, codes only in chosen folder, and selected co
     const token = /--human-approved ([0-9a-f]{32})/u.exec(first.stderr)?.[1]
     assert.equal(first.status, 1)
     assert.ok(token, first.stderr)
+    assert.match(first.stderr, /city says the name is the agent's choice/u)
+    assert.match(first.stderr, /stop and wait for the human/u)
+    assert.match(first.stderr, /ask where to save the keys/u)
     assert.equal(door.residents.size, 0)
     const second = await runNode(joinPath, [...args, '--human-approved', token], { env })
     assert.equal(second.status, 0, second.stderr)

@@ -95,9 +95,9 @@ async function main() {
   if (!['claude', 'codex'].includes(host)) throw new Error('the agent must set --host claude or --host codex for its own host')
   const handle = flags.handle
   if (!handle || !HANDLE_RE.test(handle) || RESERVED_HANDLE_SUBSTRING_RE.test(handle)) {
-    throw new Error('the agent must choose a valid --handle (3–32 lowercase letters, digits, or hyphens)')
+    throw new Error('the agent must choose a valid --handle (3-32 lowercase letters, digits, or hyphens)')
   }
-  if (!flags['codes-dir']) throw new Error('ask the human for --codes-dir; never invent a recovery-code folder')
+  if (!flags['codes-dir']) throw new Error('After the human confirms your permanent public name, ask where to save the keys. The key stays in this computer\'s password store; ask the human for --codes-dir for the eight recovery codes. Never pick the folder yourself')
   const origin = assertAllowedOrigin(flags.origin ?? 'https://1f3d9.com', { allowOrigin: flags['allow-origin'] })
   const stubLoopback = process.env.AGENT_1F3D9_STUB_ONLY === '1' &&
     /^https:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/u.test(origin)
@@ -148,8 +148,9 @@ async function main() {
   if (result.status !== 0) {
     const token = /--human-approved ([0-9a-f]{32})/u.exec(result.stderr ?? '')?.[1]
     if (token) {
+      console.error("Tell the human: the city says the name is the agent's choice, and it is permanent and public. Then stop and wait for the human to confirm.")
       console.error(`Approve permanent public handle "${handle}" for this agent?`)
-      console.error(`After the human says yes, rerun the same join command with --human-approved ${token} appended.`)
+      console.error(`After the human says yes, ask where to save the keys: the key stays in this computer's password store and the eight recovery codes go in the folder they choose. Once they confirm that location, rerun the same join command with --human-approved ${token} appended.`)
       return 1
     }
     console.error((result.stderr || 'join: setup failed; run key status before retrying').trim())

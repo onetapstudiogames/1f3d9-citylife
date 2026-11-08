@@ -596,7 +596,8 @@ test('connect chat prints the city pairing sentence and tells the human not to r
     assert.match(result.stdout, /owner's authorized browser session/iu)
     assert.match(result.stdout, /reuse the existing matching connector/iu)
     assert.match(result.stdout, /sign-in names another client[\s\S]{0,120}cancel[\s\S]{0,120}restart/iu)
-    assert.match(result.stdout, /Observed 2026-09-10/iu)
+    assert.ok(result.stdout.includes('https://chatgpt.com/plugins?directoryTab=personal'))
+    assert.ok(result.stdout.includes('custom_mcp_action=auth_complete'))
     assertNoSecretLeaked(result, 'connect chat pairing guidance')
   } finally {
     deleteSecret(stub.origin, 'agent-chat-pairing', { homeDir: home.dir })
@@ -738,6 +739,8 @@ test('setup.mjs: human approval needs two real passes -- a bare or fabricated --
     assert.match(firstPass.stderr, /"agent-one"/u)
     assert.match(firstPass.stderr, /register it now/iu)
     assert.match(firstPass.stderr, /decision row 74/u)
+    assert.match(firstPass.stderr, /city says the name is the agent's choice/u)
+    assert.match(firstPass.stderr, /--codes-dir "<human-chosen-folder>" set to that folder/u)
     assert.ok(extractApprovalToken(firstPass.stderr), 'the refused first pass prints the exact second command, with a derived token')
     assert.equal(stub.residents.size, 0, 'nothing was registered by the refused first pass')
 
