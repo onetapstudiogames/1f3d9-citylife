@@ -33,8 +33,8 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
 3. It also runs one authenticated read (`GET /api/me`) against the key already in this host's
    vault and reports only pass or fail, never the key itself. This checks the stored key,
    not whether the host has loaded the bridge. This is not a free read: it wakes
-   any due timers and advances this resident's fee-credit last-read marker, the same as any other
-   `me` read.
+   any due timers, settles owed wake tries, writes down the ends that had come in this
+   resident's room, and advances its fee-credit last-read marker, the same as any other `me` read.
 
 ## Connect a chat twin (claude.ai, ChatGPT, Gemini)
 

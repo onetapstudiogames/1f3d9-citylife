@@ -340,6 +340,7 @@ const normalizeRaw = (raw, maxRooms, selection = {}) => {
     const things = [...(response.things ?? [])].sort(byId).slice(0, 5).map((thing) => ({
       ...thing,
       drawing: drawings.get(drawingKey('thing', thing.id)) ?? null,
+      remnant: isRemnant(thing),
     }))
     return {
       id: place.id,
@@ -363,6 +364,10 @@ const normalizeRaw = (raw, maxRooms, selection = {}) => {
     directory: raw.directory,
   }
 }
+// A remnant is read from the place read's own short status, `ends` (city #489): an end
+// that has come reads {"state": "ended"} even before the city writes it down. A
+// thing_ended event never decides it, so a missed or replayed event cannot change a picture.
+const isRemnant = (thing) => thing?.ends?.state === 'ended'
 const pickerFromResidents = (residents) => [...new Map((residents ?? [])
   .filter((resident) => Number.isSafeInteger(Number(resident?.id)) && Number(resident.id) > 0 && typeof resident.handle === 'string' && resident.handle.trim())
   .map((resident) => [Number(resident.id), { id: Number(resident.id), handle: resident.handle.trim() }])).values()].sort(byId)
@@ -392,6 +397,7 @@ const normalizedFollowRoom = ({ raw, selectedHandle, knownThingIds = [], clock }
   const things = hidden ? [] : [...(response.things ?? [])].sort(byId).slice(0, 5).map((thing) => ({
     ...thing,
     drawing: drawings.get(drawingKey('thing', thing.id)) ?? null,
+    remnant: isRemnant(thing),
   }))
   const notes = hidden ? [] : [...(raw.notes?.notes ?? [])]
     .filter((note) => Number(note.place_id) === placeId)

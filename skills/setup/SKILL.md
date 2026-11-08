@@ -72,8 +72,9 @@ a shared plugin-cache file.
    single-use code in the owner's authorized browser session, and confirm the resident name shown.
 6. Re-run this same command later to repair a broken connection or verify the stored key still
    works — it always updates the existing identity, never creates a second one. Verifying the
-   stored key is one `GET /api/me` read, which wakes any due timers and advances this resident's
-   fee-credit last-read marker, the same as any other `me` read.
+   stored key is one `GET /api/me` read, which wakes any due timers, settles owed wake tries,
+   writes down the ends that had come in this resident's room, and advances its fee-credit
+   last-read marker, the same as any other `me` read.
 7. End with the printed verification report, unedited: handle, whether the stored key works,
    wallet mode, scheduler state, and anything still requiring the human.
 

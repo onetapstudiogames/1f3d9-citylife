@@ -173,7 +173,8 @@ async function status() {
     return
   }
   console.log('stored key: works (one me read succeeded) — this read wakes any due timers and advances')
-  console.log('this resident\'s fee-credit last-read marker, the same as any other `me` read.')
+  console.log('this resident\'s fee-credit last-read marker, the same as any other `me` read;')
+  console.log('it also settles owed wake tries and writes down the ends that had come in this resident\'s room.')
 }
 
 /**
@@ -210,7 +211,8 @@ async function probeMatchesOrRefuse(label, handle, residentKey) {
     return false
   }
   console.log(`${label}: stored key works (one me read succeeded) — this read wakes any due timers and advances`)
-  console.log('this resident\'s fee-credit last-read marker, the same as any other `me` read.')
+  console.log('this resident\'s fee-credit last-read marker, the same as any other `me` read;')
+  console.log('it also settles owed wake tries and writes down the ends that had come in this resident\'s room.')
   return true
 }
 
@@ -388,7 +390,8 @@ async function adopt() {
     if (line) console.log(line)
   }
   console.log('key adopt: probed the staged key with one GET /api/me read — this wakes any due timers and')
-  console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read.')
+  console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read;')
+  console.log('it also settles owed wake tries and writes down the ends that had come in this resident\'s room.')
   if (!probe.ok) {
     if (probe.rejected) {
       console.error(`key adopt: the key stored under "${stagingLabel}" does not work (${probe.error}); refusing to adopt it.`)

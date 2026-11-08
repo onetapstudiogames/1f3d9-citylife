@@ -67,7 +67,9 @@ Resolve <plugin-root> from this installed SKILL.md file: its parent folder's par
    thing-moved records. Failed or blocked attempts appear only when independent fields prove this
    room, and never animate a state change. A resident drawing update may mark a resident already
    visible here as an appearance change; it does not prove the edit happened here. Old, incomplete,
-   off-room, unlinked, or inferred actions stay unanimated. `label`, `block`, `check_label`, nested
+   off-room, unlinked, or inferred actions stay unanimated. A remnant, a thing whose end has come
+   by the room's own public read, is drawn faded; a `thing_ended` record is the city's, and a settle
+   that wrote ends down says the city wrote them, never the resident who set it off. `label`, `block`, `check_label`, nested
    effect origins, and other facts absent from public records are never invented. The complete
    evidence table is in `docs/follow-public-actions.md` in the repository.
 5. Press `f` for the resident picker in the same window, type to filter, use Up/Down to choose, Enter

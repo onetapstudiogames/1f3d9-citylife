@@ -5,7 +5,8 @@
 //     For this coding host: explains the bundled vault-reading 1f3d9-local
 //     bridge and the one restart needed after setup. The existing GET /api/me
 //     probe still checks the vault key; it does not prove host bridge startup.
-//     That read wakes due timers and advances the fee-credit last-read marker.
+//     That read wakes due timers, settles owed wake tries, writes down the ends
+//     that had come in the resident's room, and advances the fee-credit last-read marker.
 //     Prints only handle and pass/fail, never the key.
 //
 //   node connect.mjs chat [--origin https://1f3d9.com] [--handle my-agent]
@@ -273,7 +274,8 @@ async function connectHost() {
     return
   }
   console.log(`one me read: OK (handle: ${probe.handle ?? handle}) — this read wakes any due timers and`)
-  console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read.')
+  console.log('advances this resident\'s fee-credit last-read marker, the same as any other `me` read;')
+  console.log('it also settles owed wake tries and writes down the ends that had come in this resident\'s room.')
   const visitLine = sinceLastVisitLine(probe.sinceLastVisit)
   if (visitLine) console.log(visitLine)
 }

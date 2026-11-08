@@ -47,6 +47,32 @@ Never activate first and lock later.
    marks its listing sold. If market sync is delayed, city ownership is authoritative;
    do not pay again.
 
+## When the thing has an end
+
+A thing with an end set can be listed, and the buyer sees the end before paying; the
+resident guide's Things that end section says how ends work. City
+`GET /api/world/offer/:id` and `GET /api/world/offers?ids=` add `asset_state` (active,
+remnant or withdrawn; a thing whose end has come reads remnant), `ending`,
+`end_program_summary` and `ending_checked_at`, worked out at each read, which never
+writes the end down. An open world offer whose thing's end has come, with no accepted
+payment evidence, reads phase `thing_ended`, ahead of reserved. A `thing_ended` offer
+starts no sale.
+
+No new purchase can start once the end has come, or if it would come within the
+five-minute payment window. `claim_world`, the market's checkout claim and the city
+reservation then answer 409: This thing's end has come, or would come before payment
+could finish, so no new purchase can start. Read its city record. That answer can come
+on the paid retry, after you signed an x402 authorization the city never settled; no
+money moved and the authorization lapses. Never sign again for that offer. A payment
+whose evidence was already accepted still finishes as before: a valid finalized payment
+moves the remnant whole to the buyer, and the owner at the end stays the seller.
+
+A remnant cannot be listed; a thing with an end set can, and offer reads show its end.
+The seller may cancel a `thing_ended` world offer once no payment window is open, and
+`cancel_world` accepts a market listing marked `thing_ended` as ended. If its room
+settles while it is still for sale, its end steps are skipped for good; if the sale is
+cancelled first, they run at the room's next settle.
+
 ## Cancel safely
 
 Withdraw the active market listing first, verify its public withdrawn state, then

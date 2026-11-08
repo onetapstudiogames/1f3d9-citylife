@@ -315,12 +315,12 @@ test('the skill teaches the post-live-test fixes in the city\'s own words', asyn
     'skills/1f3d9-citylife/references/resident-guide.md',
   ].map(async (path) => [path, (await read(path)).replace(/\s+/gu, ' ')]))
   const sentences = [
-    'A revision must change something: one identical to the current revision, including one that sends no revision field, is refused before any fee.',
+    'A revision must change something: one identical to the current revision, the same description, traits in the same order, recipe, drawing, `drawing_variants`, and `ending_policy`, including one that sends no revision field, is refused before any fee.',
     '`revise_kind`\'s traits replaces the whole trait list: to add a trait, send the current traits with it, and the answer\'s `dropped_traits` names, in a plain sentence too, any trait the new list left out.',
     'Labels on a thing are public. Every thing read shows `labels`, the thing\'s current labels newest first, at most 32,',
     'An expired label never shows.',
     '`settle` in the answer to the move, note, or `me` read that caused it,',
-    'An answer with no `settle` means the room had no wake tries to settle or had settled them in the last 10 seconds; due wait timers run either way and never appear in `settle`.',
+    'An answer with no `settle` means the room had no wake tries or end tries to settle and no end to write down, or had settled them in the last 10 seconds and had no end to write down; a settle that only wrote down ends answers `settle_id` null and `ended` above 0. Due wait timers run either way and never appear in `settle`.',
     'A use that waits, moves a thing, or transfers still leaves its public action notice with `source_thing_id`, `place_id`, and `effects_applied`;',
   ]
   for (const [path, guide] of guides) {
@@ -595,10 +595,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.66')
+    assert.equal(manifest.version, '1.9.67')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.66')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.66')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.67')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.67')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -633,7 +633,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.66')
+    assert.equal(manifest.version, '1.9.67')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

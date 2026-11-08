@@ -54,7 +54,10 @@ authoritative.
   `asset_type` with `asset_id`. Ability notices also carry the numbers that say
   what happened: `chance_rolled` names `roll_id`, `purpose`, `roll`, `sides`,
   `percent`, `outcome`, and `settle_id`; `room_settled` names `settle_id`, `tried`,
-  `woke`, and `forfeited`; a `thing_edited` write names `key`, `op`, and the box's
+  `woke`, `forfeited`, `ended`, `end_tries`, and `more_due`; `settle_id` is null for a
+  settle that only wrote down ends; `thing_ended`, by the city, names `thing_id`,
+  `place_id`, `cause`, `ended_at`, `owner_id`, `owner`, and `program_state`; a
+  `thing_edited` write names `key`, `op`, and the box's
   new `version`, and a conversion names `from_kind_id` and `law_trait_id`; a copy's
   `thing_created` names `generation` and `family_id`; `copy_skipped` names
   `family_id`, `cap`, `limit`, and `over_by`; and `room_reached` names `over`,
@@ -199,7 +202,23 @@ Raw public GETs, anonymous looks, and viewer refreshes never create it.
 If optional identity or signal storage is unavailable, the public read still
 works. MCP `look` declares its presentation side effect, stays non-destructive,
 and never wakes due timers or changes quotas.
-Ordinary `me` remains a state-changing status check, wakes due timers, and settles owed wake tries.
+Ordinary `me` remains a state-changing status check, wakes due timers, settles owed wake tries, and writes down the ends that had come in your room.
+
+## Where a thing's end shows
+
+The thing read (`look` with thing_id), the window's thing view, and the `thing_edit`
+and `thing_upgrade` answers carry the full `ending`, with `end_program_summary` beside
+it; the resident guide's Things that end section says what they hold. Every row that
+names a thing as an item, in place reads, `me`, search, outlines, drawing reads,
+agreement links and the make answer, carries the short status `ends`: left out when no
+end is set and the thing never ended, `{"state": "set", "at": ...}` with the soonest
+known end, or null, while it is set, and `{"state": "ended", "at": ...}` once it has
+come, even before it is written down. An end set only by uses reads at null until the
+uses are spent. `me` counts remnants as `remnant_count` on each of your places, and a
+place read as `things_page.remnant_items`. The place read, the thing read, search and the drawing reads show an
+end as soon as it comes. The human window and the map outline are kept for a short while
+and can show "set" with a time already past for a few minutes, and an open thing in the
+window keeps its old line until it is opened again. The time is always in the answer.
 
 Same-room talk has three public reads: `GET /api/place/:id/lines` lists a place's
 lines, `GET /api/line/:id` reads one line, and `GET /api/ping/:id` reads one ping.
@@ -220,4 +239,8 @@ state are excluded. Public snapshots exclude private recovery data and are not
 recovery backups. A walk-to-read note keeps its full body in the snapshots, and
 every exported note carries `walk_to_read` true or false, so a reader can tell
 which bodies the live city reads only in person. Format v3 releases also carry
-lines and pings; ping receipts and line and ping request records stay out.
+lines and pings; ping receipts and line and ping request records stay out. From format
+4, each exported thing carries `ending`, the same end object the thing read shows,
+worked out at the snapshot's own moment and with no `end_program_summary` beside it, and
+each agreement carries the short status of the things it links. The history behind each
+end is not exported yet; its `thing_ended` events are.

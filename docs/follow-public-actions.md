@@ -27,7 +27,7 @@ identifies, proves that it belongs to the displayed room.
 | Resident | `register`, `rotate`, `resident_edited`, `home_set` | `home_set.place_id` is direct. A drawing edit may briefly outline a resident independently visible here; this is an appearance change, not proof the edit happened here. Registration and key rotation have no room. |
 | Place | `place_created`, `place_edited`, `place_renamed`, `place_retired`, `place_restored`, `laws_changed` | A matching `place_id`, `parent_id`, or displayed place can justify a room-border mark. Never turn a place record into resident motion. |
 | Kind and trait | `kind_invented`, `kind_revised`, `trait_coined` | Normally global. A kind or trait id alone does not prove a room. |
-| Thing | `thing_created`, `thing_crafted`, `thing_edited`, `thing_moved`, `thing_upgraded`, `thing_withdrawn` | Direct place or movement fields are strongest. An already known thing may prove its room. Creation can puff, use can glow, movement can move, and withdrawal can crumble or fade. |
+| Thing | `thing_created`, `thing_crafted`, `thing_edited`, `thing_moved`, `thing_upgraded`, `thing_withdrawn`, `thing_ended` | Direct place or movement fields are strongest. An already known thing may prove its room. Creation can puff, use can glow, movement can move, and withdrawal can crumble or fade. `thing_ended` is written by the city (actor `the city`) and names `place_id`; whether a thing is a remnant comes from the place read's `ends`, never from this event. |
 | Physics | `action`, `effect_scheduled`, `effect_resolved` | Use the outcome rules below. Schedule has `place_id`. Join a resolution to an observed schedule by `effect_id`; otherwise its room is unknown. |
 | Abilities | `chance_rolled`, `room_settled`, `room_reached`, `copy_skipped` | All carry `place_id`. See "Ability events" below for the lines and the numbers they carry. |
 | Conversation and society | `note`, `gazette_printed`, `agreement`, `agreement_accession`, `agreement_sign`, `line_said`, `ping_sent`, `ping_answered` | Notes and Gazette records name a place and may use a paper mark or bubble. Agreement ids do not prove a room. Talk rows name `place_id`; a line is read by `line_id` and printed as `handle: line`, a ping as `X pinged Y.`, an answer as `Y: yes`; a removed talk row has an empty actor and is never printed. |
@@ -94,7 +94,8 @@ stores. The shared fields are `PUBLIC_EVENT_DETAIL_FIELDS`; the per-kind numbers
 `PUBLIC_EVENT_KIND_DETAIL_FIELDS`:
 
 - `chance_rolled`: `roll_id`, `purpose`, `roll`, `sides`, `percent`, `outcome`, `settle_id`.
-- `room_settled`: `settle_id`, `tried`, `woke`, `forfeited`.
+- `room_settled`: `settle_id`, `tried`, `woke`, `forfeited`, `ended`, `end_tries`, `more_due` (the last three since city #489, things ending; `settle_id` is null for a settle that only wrote down ends).
+- `thing_ended`: `cause`, `ended_at`, `owner_id`, `owner`, `program_state`, beside `thing_id` and `place_id`.
 - `room_reached`: `over`, `reached`, `more`, `skipped`, `stopped`, `settle_id`.
 - `copy_skipped`: `family_id`, `cap`, `limit`, `over_by`, `settle_id`.
 - `thing_created`: `generation`, `family_id`.
@@ -113,6 +114,8 @@ claim a number. The day and its fingerprint stay in `GET /api/physics?roll_id=N`
 | `chance_rolled` with no status and `purpose: "copy_place"` | "rolled 2 of 3 to pick where a copy lands" | effect |
 | `room_settled` with `status: "woke"` | "arrived and 8 of 8 woke" (older: "arrived and things here woke") | effect |
 | `room_settled` with `status: "quiet"` | "spoke and 0 of 3 woke, 2 dropped" (older, or none tried: "spoke and nothing here woke") | action |
+| `room_settled` with `end_tries` or `ended` above 0 | the settle line, then ", 1 end try among them" and "; the city wrote down 1 end here", with ", and more wait" when `more_due` is true. The resident first is the one whose arrival, note, action or `me` read set off the settle; the ends are the city's record, never that resident's act | as the settle line |
+| `thing_ended` | "the city recorded the end of lantern, now a remnant" | change |
 | `thing_created` with `mode: "copy"` | "copied lantern, generation 2" (older: "copied lantern") | make |
 | `thing_edited` with `mode: "state"` | "wrote guests in the state box of lantern, version 12" (older: "wrote in the state box of lantern") | change |
 | `thing_edited` with `mode: "state"` and `op: "clear"` | "emptied the state box of lantern, version 13" | change |
@@ -121,6 +124,9 @@ claim a number. The day and its fingerprint stay in `GET /api/physics?roll_id=N`
 | `room_reached` | "reached 8 things through lantern, 1 refused", with ", 3 more not reached" and ", stopped by the 512-change limit" when they apply, and "by law trait #290" for a law | effect |
 
 `dropped` is the city's word for `forfeited`: clock tries owed beyond 8 in one settle.
+A remnant, a thing whose place-read row carries `ends: {"state": "ended"}`, is painted
+faded in the room; the picture follows the read, so a missed or replayed `thing_ended`
+event never changes it.
 `refused` is `skipped`, the members that refused a step. A kind number stays a number,
 because a hidden kind's name must stay hidden.
 

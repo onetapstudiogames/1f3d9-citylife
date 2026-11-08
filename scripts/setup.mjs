@@ -191,7 +191,8 @@ async function verifyStoredKey(handle) {
   }
   return {
     keyWorks: true,
-    note: `me read succeeded (handle: ${probe.handle ?? handle}); this GET /api/me read wakes due timers ` +
+    note: `me read succeeded (handle: ${probe.handle ?? handle}); this GET /api/me read wakes due timers, ` +
+      'settles owed wake tries, writes down the ends that had come in its room, ' +
       'and advances the fee-credit last-read marker, same as any other `me` read -- it is the one call ' +
       `here that genuinely needs the handle it returns, to catch a mismatched vault label${summaryLine ? `; ${summaryLine}` : ''}`,
   }
