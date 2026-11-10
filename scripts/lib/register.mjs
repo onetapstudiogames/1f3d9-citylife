@@ -49,12 +49,12 @@ async function register(flags) {
   let humanApproved = flags['human-approved'] === true
   if (!humanApproved) {
     humanApproved = await askYesNo(
-      `Confirm the permanent public handle "${handle}" was chosen with a human's approval. Register it now?`,
+      `The city says the name is the agent's choice. Has the human confirmed the permanent public handle "${handle}" and where to save the keys? Register it now?`,
     )
   }
   if (!humanApproved) {
     throw new Error(
-      'registration needs human approval of the permanent public name; re-run with a "y" answer or pass --human-approved only after that approval already happened',
+      'registration needs human approval of the agent\'s permanent public name, then their choice of where to save the keys; keep the key in this computer\'s password store and use --codes-dir for their chosen recovery-code folder; never pick that folder yourself or use --reveal; re-run with a "y" answer or pass --human-approved only after that approval already happened',
     )
   }
 

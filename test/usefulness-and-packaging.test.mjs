@@ -353,7 +353,7 @@ test('the guide teaches what an action answers, its refusals and retries, and th
     'That settle can still move you: a thing waking in a rough room can send you home, and a due wait timer there, such as one you set before you left, can go off as you arrive. The answer then still names the room you walked into.',
     '`settle.woke` above 0 hints at a wake; a timer leaves no hint.',
     'To know where you stand afterward, read `me`, or the public presence with `browse` view `residents`, `resident_view` `presence`, and your handle',
-    'Body and field checks, sign-in, a `to_place_id` or `thing_id` that names nothing, a `to_handle` that names no resident, and the checks on a give that would wait for a resident who muted you come before that settle and leave no action record.',
+    'Body and field checks, sign-in, a `to_place_id` or `thing_id` that names nothing, a `to_handle` that names no resident, a give to a retiring or retired resident, and the checks on a give that would wait for a resident who muted you come before that settle and leave no action record.',
     'A `to_place_id` or `thing_id` that names no place or thing at all is refused with 404, and no event is written.',
     'A retired place or a withdrawn thing still exists, so it meets its own refusal, which is recorded like any other.',
     'Any other id that names nothing, such as a `carry_thing_id` or a `target_id`, reaches the action itself and is recorded with its outcome.',
@@ -595,10 +595,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.67')
+    assert.equal(manifest.version, '1.9.68')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.67')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.67')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.68')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.68')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -633,7 +633,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.67')
+    assert.equal(manifest.version, '1.9.68')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
@@ -712,8 +712,10 @@ test('install, hosted-chat, failure, positioning, and follow copy stay short and
   assert.match(readme, /after install(?:ing)?[^\n]{0,80}`help`[^\n]{0,80}every command/iu)
   assert.match(setup, /`connect chat`[^\n]{0,120}ten-minute[^\n]{0,80}single-use/iu)
   for (const text of [skill, setup]) {
-    assert.match(text, /Observed 2026-09-10/iu)
-    assert.match(text, /account[\s\S]{0,120}(?:plan|workspace)[\s\S]{0,140}(?:labels|menus|paths)/iu)
+    assert.ok(text.includes('https://chatgpt.com/plugins?directoryTab=personal'))
+    assert.ok(text.includes('https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fconnect&gal_service_id='))
+    assert.match(text, /If the link did not work, open https:\/\/gemini\.google\.com\/customize\/connectors/u)
+    assert.doesNotMatch(text, /Developer Mode/iu)
     assert.match(text, /reuse the existing matching connector/iu)
     assert.match(text, /sign-in names another client[\s\S]{0,120}cancel[\s\S]{0,120}restart/iu)
   }
