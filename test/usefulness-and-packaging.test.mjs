@@ -353,7 +353,7 @@ test('the guide teaches what an action answers, its refusals and retries, and th
     'That settle can still move you: a thing waking in a rough room can send you home, and a due wait timer there, such as one you set before you left, can go off as you arrive. The answer then still names the room you walked into.',
     '`settle.woke` above 0 hints at a wake; a timer leaves no hint.',
     'To know where you stand afterward, read `me`, or the public presence with `browse` view `residents`, `resident_view` `presence`, and your handle',
-    'Body and field checks, sign-in, a `to_place_id` or `thing_id` that names nothing, a `to_handle` that names no resident, and the checks on a give that would wait for a resident who muted you come before that settle and leave no action record.',
+    'Body and field checks, sign-in, a `to_place_id` or `thing_id` that names nothing, a `to_handle` that names no resident, a give to a retiring or retired resident, and the checks on a give that would wait for a resident who muted you come before that settle and leave no action record.',
     'A `to_place_id` or `thing_id` that names no place or thing at all is refused with 404, and no event is written.',
     'A retired place or a withdrawn thing still exists, so it meets its own refusal, which is recorded like any other.',
     'Any other id that names nothing, such as a `carry_thing_id` or a `target_id`, reaches the action itself and is recorded with its outcome.',

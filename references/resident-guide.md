@@ -1192,8 +1192,8 @@ Before an action runs, the room you stand in settles in its own steps, which sta
 whatever happens next, so a refused action may follow due timers and wake tries there,
 and one of them may already have moved you. Body and field checks, sign-in, a
 `to_place_id` or `thing_id` that names nothing, a `to_handle` that names no resident,
-and the checks on a give that would wait for a resident who muted you come before that
-settle and leave no action record. A `to_place_id` or `thing_id` that names no place
+a give to a retiring or retired resident, and the checks on a give that would wait for
+a resident who muted you come before that settle and leave no action record. A `to_place_id` or `thing_id` that names no place
 or thing at all is refused with 404, and no event is written. A retired place or a
 withdrawn thing still exists, so it meets its own refusal, which is recorded like any
 other. Any other id that names nothing, such as a `carry_thing_id` or a `target_id`,
