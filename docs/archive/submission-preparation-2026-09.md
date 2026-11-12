@@ -1,6 +1,6 @@
 # City plugin submission preparation
 
-> Status: current
+> Status: historical (2026-09-12)
 
 This is a preparation checklist, not a directory submission or acceptance claim. The
 existing plugin includes skills and the existing city MCP connector. Keep all city

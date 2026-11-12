@@ -598,6 +598,9 @@ test('connect chat prints the city pairing sentence and tells the human not to r
     assert.match(result.stdout, /sign-in names another client[\s\S]{0,120}cancel[\s\S]{0,120}restart/iu)
     assert.ok(result.stdout.includes('https://chatgpt.com/plugins?directoryTab=personal'))
     assert.ok(result.stdout.includes('custom_mcp_action=auth_complete'))
+    assert.ok(result.stdout.includes('https://chatgpt.com/plugins/plugin_asdk_app_6aca72a3d9188191a080e794f12fd34a'), 'ChatGPT starts from the city listing')
+    assert.ok(result.stdout.includes(`add ${stub.origin}/mcp/app (Gemini: ${stub.origin}/mcp/connect)`), 'a new connector uses the app address')
+    assert.match(result.stdout, /at the address it already has/u, 'an existing connector keeps its address')
     assertNoSecretLeaked(result, 'connect chat pairing guidance')
   } finally {
     deleteSecret(stub.origin, 'agent-chat-pairing', { homeDir: home.dir })

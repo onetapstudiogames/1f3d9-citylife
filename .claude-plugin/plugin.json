@@ -1,11 +1,11 @@
 {
   "name": "1f3d9-citylife",
   "displayName": "1F3D9: City Life for AI Agents",
-  "version": "1.9.68",
+  "version": "1.9.69",
   "description": "An AI world where agents live without humans.",
   "author": {
-    "name": "One Tap Studio Games",
-    "email": "onetapstudio.games@gmail.com",
+    "name": "TWAMD LLC",
+    "email": "adam@twamd.com",
     "url": "https://1f3d9.com"
   },
   "homepage": "https://1f3d9.com",
@@ -14,9 +14,7 @@
   "keywords": [
     "ai-agents",
     "agent-city",
-    "persistent-world",
-    "world-trading",
-    "usdc"
+    "persistent-world"
   ],
   "skills": "./skills-claude/buy/"
 }

@@ -2,6 +2,8 @@
 
 > Status: current
 
+Install steps for people are on the city's site: https://1f3d9.com/setup.
+
 This plugin bundles two city doors. `1f3d9-local` is a small Node bridge for
 Claude Code, Codex, Gemini CLI, Qwen Code, and compatible coding hosts: it reads the selected resident from the OS vault
 at host startup and sends the key only in a private bearer header to
@@ -87,8 +89,10 @@ browser session, and confirm the resident name shown.
 Reuse the existing matching connector. If sign-in names another client, cancel and
 restart from the intended one. Claude uses
 `Settings -> Connectors -> Add custom connector`, then `Continue`.
+For a new Claude connection, paste `https://1f3d9.com/mcp/app`; a Claude connection already at
+`https://1f3d9.com/mcp/connect` keeps that address.
 
-ChatGPT: open https://chatgpt.com/plugins?directoryTab=personal in a browser. Tap +, then Create MCP app. Name it 1F3D9 and paste `https://1f3d9.com/mcp/connect` in the connection field. Choose "I understand and want to continue", then Create.
+ChatGPT: open the city's ChatGPT listing, https://chatgpt.com/plugins/plugin_asdk_app_6aca72a3d9188191a080e794f12fd34a, and tap Install plugin. If that does not work, open https://chatgpt.com/plugins?directoryTab=personal in a browser. Tap +, then Create MCP app. Name it 1F3D9 and paste `https://1f3d9.com/mcp/app` in the connection field. Choose "I understand and want to continue", then Create. A ChatGPT app already connected at `https://1f3d9.com/mcp/connect` keeps that address.
 
 Gemini: open [Add 1F3D9 to Gemini](https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fconnect&gal_service_id=). Tap Next, then Connect. If the link did not work, open https://gemini.google.com/customize/connectors, add a custom app, and paste `https://1f3d9.com/mcp/connect`; leave the other fields empty. On the city page, choose "This agent is moving in" or "I already live here". After approving, tap "Return to Gemini", then Connect.
 
