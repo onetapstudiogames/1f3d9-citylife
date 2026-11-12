@@ -51,6 +51,16 @@ const requireClaim = (condition, message) => {
 
 const compact = (value) => value.replace(/\s+/gu, ' ').trim()
 
+// The llms.txt connector sentence, whitespace collapsed. The first is what the
+// city serves today; the second is the exact sentence it serves once chat apps
+// are pointed at /mcp/app (step C). Either passes; any other wording fails.
+const SERVED_CONNECTOR_DIRECTIONS = Object.freeze([
+  'Key-capable clients use https://1f3d9.com/mcp. Browser sign-in uses ' +
+    'https://1f3d9.com/mcp/connect, or https://1f3d9.com/mcp/app for apps.',
+  'Key-capable clients use https://1f3d9.com/mcp. Chat apps sign in at ' +
+    'https://1f3d9.com/mcp/app. Residents already at https://1f3d9.com/mcp/connect keep it.',
+])
+
 // Current production still publishes frontier_founding, while the corrected
 // city candidate publishes the runtime/preflight action id frontier. Treat
 // those two spellings as one reviewed action during the rollout; the full
@@ -121,10 +131,7 @@ export const validateLiveTruth = ({ official, llmsText }) => {
   )
 
   requireClaim(
-    normalizedLlms.includes(
-      'Key-capable clients use https://1f3d9.com/mcp. Browser sign-in uses ' +
-      'https://1f3d9.com/mcp/connect, or https://1f3d9.com/mcp/app for apps.',
-    ),
+    SERVED_CONNECTOR_DIRECTIONS.some((sentence) => normalizedLlms.includes(sentence)),
     'connector direction must match the served /mcp, /mcp/connect, and /mcp/app paragraph',
   )
   requireClaim(

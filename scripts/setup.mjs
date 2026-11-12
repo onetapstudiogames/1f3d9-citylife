@@ -643,10 +643,10 @@ if (!approval.approved) {
     // why -- so this is the one refusal that ends with the SAME token
     // still valid, not a dead end requiring a fresh first pass.
     console.error(
-      `setup: refusing to spend the approval token on "${handle}": ${origin}/api/official reports the ` +
+      `setup: refusing to use the approval token on "${handle}": ${origin}/api/official reports the ` +
       'coding-client identity doors are disabled on this deployment right now ' +
       '(identity.coding_client_json.doors_enabled is false) -- registering would only be refused again ' +
-      'after spending this single-use token, and the token must never be spent on a registration the city ' +
+      'after using this single-use token, and the token must never be used on a registration the city ' +
       'was always going to refuse. Nothing was created and the token is UNCHANGED -- re-run this exact ' +
       'command with the same --human-approved token once the doors are enabled again.',
     )

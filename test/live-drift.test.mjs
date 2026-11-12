@@ -46,6 +46,21 @@ const reviewedOfficialFacts = {
 const reviewedConnectorDirections = `Key-capable clients use https://1f3d9.com/mcp. Browser sign-in uses
 https://1f3d9.com/mcp/connect, or https://1f3d9.com/mcp/app for apps.`
 
+// The sentence the city serves after step C: chat apps sign in at /mcp/app and
+// residents already at /mcp/connect keep it. The check accepts exactly this
+// sentence or today's, and nothing looser.
+const stepCConnectorDirections = `Key-capable clients use https://1f3d9.com/mcp. Chat apps sign in at
+https://1f3d9.com/mcp/app. Residents already at https://1f3d9.com/mcp/connect keep it.`
+const stepCConnectorNearMisses = [
+  stepCConnectorDirections.replace(' Residents already at https://1f3d9.com/mcp/connect keep it.', ''),
+  stepCConnectorDirections.replace('Chat apps sign in at\nhttps://1f3d9.com/mcp/app. ', ''),
+  stepCConnectorDirections.replace('sign in at\nhttps://1f3d9.com/mcp/app.', 'sign in at\nhttps://1f3d9.com/mcp/connect.'),
+  stepCConnectorDirections.replace('already at https://1f3d9.com/mcp/connect', 'already at https://1f3d9.com/mcp/app'),
+  stepCConnectorDirections.replace('clients use https://1f3d9.com/mcp.', 'clients use https://1f3d9.com/mcp/connect.'),
+  stepCConnectorDirections.replace('Key-capable clients use https://1f3d9.com/mcp. ', ''),
+  stepCConnectorDirections.replace('keep it.', 'may keep it.'),
+]
+
 const reviewedLlmsClaims = `
 - Open https://1f3d9.com/join in a first-party browser; the key and the first eight one-use recovery codes are shown once.
 ${reviewedConnectorDirections}
@@ -240,11 +255,15 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
     }),
     /later_holder_discovery\.singular_question/iu,
   )
+  for (const nearMiss of stepCConnectorNearMisses) {
+    assert.notEqual(nearMiss, stepCConnectorDirections, 'each step C near miss changes the sentence')
+  }
   for (const directions of [
     reviewedConnectorDirections.replace(', or https://1f3d9.com/mcp/app for apps', ''),
     reviewedConnectorDirections.replace('/mcp/app for apps', '/mcp/connect for apps'),
     reviewedConnectorDirections.replace('clients use https://1f3d9.com/mcp.', 'clients use https://1f3d9.com/mcp/connect.'),
     'Hosted chats use https://1f3d9.com/mcp/connect and first-party browser sign-in. Key-capable clients use https://1f3d9.com/mcp.',
+    ...stepCConnectorNearMisses,
   ]) {
     assert.throws(
       () => validateLiveTruth({
@@ -252,12 +271,19 @@ test('reviewed live claims agree across official JSON and llms.txt', () => {
         llmsText: reviewedLlmsClaims.replace(reviewedConnectorDirections, directions),
       }),
       /connector direction/iu,
+      `refused: ${directions}`,
     )
   }
-  assert.doesNotThrow(() => validateLiveTruth({
-    official: reviewedOfficialFacts,
-    llmsText: reviewedLlmsClaims.replace(reviewedConnectorDirections, reviewedConnectorDirections.replace(/\s+/gu, ' ')),
-  }))
+  for (const directions of [reviewedConnectorDirections, stepCConnectorDirections]) {
+    assert.doesNotThrow(() => validateLiveTruth({
+      official: reviewedOfficialFacts,
+      llmsText: reviewedLlmsClaims.replace(reviewedConnectorDirections, directions),
+    }), `accepted: ${directions}`)
+    assert.doesNotThrow(() => validateLiveTruth({
+      official: reviewedOfficialFacts,
+      llmsText: reviewedLlmsClaims.replace(reviewedConnectorDirections, directions.replace(/\s+/gu, ' ')),
+    }), `accepted with whitespace collapsed: ${directions}`)
+  }
   assert.throws(
     () => validateLiveTruth({
       official: reviewedOfficialFacts,

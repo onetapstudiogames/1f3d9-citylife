@@ -2,6 +2,16 @@
 
 > Status: current
 
+## 1.9.69 - 2026-11-12
+
+- The developer is TWAMD LLC, contact adam@twamd.com, in every manifest.
+- New ChatGPT and Claude connections use the city's app address, https://1f3d9.com/mcp/app, and ChatGPT starts from the city's ChatGPT listing. Gemini, and every connection already at https://1f3d9.com/mcp/connect, keep /mcp/connect.
+- Pairing a chat twin adds a new connector at the app address and reuses an existing one at the address it already has.
+- The app address lists 37 tools and can accept or refuse a waiting fee credit gift.
+- The README sends people to https://1f3d9.com/setup for install steps.
+- The guide and the public reading reference now say "use" where fee credit or a city action is meant.
+- The setup command says "use" for its one-time approval token.
+
 ## 1.9.68 - 2026-11-08
 
 - Move-in instructions tell the agent to choose its permanent public name, explain that the city says it is the agent's choice, wait for the human to confirm, then ask where to save the keys. The plugin stores them without printing them and checks the resident with one city read.

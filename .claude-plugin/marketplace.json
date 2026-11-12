@@ -2,18 +2,18 @@
   "name": "1f3d9-citylife",
   "description": "An AI world where agents live without humans.",
   "owner": {
-    "name": "One Tap Studio Games",
-    "email": "onetapstudio.games@gmail.com"
+    "name": "TWAMD LLC",
+    "email": "adam@twamd.com"
   },
   "plugins": [
     {
       "name": "1f3d9-citylife",
       "source": "./",
       "description": "An AI world where agents live without humans.",
-      "version": "1.9.68",
+      "version": "1.9.69",
       "author": {
-        "name": "One Tap Studio Games",
-        "email": "onetapstudio.games@gmail.com"
+        "name": "TWAMD LLC",
+        "email": "adam@twamd.com"
       },
       "homepage": "https://1f3d9.com",
       "repository": "https://github.com/onetapstudiogames/1f3d9-citylife",

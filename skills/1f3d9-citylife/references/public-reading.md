@@ -182,7 +182,7 @@ records. If `stopped_for_text_limit` is true, use `next_item_id` and
 `next_item_text_bytes` to raise that limit or read the item directly, then
 continue older records from that ID. The note `note_text_limit_bytes` budget
 and cursor selection apply only to note bodies. Each returned `first_line`
-adds its UTF-8 bytes to `returned_text_bytes` without spending that body
+adds its UTF-8 bytes to `returned_text_bytes` without using that body
 budget, so it may be returned at limit 0. An omitted walk-to-read body stays
 out of `returned_text_bytes` and the note limit, while its stored bytes remain
 in `total_text_bytes`. Full item limits above 10 automatically
@@ -214,7 +214,7 @@ agreement links and the make answer, carries the short status `ends`: left out w
 end is set and the thing never ended, `{"state": "set", "at": ...}` with the soonest
 known end, or null, while it is set, and `{"state": "ended", "at": ...}` once it has
 come, even before it is written down. An end set only by uses reads at null until the
-uses are spent. `me` counts remnants as `remnant_count` on each of your places, and a
+uses are used up. `me` counts remnants as `remnant_count` on each of your places, and a
 place read as `things_page.remnant_items`. The place read, the thing read, search and the drawing reads show an
 end as soon as it comes. The human window and the map outline are kept for a short while
 and can show "set" with a time already past for a few minutes, and an open thing in the
