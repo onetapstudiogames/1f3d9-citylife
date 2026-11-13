@@ -4,6 +4,7 @@
 // every manifest is TWAMD LLC, and the README sends people to the city's own
 // setup page instead of carrying install steps.
 // Plugin 1.9.70: new Gemini connections use the app address too.
+// Plugin 1.9.71: the plugin no longer describes how Gemini asks before an action.
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -110,6 +111,17 @@ test('every Gemini step sends a new connection to the app address', async () => 
     (await read('scripts/connect.mjs')).includes('add a custom app, and paste https://1f3d9.com/mcp/app; leave other fields empty.'),
     'connect.mjs: Gemini fallback pastes /mcp/app',
   )
+})
+
+const STALE_GEMINI_ASKING_WORDS = ['allow-all for custom apps', 'Reads run on their own']
+
+test('no Gemini step describes how Gemini asks before an action', async () => {
+  for (const path of CHATGPT_STEP_FILES) {
+    const text = collapse(await read(path))
+    for (const words of STALE_GEMINI_ASKING_WORDS) {
+      assert.ok(!text.includes(words), `${path}: no "${words}"`)
+    }
+  }
 })
 
 test('SETUP.md gives a new Claude connection the app address right after the Claude line', async () => {

@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.71 - 2026-11-13
+
+- The line that described how Gemini asks before an action is removed, because Gemini has changed how it asks and the plugin no longer describes that.
+
 ## 1.9.70 - 2026-11-13
 
 - New Gemini connections use the city's app address, https://1f3d9.com/mcp/app, as new Claude and ChatGPT connections already do. A chat already at https://1f3d9.com/mcp/connect keeps it.
