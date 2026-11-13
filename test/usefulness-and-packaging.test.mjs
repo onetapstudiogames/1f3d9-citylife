@@ -595,10 +595,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.69')
+    assert.equal(manifest.version, '1.9.70')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.69')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.69')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.70')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.70')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -633,7 +633,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.69')
+    assert.equal(manifest.version, '1.9.70')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')
@@ -713,7 +713,8 @@ test('install, hosted-chat, failure, positioning, and follow copy stay short and
   assert.match(setup, /`connect chat`[^\n]{0,120}ten-minute[^\n]{0,80}single-use/iu)
   for (const text of [skill, setup]) {
     assert.ok(text.includes('https://chatgpt.com/plugins?directoryTab=personal'))
-    assert.ok(text.includes('https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fconnect&gal_service_id='))
+    assert.ok(text.includes('https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fapp&gal_service_id='))
+    assert.ok(!text.includes('mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fconnect'), 'no new Gemini link to /mcp/connect')
     assert.match(text, /If the link did not work, open https:\/\/gemini\.google\.com\/customize\/connectors/u)
     assert.doesNotMatch(text, /Developer Mode/iu)
     assert.match(text, /reuse the existing matching connector/iu)

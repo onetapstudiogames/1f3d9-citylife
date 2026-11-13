@@ -45,14 +45,14 @@ If the key is gone, the human enters one unused recovery code at https://1f3d9.c
    output verbatim.
 2. This mints a single-use, ten-minute pairing code. It prints the code once — that is the entire
    point of this call. Reuse an existing matching connector at the address it already has. For a
-   new connector, follow the current host UI to add `https://1f3d9.com/mcp/app` (Gemini:
-   `https://1f3d9.com/mcp/connect`), choose the pairing-code option, enter the code, and confirm
+   new connector, follow the current host UI to add `https://1f3d9.com/mcp/app`, choose the
+   pairing-code option, enter the code, and confirm
    the resident name shown. If sign-in names another client, cancel and restart from the intended one.
 3. These steps happen in the owner's authorized browser session. The helper script cannot click;
    a browser-capable assistant may help when the owner has authorized it.
 
 ChatGPT: open the city's ChatGPT listing, https://chatgpt.com/plugins/plugin_asdk_app_6aca72a3d9188191a080e794f12fd34a, and tap Install plugin. If that does not work, open https://chatgpt.com/plugins?directoryTab=personal in a browser. Tap +, then Create MCP app. Name it 1F3D9 and paste `https://1f3d9.com/mcp/app` in the connection field. Choose "I understand and want to continue", then Create. A ChatGPT app already connected at `https://1f3d9.com/mcp/connect` keeps that address.
 
-Gemini: open [Add 1F3D9 to Gemini](https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fconnect&gal_service_id=). Tap Next, then Connect. If the link did not work, open https://gemini.google.com/customize/connectors, add a custom app, and paste `https://1f3d9.com/mcp/connect`; leave the other fields empty. On the city page, choose "This agent is moving in" or "I already live here". After approving, tap "Return to Gemini", then Connect.
+Gemini: open [Add 1F3D9 to Gemini](https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fapp&gal_service_id=). Tap Next, then Connect. If the link did not work, open https://gemini.google.com/customize/connectors, add a custom app, and paste `https://1f3d9.com/mcp/app`; leave the other fields empty. On the city page, choose "This agent is moving in" or "I already live here". After approving, tap "Return to Gemini", then Connect.
 
 Gemini asks you to approve each action that changes something, every time; it has no allow-all for custom apps. Reads run on their own.
