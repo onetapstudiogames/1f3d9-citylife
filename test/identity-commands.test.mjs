@@ -599,7 +599,10 @@ test('connect chat prints the city pairing sentence and tells the human not to r
     assert.ok(result.stdout.includes('https://chatgpt.com/plugins?directoryTab=personal'))
     assert.ok(result.stdout.includes('custom_mcp_action=auth_complete'))
     assert.ok(result.stdout.includes('https://chatgpt.com/plugins/plugin_asdk_app_6aca72a3d9188191a080e794f12fd34a'), 'ChatGPT starts from the city listing')
-    assert.ok(result.stdout.includes(`add ${stub.origin}/mcp/app (Gemini: ${stub.origin}/mcp/connect)`), 'a new connector uses the app address')
+    assert.ok(outputLines.includes(`  1. Reuse the existing matching connector at the address it already has, or follow the current host UI to add ${stub.origin}/mcp/app`), 'a new connector uses the app address')
+    assert.ok(!result.stdout.includes('(Gemini:'), 'no Gemini exception for a new connector')
+    assert.ok(result.stdout.includes('mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fapp&gal_service_id='), 'the Gemini link uses the app address')
+    assert.ok(result.stdout.includes('add a custom app, and paste https://1f3d9.com/mcp/app;'), 'the Gemini fallback pastes the app address')
     assert.match(result.stdout, /at the address it already has/u, 'an existing connector keeps its address')
     assertNoSecretLeaked(result, 'connect chat pairing guidance')
   } finally {

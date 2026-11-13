@@ -1,8 +1,9 @@
 // Plugin 1.9.69: new ChatGPT and Claude connections go to the city's app
-// address, ChatGPT starts from the city's ChatGPT listing, and Gemini plus
-// every connection already at /mcp/connect keep /mcp/connect. The developer
-// in every manifest is TWAMD LLC, and the README sends people to the city's
-// own setup page instead of carrying install steps.
+// address, ChatGPT starts from the city's ChatGPT listing, and every
+// connection already at /mcp/connect keeps /mcp/connect. The developer in
+// every manifest is TWAMD LLC, and the README sends people to the city's own
+// setup page instead of carrying install steps.
+// Plugin 1.9.70: new Gemini connections use the app address too.
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
@@ -34,8 +35,7 @@ const CONNECT_SCRIPT_CHATGPT_LINE =
   `add an MCP app at https://chatgpt.com/plugins?directoryTab=personal with ${APP_ADDRESS}.'`
 
 const HOSTED_STEP_ONE =
-  '1. A new chat app connection uses `https://1f3d9.com/mcp/app`; Gemini still uses ' +
-  '`https://1f3d9.com/mcp/connect` for now. A connection already at ' +
+  '1. A new chat app connection uses `https://1f3d9.com/mcp/app`. A connection already at ' +
   '`https://1f3d9.com/mcp/connect` keeps that address and reconnects there. `/mcp` is ' +
   'only for key-capable local clients. Replace an old ChatGPT `/mcp` connection rather ' +
   'than reopening it.'
@@ -72,12 +72,44 @@ test('no ChatGPT step tells a new connection to use /mcp/connect', async () => {
   assert.ok(connectScript.includes(`console.log(${CONNECT_SCRIPT_CHATGPT_LINE})`), 'connect.mjs prints the one-line ChatGPT step')
 })
 
-test('the hosted chat step 1 sends new connections to /mcp/app and keeps /mcp/connect for existing ones and Gemini', async () => {
+test('the hosted chat step 1 sends new connections to /mcp/app and keeps /mcp/connect for existing ones', async () => {
   for (const path of GUIDES) {
     const guide = collapse(await read(path))
     assert.ok(guide.includes(HOSTED_STEP_ONE), `${path}: new hosted chat step 1`)
     assert.ok(!guide.includes('Connect to exactly `https://1f3d9.com/mcp/connect`'), `${path}: old step 1 is gone`)
+    assert.ok(!guide.includes('Gemini still uses'), `${path}: no Gemini exception`)
   }
+})
+
+const GEMINI_APP_LINK =
+  'https://gemini.google.com/customize/connectors?custom_mcp_action=auth_complete&mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fapp&gal_service_id='
+const GEMINI_CONNECT_LINK_ENDING = 'mcp_url=https%3A%2F%2F1f3d9.com%2Fmcp%2Fconnect'
+const GEMINI_STEP_FILES = [...CHATGPT_STEP_FILES, 'scripts/connect.mjs']
+
+function geminiLines(text) {
+  return text.split(/\r?\n/u).filter((line) => /Gemini:|gemini\.google\.com/u.test(line))
+}
+
+test('every Gemini step sends a new connection to the app address', async () => {
+  for (const path of GEMINI_STEP_FILES) {
+    const text = await read(path)
+    assert.ok(text.includes(GEMINI_APP_LINK), `${path}: Gemini link carries /mcp/app`)
+    assert.ok(!text.includes(GEMINI_CONNECT_LINK_ENDING), `${path}: no Gemini link to /mcp/connect`)
+    assert.ok(!/\(Gemini: [^)]*mcp\/connect/u.test(text), `${path}: no Gemini exception to /mcp/connect`)
+    for (const line of geminiLines(text)) {
+      assert.ok(!line.includes(CONNECT_ADDRESS), `${path}: Gemini line names no /mcp/connect: ${line}`)
+    }
+  }
+  for (const path of CHATGPT_STEP_FILES) {
+    assert.ok(
+      (await read(path)).includes('add a custom app, and paste `https://1f3d9.com/mcp/app`; leave the other fields empty.'),
+      `${path}: Gemini fallback pastes /mcp/app`,
+    )
+  }
+  assert.ok(
+    (await read('scripts/connect.mjs')).includes('add a custom app, and paste https://1f3d9.com/mcp/app; leave other fields empty.'),
+    'connect.mjs: Gemini fallback pastes /mcp/app',
+  )
 })
 
 test('SETUP.md gives a new Claude connection the app address right after the Claude line', async () => {
@@ -96,12 +128,12 @@ test('pairing a chat twin adds /mcp/app for a new connector and reuses an existi
   const connectSkill = collapse(await read('skills/connect/SKILL.md'))
   assert.ok(connectSkill.includes(
     'Reuse an existing matching connector at the address it already has. For a new connector, follow the current host UI to add ' +
-    '`https://1f3d9.com/mcp/app` (Gemini: `https://1f3d9.com/mcp/connect`), choose the pairing-code option, enter the code, and confirm ' +
+    '`https://1f3d9.com/mcp/app`, choose the pairing-code option, enter the code, and confirm ' +
     'the resident name shown.',
   ), 'skills/connect/SKILL.md: pairing step names /mcp/app for a new connector')
   const connectScript = await read('scripts/connect.mjs')
   assert.ok(connectScript.includes(
-    '1. Reuse the existing matching connector at the address it already has, or follow the current host UI to add ${origin}/mcp/app (Gemini: ${origin}/mcp/connect)',
+    '1. Reuse the existing matching connector at the address it already has, or follow the current host UI to add ${origin}/mcp/app`)',
   ), 'connect.mjs: pairing step names /mcp/app for a new connector')
 })
 
