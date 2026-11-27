@@ -86,13 +86,13 @@ test('the always-loaded skill stays compact and points to full command contracts
 })
 
 test('the skill names every MCP door count and the complete catalog', () => {
-  assert.ok(rootSkill.includes('The legacy `/mcp` door lists 10 public tools without a valid key and all 44 with one. `/mcp/connect` lists 43 tools; `/mcp/app` lists 37. Both list before sign-in and omit founder-only `moderate`.'))
+  assert.ok(rootSkill.includes('The legacy `/mcp` door lists 10 public tools without a valid key and all 45 with one. `/mcp/connect` lists 44 tools; `/mcp/app` lists 38. Both list before sign-in and omit founder-only `moderate`.'))
   assert.equal(rootSkill.match(/10 public tools without a valid key/gu)?.length, 1)
-  assert.equal(rootSkill.match(/all 44 with one/gu)?.length, 1)
-  assert.equal(rootSkill.match(/`\/mcp\/connect` lists 43 tools/gu)?.length, 1)
-  assert.equal(rootSkill.match(/`\/mcp\/app` lists 37/gu)?.length, 1)
+  assert.equal(rootSkill.match(/all 45 with one/gu)?.length, 1)
+  assert.equal(rootSkill.match(/`\/mcp\/connect` lists 44 tools/gu)?.length, 1)
+  assert.equal(rootSkill.match(/`\/mcp\/app` lists 38/gu)?.length, 1)
   assert.match(rootSkill, /Complete catalog: https:\/\/1f3d9\.com\/api\/tools/u)
-  assert.match(residentGuide, /local bridge uses `\/mcp` and lists the complete 44-tool catalog with a valid\s+current key/u)
+  assert.match(residentGuide, /local bridge uses `\/mcp` and lists the complete 45-tool catalog with a valid\s+current key/u)
 })
 
 test('help follows the first calls and troubleshooting does not give another order', () => {
@@ -155,7 +155,7 @@ test('standing and scheduled prompts carry the required three-step visit order',
 
 test('the skill exposes the current city doors and Gazette contract', () => {
   assert.match(skill, /legacy[^\n]{0,100}`?\/mcp`?[^\n]{0,100}10 public tools/iu)
-  assert.match(skill, /`\/mcp\/connect` lists 43 tools; `\/mcp\/app` lists 37/u)
+  assert.match(skill, /`\/mcp\/connect` lists 44 tools; `\/mcp\/app` lists 38/u)
   assert.match(skill, /refus(?:ed|es) key-only tools at call time/iu)
   assert.match(skill, /`help`[\s\S]{0,120}topic list after/iu)
   assert.match(skill, /room #454/iu)
@@ -595,10 +595,10 @@ test('portable, Claude, and Codex packages select the right skills and city door
   ])
 
   for (const manifest of [portable, claude, codex]) {
-    assert.equal(manifest.version, '1.9.71')
+    assert.equal(manifest.version, '1.9.72')
   }
-  assert.equal(claudeMarketplace.plugins[0].version, '1.9.71')
-  assert.equal(codexMarketplace.plugins[0].version, '1.9.71')
+  assert.equal(claudeMarketplace.plugins[0].version, '1.9.72')
+  assert.equal(codexMarketplace.plugins[0].version, '1.9.72')
   assert.equal(claude.skills, './skills-claude/buy/')
   assert.equal(codex.skills, undefined)
   assert.equal(codex.mcpServers, undefined)
@@ -633,7 +633,7 @@ test('Gemini loads its native bridge and Qwen keeps a portable-compatible legacy
     cwd: '${extensionPath}',
   }
   for (const manifest of [gemini, qwen]) {
-    assert.equal(manifest.version, '1.9.71')
+    assert.equal(manifest.version, '1.9.72')
     assert.deepEqual(manifest.mcpServers['1f3d9-local'], localBridge)
   }
   assert.equal(qwen.skills, 'skills')

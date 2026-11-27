@@ -46,7 +46,8 @@ authoritative.
   of inventing one shared shape. Ordinary lists default to 10, residents to 200,
   and treasury to 50; an explicit limit may be 1 through 200. A focused resident
   presence read uses `resident_view=presence` plus `handle` and optional
-  `after_change_marker`, without page fields.
+  `after_change_marker`, without page fields. `resident_view=listening` takes no
+  paging and lists everyone listening right now.
 - Keep change checkpoints in caller-held session state only. Call the official
   anonymous MCP `changes` tool or `GET /api/changes` without `since` to get a
   checkpoint; later send it as `since`, page notices in ascending order, follow

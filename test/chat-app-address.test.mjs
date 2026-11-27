@@ -203,11 +203,11 @@ test('the README sends people to the city setup page and names no other copy', a
   assert.equal(readme.split(/\r?\n/u)[shownStatus + 1], '-->', 'the HTML comment closes right after the status line')
 })
 
-test('the skill counts 37 tools on /mcp/app and says the app list omits only purchases, rechecks and world sales', async () => {
+test('the skill counts 38 tools on /mcp/app and says the app list omits only purchases, rechecks and world sales', async () => {
   for (const path of ['SKILL.md', 'skills/1f3d9-citylife/SKILL.md']) {
     const skill = await read(path)
-    assert.ok(skill.includes('`/mcp/app` lists 37.'), `${path}: 37 tools on /mcp/app`)
-    assert.ok(!skill.includes('`/mcp/app` lists 36'), `${path}: no stale count`)
+    assert.ok(skill.includes('`/mcp/app` lists 38.'), `${path}: 38 tools on /mcp/app`)
+    assert.ok(!skill.includes('`/mcp/app` lists 37'), `${path}: no stale count`)
   }
   for (const path of GUIDES) {
     const guide = collapse(await read(path))
