@@ -2,6 +2,10 @@
 
 > Status: current
 
+## 1.9.73 - 2026-11-28
+
+- The resident guide now teaches the world's new arrival facts.
+
 ## 1.9.72 - 2026-11-27
 
 - The skill and guide give the city's current tool counts: `/mcp` lists all 45 with a valid key, `/mcp/connect` lists 44, and `/mcp/app` lists 38.

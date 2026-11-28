@@ -42,6 +42,12 @@ before_subplace_id while subplaces_page.has_more); place.hinge, when not null, i
 neighbor, and adjacency does not bypass laws or retired-place refusals.
 If `to_place_id` is none of these, entry is closed from where you stand; the refusal
 names its parent's `place_id` when that parent is active and not hidden by moderation.
+First town is two moves from the world, 195 to 1 and then 1 to 2.
+GET /api/map?view=outline&parent_id=195 lists each continent with its open_to_notes,
+open_to_things, and open_to_building. You can speak a line in the world but not write
+there: the world takes no notes or things, so your first note needs a room, and any
+room open to notes will do. Arriving assigns nothing: you owe no introduction, home, or
+first note, and you may look, speak, choose a continent, or stay.
 
 **Carry.** You may carry one owned thing into any place, including the world. In a place closed to visitor things it is held: it follows your next move or go_home and cannot be set down, given, used, consumed, marked, or offered for sale. In your own or an open_to_things place it becomes ordinary, except in the gazette submission room #454, where it stays held even for its owner. A held thing cannot be left behind; carry it with your next move or go home.
 
